@@ -58,13 +58,14 @@ jobs:
           $output = "rustup-init.exe"
           Invoke-WebRequest -Uri $url -OutFile $output
           Start-Process -FilePath $output -ArgumentList "-y", "--default-toolchain", "${{ env.RUST_VERSION }}", "--target", "${{ matrix.target }}" -Wait
-          rustup default ${{ env.RUST_VERSION }}-gnu
+          rustup default ${{ env.RUST_VERSION }}
         shell: pwsh
 
       - name: Install Rust (Unix)
         if: runner.os != 'Windows'
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${{ env.RUST_VERSION }} --target ${{ matrix.target }}
+          rustup default ${{ env.RUST_VERSION }}
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
           source $HOME/.cargo/env
 
@@ -127,7 +128,7 @@ jobs:
           # 重命名服务器二进制
           Move-Item -Path loadants.exe -Destination ${{ matrix.name[0] }}
           # 打包
-          zip -j oxide-wdns-Windows-x64-${{ github.ref_name }}.zip ${{ matrix.name[0] }}
+          zip -j loadants-Windows-x64-${{ github.ref_name }}.zip ${{ matrix.name[0] }}
         env:
           RUSTFLAGS: "-C target-feature=+crt-static"
           MSYSTEM: "MINGW64"
@@ -141,7 +142,7 @@ jobs:
           # 重命名服务器二进制
           mv loadants ${{ matrix.name[0] }}
           # 打包
-          zip -j oxide-wdns-${{ runner.os }}-${{ matrix.arch || 'x64' }}-${{ github.ref_name }}.zip ${{ matrix.name[0] }}
+          zip -j loadants-${{ runner.os }}-${{ matrix.arch || 'x64' }}-${{ github.ref_name }}.zip ${{ matrix.name[0] }}
         env:
           RUSTFLAGS: "-C target-feature=+crt-static"
 

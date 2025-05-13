@@ -123,12 +123,12 @@ jobs:
 
           # 保存镜像为 tar 文件
           echo "Saving amd64 image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_AMD64 }}:$IMAGE_TAG"
-          docker save "${{ env.REGISTRY }}/${{ env.IMAGE_NAME_AMD64 }}:$IMAGE_TAG" > "oxide-wdns-x64-$VERSION.tar"
+          docker save "${{ env.REGISTRY }}/${{ env.IMAGE_NAME_AMD64 }}:$IMAGE_TAG" > "loadants-x64-$VERSION.tar"
 
           # 验证 tar 文件是否创建成功
-          if [ -f "oxide-wdns-x64-$VERSION.tar" ]; then
-            echo "Successfully created tar file: oxide-wdns-x64-$VERSION.tar"
-            ls -lh "oxide-wdns-x64-$VERSION.tar"
+          if [ -f "loadants-x64-$VERSION.tar" ]; then
+            echo "Successfully created tar file: loadants-x64-$VERSION.tar"
+            ls -lh "loadants-x64-$VERSION.tar"
           else
             echo "Failed to create tar file"
             exit 1
@@ -156,12 +156,12 @@ jobs:
 
           # 保存镜像为 tar 文件
           echo "Saving arm64 image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_ARM64 }}:$IMAGE_TAG"
-          docker save "${{ env.REGISTRY }}/${{ env.IMAGE_NAME_ARM64 }}:$IMAGE_TAG" > "oxide-wdns-arm64-$VERSION.tar"
+          docker save "${{ env.REGISTRY }}/${{ env.IMAGE_NAME_ARM64 }}:$IMAGE_TAG" > "loadants-arm64-$VERSION.tar"
 
           # 验证 tar 文件是否创建成功
-          if [ -f "oxide-wdns-arm64-$VERSION.tar" ]; then
-            echo "Successfully created tar file: oxide-wdns-arm64-$VERSION.tar"
-            ls -lh "oxide-wdns-arm64-$VERSION.tar"
+          if [ -f "loadants-arm64-$VERSION.tar" ]; then
+            echo "Successfully created tar file: loadants-arm64-$VERSION.tar"
+            ls -lh "loadants-arm64-$VERSION.tar"
           else
             echo "Failed to create tar file"
             exit 1
@@ -171,6 +171,6 @@ jobs:
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         with:
-          files: oxide-wdns-*.tar
+          files: loadants-*.tar
           fail_on_unmatched_files: true
           tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.version_tag || github.ref_name }}
