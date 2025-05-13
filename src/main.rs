@@ -33,12 +33,13 @@ use crate::config::MatchType::{Exact, Wildcard, Regex};
 static GLOBAL: MiMalloc = mimalloc::MiMalloc;
 
 fn init_logging(args: &Args) {
-    // 从环境变量获取日志级别，或根据调试参数设置
-    let filter = if let Ok(filter) = EnvFilter::try_from_default_env() {
-        filter
-    } else if args.debug {
+    // 根据命令行参数决定日志级别，优先使用 --debug 参数
+    let filter = if args.debug {
         // 启用调试模式，显示更详细的日志
         EnvFilter::new("loadants=debug,tower_http=debug,info")
+    } else if let Ok(filter) = EnvFilter::try_from_default_env() {
+        // 如果没有设置 --debug，但设置了环境变量，则使用环境变量
+        filter
     } else {
         // 正常模式，仅显示 info 级别及以上
         EnvFilter::new("loadants=info,tokio_graceful_shutdown=info")
