@@ -70,6 +70,9 @@ impl DnsCache {
         
         info!("Creating DNS cache - Size: {}, Min TTL: {}s", size, min_ttl);
         
+        // 设置缓存容量指标
+        METRICS.cache_capacity().set(size as i64);
+        
         Self {
             cache,
             size,
@@ -89,8 +92,6 @@ impl DnsCache {
         
         // 从缓存中查找
         let entry = self.cache.get(&key).await?;
-        
-        debug!("Cache hit - {} ({:?})", key.name, key.record_type);
         
         // 克隆响应
         let mut response = entry.message.clone();
@@ -281,7 +282,7 @@ impl DnsCache {
         
         // 记录TTL调整
         METRICS.cache_operations_total()
-            .with_label_values(&[cache_labels::ORIGINAL])
+            .with_label_values(&[cache_labels::ADJUSTED])
             .inc();
     }
     

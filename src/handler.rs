@@ -8,7 +8,7 @@ use hickory_proto::op::{Message, MessageType, ResponseCode};
 use crate::config::RouteAction;
 use std::sync::Arc;
 use std::time::Instant;
-use tracing::{debug, error, warn};
+use tracing::{debug, error, warn, info};
 
 // DNS 请求处理器
 pub struct RequestHandler {
@@ -72,7 +72,7 @@ impl RequestHandler {
             query_class
         );
         
-        // 检查缓存（如果启用）
+        // 从缓存中获取响应
         if self.cache.is_enabled() {
             if let Some(cached_response) = self.cache.get(request).await {
                 debug!("Cache hit: {} ({} {})", query_name.to_utf8(), query_type, query_class);
@@ -88,6 +88,11 @@ impl RequestHandler {
                     .observe(duration.as_secs_f64());
                 
                 return Ok(response);
+            } else {
+                // 记录缓存未命中指标
+                METRICS.cache_operations_total()
+                    .with_label_values(&[cache_labels::MISS])
+                    .inc();
             }
         }
         
@@ -176,15 +181,10 @@ impl RequestHandler {
                 METRICS.cache_operations_total()
                     .with_label_values(&[cache_labels::INSERT_ERROR])
                     .inc();
-            } else {
-                // 记录缓存插入指标
-                METRICS.cache_operations_total()
-                    .with_label_values(&[cache_labels::INSERT])
-                    .inc();
-                
-                // 更新缓存条目计数
-                METRICS.cache_entries().set(self.cache.len().await as i64);
             }
+            
+            // 更新缓存条目计数
+            METRICS.cache_entries().set(self.cache.len().await as i64);
         }
         
         // 记录请求处理时间
@@ -192,6 +192,8 @@ impl RequestHandler {
         METRICS.dns_request_duration_seconds()
             .with_label_values(&[processing_labels::RESOLVED, query_type.to_string().as_str()])
             .observe(duration.as_secs_f64());
+
+        info!("DNS request processed in {:?} - {}", duration, query_name.to_utf8());
         
         Ok(response)
     }

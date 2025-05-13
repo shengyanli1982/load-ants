@@ -131,6 +131,7 @@ pub mod cache_labels {
     #[allow(dead_code)]
     pub const CLEAR: &str = "clear";
     // 原始TTL
+    #[allow(dead_code)]
     pub const ORIGINAL: &str = "original";
     // 调整后TTL
     pub const ADJUSTED: &str = "adjusted";
