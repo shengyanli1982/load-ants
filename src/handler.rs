@@ -74,6 +74,7 @@ impl RequestHandler {
         
         // 从缓存中获取响应
         if self.cache.is_enabled() {
+            let cache_check_time = Instant::now();
             if let Some(cached_response) = self.cache.get(request).await {
                 debug!("Cache hit: {} ({} {})", query_name.to_utf8(), query_type, query_class);
                 
@@ -87,16 +88,20 @@ impl RequestHandler {
                     .with_label_values(&[processing_labels::CACHED, query_type.to_string().as_str()])
                     .observe(duration.as_secs_f64());
                 
+                info!("Cache hit: {} processed in {:?}", query_name.to_utf8(), duration);
+                
                 return Ok(response);
             } else {
                 // 记录缓存未命中指标
                 METRICS.cache_operations_total()
                     .with_label_values(&[cache_labels::MISS])
                     .inc();
+                info!("Cache check for {} took {:?}", query_name.to_utf8(), cache_check_time.elapsed());
             }
         }
         
         // 查找路由规则
+        let route_match_time = Instant::now();
         let route_match = match self.router.find_match(query_name) {
             Ok(m) => m,
             Err(e) => {
@@ -110,6 +115,7 @@ impl RequestHandler {
                 return self.create_error_response(request, ResponseCode::ServFail);
             }
         };
+        info!("Route matching for {} took {:?}", query_name.to_utf8(), route_match_time.elapsed());
         
         // 记录路由匹配指标
         METRICS.route_matches_total()
@@ -147,7 +153,11 @@ impl RequestHandler {
                 };
                 
                 // 转发到上游
-                match self.upstream.forward(request, target_group).await {
+                let upstream_time = Instant::now();
+                let result = self.upstream.forward(request, target_group).await;
+                info!("Upstream forwarding to {} for {} took {:?}", target_group, query_name.to_utf8(), upstream_time.elapsed());
+                
+                match result {
                     Ok(response) => response,
                     Err(e) => {
                         error!("Upstream request failed: {} - {}", target_group, e);
@@ -174,6 +184,7 @@ impl RequestHandler {
         
         // 缓存响应（只缓存成功响应，且缓存已启用）
         if self.cache.is_enabled() && response.response_code() == ResponseCode::NoError {
+            let cache_insert_time = Instant::now();
             if let Err(e) = self.cache.insert(request, response.clone()).await {
                 warn!("Cache insertion failed: {}", e);
                 
@@ -181,6 +192,8 @@ impl RequestHandler {
                 METRICS.cache_operations_total()
                     .with_label_values(&[cache_labels::INSERT_ERROR])
                     .inc();
+            } else {
+                info!("Cache insertion for {} took {:?}", query_name.to_utf8(), cache_insert_time.elapsed());
             }
             
             // 更新缓存条目计数
