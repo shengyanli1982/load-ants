@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: load-ants-config
+  namespace: dns
+data:
+  config.yaml: |
+    server:
+      listen_udp: "0.0.0.0:53"
+      listen_tcp: "0.0.0.0:53"
+    health:
+      listen: "0.0.0.0:8080"
+    cache:
+      enabled: true
+      max_size: 10000
+      min_ttl: 60
+      max_ttl: 3600
+    http_client:
+      connect_timeout: 5
+      request_timeout: 10
+      idle_timeout: 60
+      keepalive: 60
+      agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    upstream_groups:
+      - name: "google_public"
+        strategy: "roundrobin"
+        servers:
+          - url: "https://dns.google/dns-query"
+          - url: "https://8.8.4.4/dns-query"
+        retry:
+          attempts: 3
+          delay: 1
+    routing_rules:
+      - match: "wildcard"
+        pattern: "*"
+        action: "forward"
+        target: "google_public"

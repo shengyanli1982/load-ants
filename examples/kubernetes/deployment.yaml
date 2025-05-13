@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: load-ants
+  namespace: dns
+  labels:
+    app: load-ants
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: load-ants
+  template:
+    metadata:
+      labels:
+        app: load-ants
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: load-ants
+          image: shengyanli1982/load-ants:latest
+          args: ["-c", "/etc/load-ants/config.yaml"]
+          ports:
+            - containerPort: 53
+              name: dns-udp
+              protocol: UDP
+            - containerPort: 53
+              name: dns-tcp
+              protocol: TCP
+            - containerPort: 8080
+              name: health
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/load-ants
+          resources:
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 5
+      volumes:
+        - name: config-volume
+          configMap:
+            name: load-ants-config

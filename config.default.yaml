@@ -1,0 +1,112 @@
+# Load Ants 配置示例
+
+# 服务器监听设置
+server:
+  listen_udp: "0.0.0.0:53" # UDP 监听地址和端口
+  listen_tcp: "0.0.0.0:53" # TCP 监听地址和端口
+
+# 健康检查服务器设置
+health:
+  listen: "0.0.0.0:8080" # 健康检查服务器监听地址和端口
+
+# 缓存设置
+cache:
+  enabled: true
+  max_size: 10000 # 最大缓存条目数 (有效范围: 10-1000000)
+  min_ttl: 60 # 缓存条目最小 TTL（秒）(有效范围: 1-86400)
+  max_ttl: 3600 # 缓存条目最大 TTL（秒）(有效范围: 1-86400)
+
+# 所有上游请求共享的 HTTP 客户端设置
+http_client:
+  connect_timeout: 5 # 连接超时（秒）(有效范围: 1-120)
+  request_timeout: 10 # 请求超时（秒）(有效范围: 1-1200)
+  idle_timeout: 60 # 可选：空闲连接超时（秒）(有效范围: 5-1800)
+  keepalive: 60 # 可选：TCP Keepalive（秒）(有效范围: 5-600)
+  agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" # 可选：HTTP 用户代理
+
+# 上游 DoH 服务器组
+upstream_groups:
+  - name: "google_public"
+    strategy: "roundrobin" # roundrobin, weighted, random
+    servers:
+      - url: "https://dns.google/dns-query" # URL必须是有效的HTTP(S)地址且包含路径
+        # 默认使用 POST 方法和 application/dns-message 内容类型
+      - url: "https://8.8.4.4/dns-query"
+        method: "get" # 可选：get 或 post，默认为 post
+        content_type: "message" # 可选：message 或 json，默认为 message
+    retry: # 可选的重试策略
+      attempts: 3 # 重试次数 (有效范围: 1-100)
+      delay: 1 # 延迟初始秒数 (有效范围: 1-120)
+    proxy: "http://user:pass@proxyserver:port" # 可选：HTTP/SOCKS5 代理
+
+  - name: "cloudflare_secure"
+    strategy: "random"
+    servers:
+      - url: "https://cloudflare-dns.com/dns-query" # 必须是完整的URL，包含协议和路径
+        method: "post"
+      - url: "https://1.0.0.1/dns-query"
+        method: "get"
+        content_type: "json" # 使用 application/dns-json 内容类型
+    # 无特定重试配置，可能稍后使用默认值
+    # 无代理，直接直通
+
+  - name: "nextdns_weighted"
+    strategy: "weighted"
+    servers:
+      - url: "https://dns.nextdns.io/YOUR_CONFIG_ID" # 必须是完整且有效的URL
+        weight: 70 # 服务器权重 (有效范围: 1-65535)
+        # 可选的每服务器认证：
+        # auth:
+        #   type: "bearer" # 或 "basic"
+        #   token: "YOUR_API_KEY_OR_TOKEN" # 或 basic 认证的 username/password
+      - url: "https://dns2.nextdns.io/YOUR_CONFIG_ID"
+        weight: 30 # 服务器权重 (有效范围: 1-65535)
+    retry:
+      attempts: 2 # 重试次数 (有效范围: 1-100)
+      delay: 2 # 延迟初始秒数 (有效范围: 1-120)
+
+  - name: "internal_doh"
+    strategy: "roundrobin"
+    servers:
+      - url: "https://internal-doh1.corp.local/dns-query"
+        # Basic 认证示例：
+        auth:
+          type: "basic"
+          username: "dnsuser" # 必须非空
+          password: "securepassword123" # 必须非空，考虑使用环境变量或密钥管理
+      - url: "https://internal-doh2.corp.local/dns-query"
+        # Bearer 认证示例：
+        auth:
+          type: "bearer"
+          token: "securetoken123" # 必须非空，考虑使用环境变量或密钥管理
+
+# 路由规则（按顺序处理）
+routing_rules:
+  # 阻止特定域名
+  - match: "exact" # exact: 精确匹配，不支持通配符
+    pattern: "ads.example.com" # 匹配模式必须非空
+    action: "block" # 动作：block, forward
+
+  # 将内部域名路由到内部解析器
+  - match: "wildcard" # wildcard: 通配符匹配，格式必须是'*'或'*.domain.com'
+    pattern: "*.corp.local" # 匹配模式必须非空
+    action: "forward"
+    target: "internal_doh" # 目标上游组必须存在
+
+  # 将特定服务路由到 Cloudflare
+  - match: "exact"
+    pattern: "service.external.com"
+    action: "forward"
+    target: "cloudflare_secure"
+
+  # 使用正则表达式进行模式匹配（谨慎使用以保证性能）
+  - match: "regex" # regex: 正则表达式匹配，必须是有效的正则表达式
+    pattern: "^(video|audio)-cdn\\..+\\.com$"
+    action: "forward"
+    target: "google_public"
+
+  # 默认规则：将所有其他流量转发到 google_public（强烈推荐显式配置）
+  - match: "wildcard"
+    pattern: "*" # 匹配所有域名
+    action: "forward"
+    target: "google_public" # 默认上游
