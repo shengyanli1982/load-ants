@@ -268,7 +268,8 @@ impl Config {
         Ok(config)
     }
 
-    // 创建一个使用默认值的配置实例
+    // 创建一个带有默认值的配置
+    #[allow(dead_code)]
     pub fn new_with_defaults() -> Self {
         Self::default()
     }
@@ -717,7 +718,8 @@ impl Config {
         Ok(())
     }
 
-    // 解析keepalive配置为Duration
+    // 解析 keepalive 配置
+    #[allow(dead_code)]
     pub fn parse_keepalive(&self) -> Option<Duration> {
         self.http_client.keepalive.map(|seconds| Duration::from_secs(seconds as u64))
     }

@@ -191,7 +191,8 @@ impl DnsMetrics {
         &self.registry
     }
 
-    // 导出当前指标为字符串（用于测试）
+    // 导出所有指标为输出字符串
+    #[allow(dead_code)]
     pub fn export_metrics(&self) -> String {
         let encoder = prometheus::TextEncoder::new();
         let metric_families = self.registry.gather();

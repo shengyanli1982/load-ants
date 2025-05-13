@@ -13,15 +13,15 @@ use tokio::net::{TcpListener, UdpSocket};
 use tokio_graceful_shutdown::{SubsystemHandle, IntoSubsystem};
 use tracing::{debug, error, info, warn};
 
-/// DNS 服务器请求处理适配器
-/// 将我们的 RequestHandler 适配到 hickory-server 的 RequestHandler trait
+// DNS 服务器请求处理适配器
+// 将我们的 RequestHandler 适配到 hickory-server 的 RequestHandler trait
 pub struct HandlerAdapter {
-    /// 内部请求处理器
+    // 内部请求处理器
     handler: Arc<DnsRequestHandler>,
 }
 
 impl HandlerAdapter {
-    /// 创建新的处理器适配器
+    // 创建新的处理器适配器
     pub fn new(handler: Arc<DnsRequestHandler>) -> Self {
         Self { handler }
     }
@@ -199,26 +199,26 @@ impl RequestHandler for HandlerAdapter {
     }
 }
 
-/// DNS 服务器配置
+// DNS 服务器配置
 pub struct DnsServerConfig {
-    /// UDP绑定地址
+    // UDP绑定地址
     pub udp_bind_addr: SocketAddr,
-    /// TCP绑定地址
+    // TCP绑定地址
     pub tcp_bind_addr: SocketAddr,
-    /// TCP空闲超时时间（秒）
+    // TCP空闲超时时间（秒）
     pub tcp_timeout: u64,
 }
 
-/// DNS 服务器
+// DNS 服务器
 pub struct DnsServer {
-    /// 服务器配置
+    // 服务器配置
     config: DnsServerConfig,
-    /// 请求处理器
+    // 请求处理器
     handler: Arc<DnsRequestHandler>,
 }
 
 impl DnsServer {
-    /// 创建新的 DNS 服务器
+    // 创建新的 DNS 服务器
     pub fn new(
         config: DnsServerConfig,
         handler: Arc<DnsRequestHandler>,
@@ -268,70 +268,27 @@ impl IntoSubsystem<AppError> for DnsServer {
         let tcp_timeout = std::time::Duration::from_secs(self.config.tcp_timeout);
         server.register_listener(tcp_listener, tcp_timeout);
         
-        // 在外部作用域声明server变量，以便稍后可以调用shutdown_gracefully
-        let server_mutex = Arc::new(tokio::sync::Mutex::new(server));
-        let server_for_shutdown = server_mutex.clone();
-        
-        // 使用tokio spawn来运行服务器，这样可以在收到关闭信号时优雅关闭它
-        let server_handle = tokio::spawn(async move {
-            let mut server = server_mutex.lock().await;
-            match server.block_until_done().await {
-                Ok(_) => info!("DNS server task completed normally"),
-                Err(e) => error!("DNS server task error: {}", e),
-            }
-        });
-        
-        // 等待关闭信号或服务器任务完成
+        // 使用tokio::select!监听服务器和关闭信号
         tokio::select! {
-            result = server_handle => {
-                warn!("DNS server stopped unexpectedly");
+            result = server.block_until_done() => {
                 if let Err(e) = result {
-                    error!("DNS server task join error: {}", e);
+                    error!("DNS server error: {}", e);
+                } else {
+                    info!("DNS server completed normally");
                 }
                 Ok(())
             }
             _ = subsys.on_shutdown_requested() => {
                 info!("Shutdown requested, stopping DNS server");
                 
-                // 获取锁并调用shutdown_gracefully
-                let shutdown_success = {
-                    let mut server = match tokio::time::timeout(
-                        std::time::Duration::from_secs(1),
-                        server_for_shutdown.lock()
-                    ).await {
-                        Ok(guard) => guard,
-                        Err(_) => {
-                            warn!("Failed to acquire server lock for shutdown");
-                            return Ok(());
-                        }
-                    };
-                    
-                    // 调用优雅关闭方法
-                    match tokio::time::timeout(
-                        std::time::Duration::from_secs(15), // 15秒超时
-                        server.shutdown_gracefully()
-                    ).await {
-                        Ok(result) => {
-                            match result {
-                                Ok(_) => {
-                                    info!("DNS server shutdown completed successfully");
-                                    true
-                                },
-                                Err(e) => {
-                                    warn!("DNS server shutdown error: {}", e);
-                                    false
-                                }
-                            }
-                        },
-                        Err(_) => {
-                            warn!("DNS server shutdown timed out, forcing abort");
-                            false
-                        }
-                    }
-                };
-                
-                if shutdown_success {
-                    info!("DNS server gracefully shut down");
+                // 使用timeout包装graceful shutdown
+                match tokio::time::timeout(
+                    std::time::Duration::from_secs(15),
+                    server.shutdown_gracefully()
+                ).await {
+                    Ok(Ok(_)) => info!("DNS server shutdown completed successfully"),
+                    Ok(Err(e)) => warn!("DNS server shutdown error: {}", e),
+                    Err(_) => warn!("DNS server shutdown timed out")
                 }
                 
                 Ok(())

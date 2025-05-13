@@ -26,12 +26,14 @@ pub enum AppError {
     Upstream(String),
 
     #[error("Router error: {0}")]
+    #[allow(dead_code)]
     Router(String),
 
     #[error("Cache error: {0}")]
     Cache(String),
 
     #[error("Timeout error")]
+    #[allow(dead_code)]
     Timeout,
 
     #[error("No available upstream servers")]
@@ -54,6 +56,14 @@ pub enum AppError {
 
     #[error("HTTP client error: {0}")]
     HttpError(#[from] HttpClientError),
+
+    #[error("Missing required configuration: {0}")]
+    #[allow(dead_code)]
+    MissingRequiredConfig(String),
+
+    #[error("Invalid load balancing strategy: {0}")]
+    #[allow(dead_code)]
+    InvalidLoadBalancingStrategy(String),
 }
 
 impl From<reqwest_middleware::Error> for AppError {
@@ -94,12 +104,6 @@ pub enum ConfigError {
 
     #[error("Invalid upstream group name: {0}")]
     InvalidGroupName(String),
-
-    #[error("Missing required configuration: {0}")]
-    MissingRequiredConfig(String),
-
-    #[error("Invalid load balancing strategy: {0}")]
-    InvalidLoadBalancingStrategy(String),
 
     #[error("Invalid weight configuration: {0}")]
     InvalidWeightConfig(String),

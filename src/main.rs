@@ -111,8 +111,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         
         // 启动健康检查服务器子系统
         let health_server = components.health_server;
-        s.start(SubsystemBuilder::new("health_server", move |_| async move {
-            health_server.run().await
+        s.start(SubsystemBuilder::new("health_server", move |s| async move {
+            health_server.run(s).await
         }));
     });
 

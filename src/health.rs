@@ -12,18 +12,18 @@ use tokio::sync::oneshot;
 use tokio_graceful_shutdown::{SubsystemHandle, IntoSubsystem};
 use tracing::{error, info};
 
-/// 健康检查服务器
+// 健康检查服务器
 pub struct HealthServer {
-    /// 监听地址
+    // 监听地址
     listen_addr: SocketAddr,
-    /// 停止信号接收端
+    // 停止信号接收端
     shutdown_rx: Option<oneshot::Receiver<()>>,
-    /// 停止信号发送端
+    // 停止信号发送端
     shutdown_tx: Option<oneshot::Sender<()>>,
 }
 
 impl HealthServer {
-    /// 创建新的健康检查服务器
+    // 创建新的健康检查服务器
     pub fn new(listen_addr: SocketAddr) -> Self {
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
         
@@ -34,7 +34,7 @@ impl HealthServer {
         }
     }
     
-    /// 停止健康检查服务器
+    // 停止健康检查服务器
     pub fn shutdown(&mut self) {
         if let Some(tx) = self.shutdown_tx.take() {
             let _ = tx.send(());
@@ -42,7 +42,7 @@ impl HealthServer {
         }
     }
     
-    /// 启动健康检查服务器
+    // 启动健康检查服务器
     pub async fn start(&mut self) -> Result<(), AppError> {
         // 组合健康检查和指标路由
         let app = Router::new()
@@ -66,8 +66,9 @@ impl HealthServer {
         Ok(())
     }
     
-    /// 运行服务器（用于优雅关闭集成）
-    pub async fn run(mut self) -> Result<(), AppError> {
+    // 运行服务器（用于优雅关闭集成）
+    #[allow(dead_code)]
+    pub async fn start_server(mut self) -> Result<(), AppError> {
         self.start().await
     }
 }
@@ -94,7 +95,7 @@ impl IntoSubsystem<AppError> for HealthServer {
     }
 }
 
-/// 健康检查处理程序
+// 健康检查处理程序
 async fn health_handler() -> &'static str {
     "OK"
 } 

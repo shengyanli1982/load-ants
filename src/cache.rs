@@ -156,6 +156,7 @@ impl DnsCache {
     }
     
     // 清空缓存
+    #[allow(dead_code)]
     pub async fn clear(&self) {
         debug!("Clearing DNS cache");
         self.cache.invalidate_all();
@@ -291,6 +292,7 @@ impl DnsCache {
     }
     
     // 检查缓存是否为空
+    #[allow(dead_code)]
     pub async fn is_empty(&self) -> bool {
         self.cache.run_pending_tasks().await;
         self.cache.entry_count() == 0

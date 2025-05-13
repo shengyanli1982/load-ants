@@ -219,7 +219,8 @@ impl RequestHandler {
     }
 }
 
-// 处理 DNS 请求的入口函数
+// 处理DNS请求（仅用于测试）
+#[allow(dead_code)]
 pub async fn handle_request(
     request: Message,
     handler: &Arc<RequestHandler>,

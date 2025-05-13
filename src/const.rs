@@ -82,6 +82,7 @@ pub mod protocol_labels {
     // TCP协议
     pub const TCP: &str = "tcp";
     // 未知协议
+    #[allow(dead_code)]
     pub const UNKNOWN: &str = "unknown";
 }
 
@@ -120,12 +121,14 @@ pub mod cache_labels {
     // 缓存命中
     pub const HIT: &str = "hit";
     // 缓存未命中
+    #[allow(dead_code)]
     pub const MISS: &str = "miss";
     // 插入错误
     pub const INSERT_ERROR: &str = "insert_error";
     // 插入成功
     pub const INSERT: &str = "insert";
     // 清空缓存
+    #[allow(dead_code)]
     pub const CLEAR: &str = "clear";
     // 原始TTL
     pub const ORIGINAL: &str = "original";
@@ -148,6 +151,7 @@ pub mod upstream_labels {
     // 未知上游
     pub const UNKNOWN: &str = "unknown";
     // 重试
+    #[allow(dead_code)]
     pub const RETRY: &str = "retry";
 }
 
