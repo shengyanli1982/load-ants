@@ -1,3 +1,5 @@
+English | [中文](./README_CN.md)
+
 <div align="center">
     <h1>LOAD ANTS</h1>
     <h4>🐜🐜🐜 A lightweight DNS forwarder converting UDP/TCP queries to DoH.</h4></br>
