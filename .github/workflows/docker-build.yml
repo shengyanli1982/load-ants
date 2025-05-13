@@ -13,7 +13,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: shengyanli1982/loadants
+  IMAGE_NAME: shengyanli1982/load-ants
 
 jobs:
   build-and-push:
