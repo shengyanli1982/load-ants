@@ -37,10 +37,6 @@ tokio = { version = "1.35", features = ["full"] }
 tokio-graceful-shutdown = "0.15"
 tokio-util = { version = "0.7", features = ["io"] }
 native-tls = "0.2"
-[target.'cfg(unix)'.dependencies]
-openssl-sys = { version = "0.9", features = ["vendored"] }
-[target.'cfg(windows)'.dependencies]
-openssl-sys = "0.9"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 thiserror = "1.0"
@@ -57,6 +53,12 @@ axum = "0.7"
 hyper = "1.0"
 prometheus = "0.13"
 url = "2.4"
+
+# 这个一定要放在最后，否则会报错
+[target.'cfg(unix)'.dependencies]
+openssl-sys = { version = "0.9", features = ["vendored"] }
+[target.'cfg(windows)'.dependencies]
+openssl-sys = "0.9"
 
 [dev-dependencies]
 tempfile = "3.8"
