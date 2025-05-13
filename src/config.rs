@@ -109,6 +109,8 @@ pub struct UpstreamGroupConfig {
     pub servers: Vec<UpstreamServerConfig>,
     // 重试配置（可选）
     pub retry: Option<RetryConfig>,
+    // 代理（可选）
+    pub proxy: Option<String>,
 }
 
 // 路由匹配类型枚举
@@ -158,8 +160,20 @@ pub struct HttpClientConfig {
     pub idle_timeout: Option<u64>,
     // TCP Keepalive（秒）（可选）
     pub keepalive: Option<u32>,
-    // HTTP代理（可选）
-    pub proxy: Option<String>,
+    // HTTP用户代理（可选）
+    pub agent: Option<String>,
+}
+
+impl Default for HttpClientConfig {
+    fn default() -> Self {
+        Self {
+            connect_timeout: crate::r#const::DEFAULT_CONNECT_TIMEOUT,
+            request_timeout: crate::r#const::DEFAULT_REQUEST_TIMEOUT,
+            idle_timeout: Some(crate::r#const::DEFAULT_TCP_IDLE_TIMEOUT),
+            keepalive: Some(30),
+            agent: None,
+        }
+    }
 }
 
 // 服务器配置
@@ -169,6 +183,23 @@ pub struct ServerConfig {
     pub listen_udp: String,
     // TCP监听地址
     pub listen_tcp: String,
+    // TCP连接空闲超时（秒）
+    #[serde(default = "default_tcp_timeout")]
+    pub tcp_timeout: u64,
+}
+
+fn default_tcp_timeout() -> u64 {
+    10 // 默认TCP空闲超时10秒
+}
+
+impl Default for ServerConfig {
+    fn default() -> Self {
+        Self {
+            listen_udp: "127.0.0.1:53".to_string(),
+            listen_tcp: "127.0.0.1:53".to_string(),
+            tcp_timeout: default_tcp_timeout(),
+        }
+    }
 }
 
 // 缓存配置
@@ -184,11 +215,30 @@ pub struct CacheConfig {
     pub max_ttl: u32,
 }
 
+impl Default for CacheConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            max_size: crate::r#const::DEFAULT_CACHE_SIZE,
+            min_ttl: 60,
+            max_ttl: crate::r#const::DEFAULT_CACHE_TTL,
+        }
+    }
+}
+
 // 健康检查服务器配置
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub struct HealthConfig {
     // 健康检查服务器监听地址
     pub listen: String,
+}
+
+impl Default for HealthConfig {
+    fn default() -> Self {
+        Self {
+            listen: "127.0.0.1:8080".to_string(),
+        }
+    }
 }
 
 // 应用配置
@@ -216,6 +266,11 @@ impl Config {
         let config: Config = serde_yaml::from_str(&content).map_err(ConfigError::ParseError)?;
         config.validate()?;
         Ok(config)
+    }
+
+    // 创建一个使用默认值的配置实例
+    pub fn new_with_defaults() -> Self {
+        Self::default()
     }
 
     // 验证配置有效性
@@ -363,11 +418,11 @@ impl Config {
             }
         }
 
-        // 验证代理URL格式
-        if let Some(proxy) = &self.http_client.proxy {
-            if !proxy.starts_with("http://") && !proxy.starts_with("https://") && !proxy.starts_with("socks5://") {
+        // 验证用户代理（如果提供）
+        if let Some(agent) = &self.http_client.agent {
+            if agent.trim().is_empty() {
                 return Err(ConfigError::InvalidHttpClientConfig(
-                    "invalid proxy format, should start with http://, https://, or socks5://".into(),
+                    "agent cannot be empty if provided".into(),
                 ));
             }
         }
@@ -431,6 +486,16 @@ impl Config {
                     "组'{}'的服务器列表不能为空",
                     group.name
                 )));
+            }
+            
+            // 验证代理URL格式（如果提供）
+            if let Some(proxy) = &group.proxy {
+                if !proxy.starts_with("http://") && !proxy.starts_with("https://") && !proxy.starts_with("socks5://") {
+                    return Err(ConfigError::InvalidGroupName(format!(
+                        "组'{}'的代理URL格式无效，应以http://、https://或socks5://开头",
+                        group.name
+                    )));
+                }
             }
             
             // 验证负载均衡策略与配置是否一致
@@ -655,5 +720,45 @@ impl Config {
     // 解析keepalive配置为Duration
     pub fn parse_keepalive(&self) -> Option<Duration> {
         self.http_client.keepalive.map(|seconds| Duration::from_secs(seconds as u64))
+    }
+}
+
+// 默认配置实现
+impl Default for Config {
+    fn default() -> Self {
+        Config {
+            server: ServerConfig::default(),
+            health: HealthConfig::default(),
+            cache: CacheConfig::default(),
+            http_client: HttpClientConfig::default(),
+            upstream_groups: vec![
+                UpstreamGroupConfig {
+                    name: "default".to_string(),
+                    strategy: LoadBalancingStrategy::RoundRobin,
+                    servers: vec![
+                        UpstreamServerConfig {
+                            url: "https://dns.google/dns-query".to_string(),
+                            weight: 1,
+                            method: DoHMethod::Post,
+                            content_type: DoHContentType::Message,
+                            auth: None,
+                        },
+                    ],
+                    retry: Some(RetryConfig {
+                        attempts: 3,
+                        delay: 1,
+                    }),
+                    proxy: None,
+                },
+            ],
+            routing_rules: vec![
+                RouteRuleConfig {
+                    match_type: MatchType::Wildcard,
+                    pattern: "*".to_string(),
+                    action: RouteAction::Forward,
+                    target: Some("default".to_string()),
+                },
+            ],
+        }
     }
 }

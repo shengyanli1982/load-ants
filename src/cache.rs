@@ -1,6 +1,7 @@
 use crate::error::AppError;
 use crate::r#const::cache_labels;
 use crate::r#const::cache_limits;
+use crate::r#const::ttl_source_labels;
 use crate::metrics::METRICS;
 use hickory_proto::op::{Message, ResponseCode};
 use hickory_proto::rr::{RecordType, DNSClass};
@@ -129,6 +130,11 @@ impl DnsCache {
         // 计算TTL
         let ttl = self.calculate_min_ttl(&response);
         
+        // 记录TTL指标
+        METRICS.cache_ttl_seconds()
+            .with_label_values(&[ttl_source_labels::ADJUSTED])
+            .observe(ttl as f64);
+        
         // 创建缓存条目
         let entry = CacheEntry {
             message: response,
@@ -187,12 +193,33 @@ impl DnsCache {
             min_ttl = min_ttl.min(record.ttl());
         }
         
+        // 如果找到有效的TTL，记录原始值
+        if min_ttl != u32::MAX {
+            // 记录原始TTL指标
+            METRICS.cache_ttl_seconds()
+                .with_label_values(&[ttl_source_labels::ORIGINAL])
+                .observe(min_ttl as f64);
+        }
+        
         // 如果没有找到有效的TTL，使用最小TTL
         if min_ttl == u32::MAX {
             min_ttl = self.min_ttl;
+            
+            // 记录使用最小TTL指标
+            METRICS.cache_ttl_seconds()
+                .with_label_values(&[ttl_source_labels::MIN_TTL])
+                .observe(min_ttl as f64);
         } else {
             // 应用最小TTL限制
+            let before_adjustment = min_ttl;
             min_ttl = min_ttl.max(self.min_ttl);
+            
+            // 如果TTL被调整了，记录指标
+            if before_adjustment != min_ttl {
+                METRICS.cache_ttl_seconds()
+                    .with_label_values(&[ttl_source_labels::MIN_TTL])
+                    .observe(min_ttl as f64);
+            }
         }
         
         // 记录TTL调整
@@ -217,6 +244,11 @@ impl DnsCache {
                 1 // 至少保留1秒TTL
             };
             record.set_ttl(new_ttl);
+            
+            // 记录实际TTL指标（经过时间调整后）
+            METRICS.cache_ttl_seconds()
+                .with_label_values(&[ttl_source_labels::ADJUSTED])
+                .observe(new_ttl as f64);
         }
         
         // 调整权威记录的TTL

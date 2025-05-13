@@ -133,6 +133,16 @@ pub mod cache_labels {
     pub const ADJUSTED: &str = "adjusted";
 }
 
+// TTL源标签
+pub mod ttl_source_labels {
+    // 记录原始TTL
+    pub const ORIGINAL: &str = "original";
+    // 最小TTL配置
+    pub const MIN_TTL: &str = "min_ttl";
+    // TTL已调整
+    pub const ADJUSTED: &str = "adjusted";
+}
+
 // 上游标签
 pub mod upstream_labels {
     // 未知上游

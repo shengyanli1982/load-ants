@@ -20,6 +20,8 @@ use std::{
     time::Duration,
 };
 use tracing::{debug, error, info, warn};
+use hickory_proto::rr::rdata as HickoryRData;
+use retry_policies::{Jitter};
 
 // 负载均衡器特性
 #[async_trait]
@@ -142,10 +144,8 @@ impl LoadBalancer for RandomBalancer {
 pub struct UpstreamManager {
     // 上游组负载均衡器
     groups: HashMap<String, Arc<dyn LoadBalancer>>,
-    // 上游组重试配置
-    group_retry_configs: HashMap<String, RetryConfig>,
-    // 共享HTTP客户端
-    client: ClientWithMiddleware,
+    // 上游组客户端
+    group_clients: HashMap<String, ClientWithMiddleware>,
 }
 
 impl UpstreamManager {
@@ -155,29 +155,25 @@ impl UpstreamManager {
         http_config: HttpClientConfig,
     ) -> Result<Self, AppError> {
         let mut group_map = HashMap::with_capacity(groups.len());
-        let mut retry_configs = HashMap::new();
+        let mut group_clients = HashMap::new();
         
-        // 创建HTTP客户端
-        let client = Self::create_http_client(&http_config)?;
-        
-        // 为每个组创建负载均衡器
+        // 为每个组创建负载均衡器和HTTP客户端
         for group in groups {
             let lb: Arc<dyn LoadBalancer> = match group.strategy {
                 LoadBalancingStrategy::RoundRobin => {
-                    Arc::new(RoundRobinBalancer::new(group.servers))
+                    Arc::new(RoundRobinBalancer::new(group.servers.clone()))
                 }
                 LoadBalancingStrategy::Weighted => {
-                    Arc::new(WeightedBalancer::new(group.servers))
+                    Arc::new(WeightedBalancer::new(group.servers.clone()))
                 }
                 LoadBalancingStrategy::Random => {
-                    Arc::new(RandomBalancer::new(group.servers))
+                    Arc::new(RandomBalancer::new(group.servers.clone()))
                 }
             };
             
-            // 保存重试配置（如果有）
-            if let Some(retry) = group.retry {
-                retry_configs.insert(group.name.clone(), retry);
-            }
+            // 创建该组的HTTP客户端
+            let client = Self::create_http_client(&http_config, group.proxy.as_deref(), group.retry.as_ref())?;
+            group_clients.insert(group.name.clone(), client);
             
             group_map.insert(group.name, lb);
         }
@@ -186,14 +182,13 @@ impl UpstreamManager {
         
         Ok(Self {
             groups: group_map,
-            group_retry_configs: retry_configs,
-            client,
+            group_clients,
         })
     }
 
     // 创建HTTP客户端
-    fn create_http_client(config: &HttpClientConfig) -> Result<ClientWithMiddleware, AppError> {
-        debug!("Creating HTTP client, config: {:?}", config);
+    fn create_http_client(config: &HttpClientConfig, proxy: Option<&str>, retry_config: Option<&RetryConfig>) -> Result<ClientWithMiddleware, AppError> {
+        debug!("Creating HTTP client, config: {:?}, proxy: {:?}, retry_config: {:?}", config, proxy, retry_config);
         
         // 创建客户端构建器
         let mut client_builder = reqwest::ClientBuilder::new()
@@ -211,9 +206,14 @@ impl UpstreamManager {
             client_builder = client_builder.pool_idle_timeout(Duration::from_secs(idle_timeout));
         }
         
+        // 配置用户代理
+        if let Some(ref agent) = config.agent {
+            client_builder = client_builder.user_agent(agent);
+        }
+        
         // 配置代理
-        if let Some(ref proxy) = config.proxy {
-            client_builder = client_builder.proxy(reqwest::Proxy::all(proxy).map_err(|e| {
+        if let Some(proxy_url) = proxy {
+            client_builder = client_builder.proxy(reqwest::Proxy::all(proxy_url).map_err(|e| {
                 AppError::InvalidProxy(InvalidProxyConfig(format!("Proxy configuration error: {}", e)))
             })?);
         }
@@ -223,14 +223,25 @@ impl UpstreamManager {
             AppError::HttpError(HttpClientError(format!("Failed to create HTTP client: {}", e)))
         })?;
         
-        // 创建重试策略
-        let retry_policy = ExponentialBackoff::builder()
-            .build_with_max_retries(3);
-        
-        // 创建中间件客户端
-        let middleware_client = reqwest_middleware::ClientBuilder::new(client)
-            .with(RetryTransientMiddleware::new_with_policy(retry_policy))
-            .build();
+        // 配置重试策略（根据组的重试配置）
+        let middleware_client = if let Some(retry) = retry_config {
+            // 使用指数退避策略，基于组的重试配置
+            let retry_policy = ExponentialBackoff::builder()
+                // 设置指数退避的基数
+                .base(retry.delay as u32)
+                // 使用有界抖动来避免多个客户端同时重试
+                .jitter(Jitter::Bounded)
+                // 配置最大重试次数
+                .build_with_max_retries(retry.attempts);
+            
+            reqwest_middleware::ClientBuilder::new(client)
+                .with(RetryTransientMiddleware::new_with_policy(retry_policy))
+                .build()
+        } else {
+            // 不进行重试
+            reqwest_middleware::ClientBuilder::new(client)
+                .build()
+        };
         
         Ok(middleware_client)
     }
@@ -247,7 +258,7 @@ impl UpstreamManager {
                 return Err(AppError::UpstreamGroupNotFound(group_name.to_string()));
             }
         };
-        
+
         // 选择一个上游服务器
         let server = match load_balancer.select_server().await {
             Ok(s) => s,
@@ -265,80 +276,39 @@ impl UpstreamManager {
         
         debug!("Selected upstream server: {}", server.url);
         
-        // 获取重试配置（如果有）
-        let retry_config = self.group_retry_configs.get(group_name);
+        // 记录上游请求指标
+        METRICS.upstream_requests_total()
+            .with_label_values(&[group_name, &server.url])
+            .inc();
+            
+        // 记录开始时间
+        let start_time = std::time::Instant::now();
         
-        // 根据重试配置决定是否使用重试
-        let result = if let Some(retry) = retry_config {
-            debug!("Sending DoH request with retry policy: attempts: {}", retry.attempts);
-            
-            // 记录上游请求指标
-            METRICS.upstream_requests_total()
-                .with_label_values(&[group_name, &server.url])
-                .inc();
+        // 发送请求（通过reqwest-retry中间件处理重试）
+        match self.send_doh_request(query, &server, group_name).await {
+            Ok(response) => {
+                // 记录上游请求耗时
+                let duration = start_time.elapsed();
+                METRICS.upstream_duration_seconds()
+                    .with_label_values(&[group_name, &server.url])
+                    .observe(duration.as_secs_f64());
                 
-            // 记录开始时间
-            let start_time = std::time::Instant::now();
-            
-            match self.send_doh_request_with_retry(query, &server, retry).await {
-                Ok(response) => {
-                    // 记录上游请求耗时
-                    let duration = start_time.elapsed();
-                    METRICS.upstream_duration_seconds()
-                        .with_label_values(&[group_name, &server.url])
-                        .observe(duration.as_secs_f64());
-                    
-                    Ok(response)
-                }
-                Err(e) => {
-                    error!("Upstream request failed (with retry): {} - {}", server.url, e);
-                    
-                    // 记录上游错误指标
-                    METRICS.upstream_errors_total()
-                        .with_label_values(&[error_labels::REQUEST_ERROR, group_name, &server.url])
-                        .inc();
-                    
-                    Err(e)
-                }
+                Ok(response)
             }
-        } else {
-            debug!("Sending DoH request without retry policy");
-            
-            // 记录上游请求指标
-            METRICS.upstream_requests_total()
-                .with_label_values(&[group_name, &server.url])
-                .inc();
+            Err(e) => {
+                error!("Upstream request failed: {} - {}", server.url, e);
                 
-            // 记录开始时间
-            let start_time = std::time::Instant::now();
-            
-            match self.send_doh_request(query, &server).await {
-                Ok(response) => {
-                    // 记录上游请求耗时
-                    let duration = start_time.elapsed();
-                    METRICS.upstream_duration_seconds()
-                        .with_label_values(&[group_name, &server.url])
-                        .observe(duration.as_secs_f64());
-                    
-                    Ok(response)
-                }
-                Err(e) => {
-                    error!("Upstream request failed (without retry): {} - {}", server.url, e);
-                    
-                    // 报告上游失败
-                    load_balancer.report_failure(&server).await;
-                    
-                    // 记录上游错误指标
-                    METRICS.upstream_errors_total()
-                        .with_label_values(&[error_labels::REQUEST_ERROR, group_name, &server.url])
-                        .inc();
-                    
-                    Err(e)
-                }
+                // 报告上游失败
+                load_balancer.report_failure(&server).await;
+                
+                // 记录上游错误指标
+                METRICS.upstream_errors_total()
+                    .with_label_values(&[error_labels::REQUEST_ERROR, group_name, &server.url])
+                    .inc();
+                
+                Err(e)
             }
-        };
-        
-        result
+        }
     }
 
     // 发送DoH请求
@@ -346,58 +316,12 @@ impl UpstreamManager {
         &self,
         query: &Message,
         server: &UpstreamServerConfig,
+        group_name: &str,
     ) -> Result<Message, AppError> {
         // 根据配置的方法选择GET或POST
         match server.method.clone() {
-            DoHMethod::Get => self.send_doh_request_get(query, server).await,
-            DoHMethod::Post => self.send_doh_request_post(query, server).await,
-        }
-    }
-
-    // 带重试的DoH请求发送
-    async fn send_doh_request_with_retry(
-        &self,
-        query: &Message,
-        server: &UpstreamServerConfig,
-        retry: &RetryConfig,
-    ) -> Result<Message, AppError> {
-        let mut attempts = 0;
-        let max_attempts = retry.attempts;
-        let initial_delay = retry.delay;
-        
-        loop {
-            attempts += 1;
-            
-            debug!("Trying request to {} (attempt {}/{})", server.url, attempts, max_attempts);
-            
-            // 记录重试次数 (对于第一次尝试不计入)
-            if attempts > 1 {
-                METRICS.upstream_retry_total()
-                    .with_label_values(&[upstream_labels::RETRY, &server.url])
-                    .inc();
-            }
-            
-            match self.send_doh_request(query, server).await {
-                Ok(response) => {
-                    if attempts > 1 {
-                        info!("Retry successful! Attempts: {}/{}", attempts, max_attempts);
-                    }
-                    return Ok(response);
-                }
-                Err(e) => {
-                    if attempts >= max_attempts {
-                        warn!("Maximum retry attempts ({}) reached, giving up: {}", max_attempts, e);
-                        return Err(e);
-                    }
-                    
-                    // 计算下一次尝试前的延迟时间 (指数退避)
-                    let delay = initial_delay * 2u32.pow(attempts - 1);
-                    debug!("Request failed, will retry in {}s: {}", delay, e);
-                    
-                    // 等待一段时间后重试
-                    tokio::time::sleep(std::time::Duration::from_secs(delay.into())).await;
-                }
-            }
+            DoHMethod::Get => self.send_doh_request_get(query, server, group_name).await,
+            DoHMethod::Post => self.send_doh_request_post(query, server, group_name).await,
         }
     }
 
@@ -406,7 +330,17 @@ impl UpstreamManager {
         &self,
         query: &Message,
         server: &UpstreamServerConfig,
+        group_name: &str,
     ) -> Result<Message, AppError> {
+        // 获取组的HTTP客户端
+        let client = match self.group_clients.get(group_name) {
+            Some(c) => c,
+            None => {
+                error!("HTTP client not found for group: {}", group_name);
+                return Err(AppError::UpstreamGroupNotFound(group_name.to_string()));
+            }
+        };
+
         // 创建请求URL
         let url = Url::parse(&server.url).map_err(|e| {
             AppError::Upstream(format!("无效的上游URL: {} - {}", server.url, e))
@@ -419,7 +353,7 @@ impl UpstreamManager {
                 let query_data = query.to_vec()?;
                 
                 // 创建POST请求
-                let mut request = self.client
+                let mut request = client
                     .post(url)
                     .header("Accept", "application/dns-message")
                     .header("Content-Type", "application/dns-message")
@@ -445,12 +379,6 @@ impl UpstreamManager {
                 let json_string = serde_json::to_string(&json_data)?;
                 
                 // 创建POST请求
-                let client = reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
-                    .with(RetryTransientMiddleware::new_with_policy(
-                        ExponentialBackoff::builder().build_with_max_retries(3)
-                    ))
-                    .build();
-                
                 let request = client
                     .post(url)
                     .header("Accept", "application/dns-json")
@@ -474,7 +402,17 @@ impl UpstreamManager {
         &self,
         query: &Message,
         server: &UpstreamServerConfig,
+        group_name: &str,
     ) -> Result<Message, AppError> {
+        // 获取组的HTTP客户端
+        let client = match self.group_clients.get(group_name) {
+            Some(c) => c,
+            None => {
+                error!("HTTP client not found for group: {}", group_name);
+                return Err(AppError::UpstreamGroupNotFound(group_name.to_string()));
+            }
+        };
+        
         // 创建请求URL
         let mut url = Url::parse(&server.url).map_err(|e| {
             AppError::Upstream(format!("无效的上游URL: {} - {}", server.url, e))
@@ -493,7 +431,7 @@ impl UpstreamManager {
                 url.query_pairs_mut().append_pair("dns", &b64_data);
                 
                 // 创建GET请求
-                let mut request = self.client
+                let mut request = client
                     .get(url)
                     .header("Accept", "application/dns-message");
                 
@@ -528,7 +466,7 @@ impl UpstreamManager {
                 }
                 
                 // 创建GET请求
-                let mut request = self.client
+                let mut request = client
                     .get(url)
                     .header("Accept", "application/dns-json");
                 
@@ -686,7 +624,7 @@ impl UpstreamManager {
                             match data.parse::<Ipv4Addr>() {
                                 Ok(addr) => {
                                     let octets = addr.octets();
-                                    let rdata = hickory_proto::rr::rdata::A::new(octets[0], octets[1], octets[2], octets[3]);
+                                    let rdata = HickoryRData::A::new(octets[0], octets[1], octets[2], octets[3]);
                                     Record::from_rdata(
                                         name.clone(),
                                         ttl as u32,
@@ -703,7 +641,7 @@ impl UpstreamManager {
                             match data.parse::<Ipv6Addr>() {
                                 Ok(addr) => {
                                     let segments = addr.segments();
-                                    let rdata = hickory_proto::rr::rdata::AAAA::new(
+                                    let rdata = HickoryRData::AAAA::new(
                                         segments[0], segments[1], segments[2], segments[3],
                                         segments[4], segments[5], segments[6], segments[7]
                                     );
@@ -722,7 +660,7 @@ impl UpstreamManager {
                         RecordType::CNAME => {
                             match Name::parse(data, None) {
                                 Ok(target) => {
-                                    let rdata = hickory_proto::rr::rdata::CNAME(target);
+                                    let rdata = HickoryRData::CNAME(target);
                                     Record::from_rdata(
                                         name.clone(),
                                         ttl as u32,
@@ -741,7 +679,7 @@ impl UpstreamManager {
                             if parts.len() >= 2 {
                                 match (parts[0].parse::<u16>(), Name::parse(parts[1], None)) {
                                     (Ok(preference), Ok(exchange)) => {
-                                        let rdata = hickory_proto::rr::rdata::MX::new(preference, exchange);
+                                        let rdata = HickoryRData::MX::new(preference, exchange);
                                         Record::from_rdata(
                                             name.clone(),
                                             ttl as u32,
@@ -760,7 +698,7 @@ impl UpstreamManager {
                         }
                         RecordType::TXT => {
                             let txt_strings = vec![data.to_string()];
-                            let rdata = hickory_proto::rr::rdata::TXT::new(txt_strings);
+                            let rdata = HickoryRData::TXT::new(txt_strings);
                             Record::from_rdata(
                                 name.clone(),
                                 ttl as u32,

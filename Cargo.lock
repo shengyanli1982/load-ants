@@ -1170,6 +1170,7 @@ dependencies = [
  "reqwest-lb",
  "reqwest-middleware",
  "reqwest-retry",
+ "retry-policies",
  "serde",
  "serde_json",
  "serde_yaml",

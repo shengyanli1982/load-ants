@@ -55,6 +55,11 @@ build:
 # 构建发布版本
 .PHONY: build-release
 build-release:
+	$(CARGO) build --release --bin $(BINARY_NAME) --target $(TARGET)
+
+# 构建发布版本
+.PHONY: build-release
+build-release:
 
 # 运行代码检查
 .PHONY: check

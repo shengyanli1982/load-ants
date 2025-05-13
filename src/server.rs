@@ -12,17 +12,17 @@ use std::time::Instant;
 use tokio::net::{TcpListener, UdpSocket};
 use tokio::sync::oneshot;
 use tokio_graceful_shutdown::{SubsystemHandle, IntoSubsystem};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
-// DNS 服务器请求处理适配器
-// 将我们的 RequestHandler 适配到 hickory-server 的 RequestHandler trait
+/// DNS 服务器请求处理适配器
+/// 将我们的 RequestHandler 适配到 hickory-server 的 RequestHandler trait
 pub struct HandlerAdapter {
-    // 内部请求处理器
+    /// 内部请求处理器
     handler: Arc<DnsRequestHandler>,
 }
 
 impl HandlerAdapter {
-    // 创建新的处理器适配器
+    /// 创建新的处理器适配器
     pub fn new(handler: Arc<DnsRequestHandler>) -> Self {
         Self { handler }
     }
@@ -39,9 +39,10 @@ impl RequestHandler for HandlerAdapter {
         let start_time = Instant::now();
         
         // 记录协议类型
-        let protocol = match request.src().ip() {
-            std::net::IpAddr::V4(_) => protocol_labels::UDP,
-            std::net::IpAddr::V6(_) => protocol_labels::TCP,
+        let protocol = match request.protocol() {
+            hickory_server::server::Protocol::Udp => protocol_labels::UDP,
+            hickory_server::server::Protocol::Tcp => protocol_labels::TCP,
+            _ => "unknown", // 添加通配符匹配
         };
         
         // 增加请求计数
@@ -199,106 +200,113 @@ impl RequestHandler for HandlerAdapter {
     }
 }
 
-// DNS 服务器
+/// DNS 服务器配置
+pub struct DnsServerConfig {
+    /// UDP绑定地址
+    pub udp_bind_addr: SocketAddr,
+    /// TCP绑定地址
+    pub tcp_bind_addr: SocketAddr,
+    /// TCP空闲超时时间（秒）
+    pub tcp_timeout: u64,
+}
+
+/// DNS 服务器
 pub struct DnsServer {
-    // 绑定地址
-    bind_addr: SocketAddr,
-    // 请求处理器
+    /// 服务器配置
+    config: DnsServerConfig,
+    /// 请求处理器
     handler: Arc<DnsRequestHandler>,
-    // 停止信号接收端
-    shutdown_rx: Option<oneshot::Receiver<()>>,
-    // 停止信号发送端
-    shutdown_tx: Option<oneshot::Sender<()>>,
 }
 
 impl DnsServer {
-    // 创建新的 DNS 服务器
+    /// 创建新的 DNS 服务器
     pub fn new(
-        bind_addr: SocketAddr,
+        config: DnsServerConfig,
         handler: Arc<DnsRequestHandler>,
     ) -> Self {
-        let (shutdown_tx, shutdown_rx) = oneshot::channel();
-        
         Self {
-            bind_addr,
+            config,
             handler,
-            shutdown_rx: Some(shutdown_rx),
-            shutdown_tx: Some(shutdown_tx),
-        }
-    }
-    
-    // 停止 DNS 服务器
-    pub fn shutdown(&mut self) {
-        if let Some(tx) = self.shutdown_tx.take() {
-            let _ = tx.send(());
-            info!("DNS server stop signal sent");
-        }
-    }
-
-    // 运行服务器（用于优雅关闭集成）
-    pub async fn run(mut self) -> Result<(), AppError> {
-        let adapter = HandlerAdapter::new(self.handler.clone());
-        let mut server = hickory_server::ServerFuture::new(adapter);
-        
-        // 绑定 UDP 端口
-        let udp_socket = UdpSocket::bind(self.bind_addr).await?;
-        info!("DNS server UDP listening on {}", self.bind_addr);
-        server.register_socket(udp_socket);
-        
-        // 绑定 TCP 端口
-        let tcp_listener = TcpListener::bind(self.bind_addr).await?;
-        info!("DNS server TCP listening on {}", self.bind_addr);
-        server.register_listener(tcp_listener, std::time::Duration::from_secs(10));
-        
-        // 运行服务器直到收到停止信号
-        let shutdown_rx = self.shutdown_rx.take()
-            .expect("DNS 服务器已经启动");
-            
-        tokio::select! {
-            _ = server.block_until_done() => {
-                info!("DNS server task completed");
-                Ok(())
-            }
-            _ = shutdown_rx => {
-                info!("DNS server received shutdown signal");
-                Ok(())
-            }
         }
     }
 }
 
 #[async_trait::async_trait]
 impl IntoSubsystem<AppError> for DnsServer {
-    async fn run(mut self, subsys: SubsystemHandle) -> Result<(), AppError> {
+    async fn run(self, subsys: SubsystemHandle) -> Result<(), AppError> {
+        // 创建处理器适配器
         let adapter = HandlerAdapter::new(self.handler.clone());
+        
+        // 创建服务器实例
         let mut server = hickory_server::ServerFuture::new(adapter);
         
         // 绑定 UDP 端口
-        let udp_socket = UdpSocket::bind(self.bind_addr).await?;
-        info!("DNS server UDP listening on {}", self.bind_addr);
+        let udp_socket = match UdpSocket::bind(self.config.udp_bind_addr).await {
+            Ok(socket) => {
+                info!("DNS server UDP listening on {}", self.config.udp_bind_addr);
+                socket
+            },
+            Err(e) => {
+                error!("Failed to bind UDP socket: {}", e);
+                return Err(AppError::Io(e));
+            }
+        };
         server.register_socket(udp_socket);
         
         // 绑定 TCP 端口
-        let tcp_listener = TcpListener::bind(self.bind_addr).await?;
-        info!("DNS server TCP listening on {}", self.bind_addr);
-        server.register_listener(tcp_listener, std::time::Duration::from_secs(10));
-        
-        // 运行服务器直到收到停止信号
-        let shutdown_rx = self.shutdown_rx.take()
-            .expect("DNS 服务器已经启动");
-            
-        tokio::select! {
-            _ = server.block_until_done() => {
-                info!("DNS server task completed");
-                Ok(())
+        let tcp_listener = match TcpListener::bind(self.config.tcp_bind_addr).await {
+            Ok(listener) => {
+                info!("DNS server TCP listening on {}", self.config.tcp_bind_addr);
+                listener
+            },
+            Err(e) => {
+                error!("Failed to bind TCP listener: {}", e);
+                return Err(AppError::Io(e));
             }
-            _ = shutdown_rx => {
-                info!("DNS server received shutdown signal");
+        };
+        
+        // 设置TCP超时
+        let tcp_timeout = std::time::Duration::from_secs(self.config.tcp_timeout);
+        server.register_listener(tcp_listener, tcp_timeout);
+        
+        // 创建关闭通知通道
+        let (shutdown_tx, _shutdown_rx) = oneshot::channel();
+        
+        // 使用tokio spawn来运行服务器，这样可以在收到关闭信号时取消它
+        let mut server_handle = tokio::spawn(async move {
+            match server.block_until_done().await {
+                Ok(_) => info!("DNS server task completed normally"),
+                Err(e) => error!("DNS server task error: {}", e),
+            }
+        });
+        
+        // 等待关闭信号或服务器任务完成
+        tokio::select! {
+            _result = &mut server_handle => {
+                warn!("DNS server stopped unexpectedly");
                 Ok(())
             }
             _ = subsys.on_shutdown_requested() => {
-                info!("Received subsystem shutdown request, stopping DNS server");
-                self.shutdown();
+                info!("Shutdown requested, stopping DNS server");
+                // 发送关闭信号并等待服务器任务完成
+                if let Err(_) = shutdown_tx.send(()) {
+                    error!("Failed to send shutdown signal");
+                }
+                
+                // 给一个合理的超时时间来等待服务器关闭
+                let timeout = tokio::time::timeout(
+                    std::time::Duration::from_secs(5), 
+                    server_handle
+                ).await;
+                
+                match timeout {
+                    Ok(_) => info!("DNS server shutdown completed"),
+                    Err(_) => {
+                        warn!("DNS server shutdown timed out, forcing abort");
+                        // 这里不需要显式调用 abort()，因为 server_handle 会在函数结束时被 drop
+                    }
+                }
+                
                 Ok(())
             }
         }

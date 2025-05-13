@@ -32,7 +32,6 @@ pub struct DnsMetrics {
     upstream_requests_total: IntCounterVec,
     upstream_errors_total: IntCounterVec,
     upstream_duration_seconds: HistogramVec,
-    upstream_retry_total: IntCounterVec,
     
     // 5. 路由策略指标
     route_matches_total: IntCounterVec,
@@ -124,11 +123,6 @@ impl DnsMetrics {
             &["group", "server"]
         ).unwrap();
         
-        let upstream_retry_total = IntCounterVec::new(
-            opts!("loadants_upstream_retry_total", "Total retry attempts for upstream DoH requests, classified by group and server"),
-            &["group", "server"]
-        ).unwrap();
-        
         // 5. 路由策略指标
         let route_matches_total = IntCounterVec::new(
             opts!("loadants_route_matches_total", "Total routing rule matches, classified by rule type (exact, wildcard, regex) and target group"),
@@ -155,7 +149,6 @@ impl DnsMetrics {
             upstream_requests_total,
             upstream_errors_total,
             upstream_duration_seconds,
-            upstream_retry_total,
             route_matches_total,
             route_rules_count,
         };
@@ -187,7 +180,6 @@ impl DnsMetrics {
         self.registry.register(Box::new(self.upstream_requests_total.clone())).unwrap();
         self.registry.register(Box::new(self.upstream_errors_total.clone())).unwrap();
         self.registry.register(Box::new(self.upstream_duration_seconds.clone())).unwrap();
-        self.registry.register(Box::new(self.upstream_retry_total.clone())).unwrap();
         
         // 5. 路由策略指标
         self.registry.register(Box::new(self.route_matches_total.clone())).unwrap();
@@ -260,10 +252,6 @@ impl DnsMetrics {
     
     pub fn upstream_duration_seconds(&self) -> &HistogramVec {
         &self.upstream_duration_seconds
-    }
-    
-    pub fn upstream_retry_total(&self) -> &IntCounterVec {
-        &self.upstream_retry_total
     }
     
     // 5. 路由策略指标

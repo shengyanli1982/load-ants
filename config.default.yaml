@@ -22,7 +22,7 @@ http_client:
   request_timeout: 10 # 请求超时（秒）(有效范围: 1-1200)
   idle_timeout: 60 # 可选：空闲连接超时（秒）(有效范围: 5-1800)
   keepalive: 60 # 可选：TCP Keepalive（秒）(有效范围: 5-600)
-  # proxy: "http://user:pass@proxyserver:port" # 可选：HTTP/SOCKS5 代理
+  agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" # 可选：HTTP 用户代理
 
 # 上游 DoH 服务器组
 upstream_groups:
@@ -37,6 +37,7 @@ upstream_groups:
     retry: # 可选的重试策略
       attempts: 3 # 重试次数 (有效范围: 1-100)
       delay: 1 # 延迟初始秒数 (有效范围: 1-120)
+    proxy: "http://user:pass@proxyserver:port" # 可选：HTTP/SOCKS5 代理
 
   - name: "cloudflare_secure"
     strategy: "random"
@@ -47,6 +48,7 @@ upstream_groups:
         method: "get"
         content_type: "json" # 使用 application/dns-json 内容类型
     # 无特定重试配置，可能稍后使用默认值
+    # 无代理，直接直通
 
   - name: "nextdns_weighted"
     strategy: "weighted"

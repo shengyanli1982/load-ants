@@ -23,8 +23,8 @@ use crate::upstream::UpstreamManager;
 use mimalloc::MiMalloc;
 use std::process;
 use std::sync::Arc;
-use tokio_graceful_shutdown::{Toplevel, SubsystemHandle, SubsystemBuilder};
-use tracing::{error, info};
+use tokio_graceful_shutdown::{Toplevel, SubsystemBuilder, IntoSubsystem};
+use tracing::{error, info, debug};
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 use crate::config::MatchType::{Exact, Wildcard, Regex};
 
@@ -32,19 +32,46 @@ use crate::config::MatchType::{Exact, Wildcard, Regex};
 #[global_allocator]
 static GLOBAL: MiMalloc = mimalloc::MiMalloc;
 
+fn init_logging(args: &Args) {
+    // 从环境变量获取日志级别，或根据调试参数设置
+    let filter = if let Ok(filter) = EnvFilter::try_from_default_env() {
+        filter
+    } else if args.debug {
+        // 启用调试模式，显示更详细的日志
+        EnvFilter::new("loadants=debug,tower_http=debug,info")
+    } else {
+        // 正常模式，仅显示 info 级别及以上
+        EnvFilter::new("loadants=info,tokio_graceful_shutdown=info")
+    };
+    
+    // 创建日志格式化器
+    let fmt_layer = fmt::layer()
+        .with_target(true)
+        .with_level(true)
+        .with_ansi(false); // 关闭彩色输出
+        
+    // 注册日志订阅器
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(fmt_layer)
+        .init();
+    
+    // 如果启用调试模式，输出调试信息
+    if args.debug {
+        debug!("Debug logging enabled - verbose output mode active");
+    }
+} 
+
 // 程序入口
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 初始化日志
-    tracing_subscriber::registry()
-        .with(fmt::layer())
-        .with(EnvFilter::from_default_env())
-        .init();
-
-    info!("Starting Load Ants DNS UDP/TCP to DoH Proxy");
-
     // 解析命令行参数
     let args = Args::parse_args();
+    
+    // 初始化日志
+    init_logging(&args);
+
+    info!("Starting Load Ants DNS UDP/TCP to DoH Proxy");
 
     // 加载配置
     let config = match Config::from_file(&args.config) {
@@ -59,7 +86,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // 如果是测试模式，成功验证配置后退出
-    if args.test {
+    if args.test_config {
         info!("Configuration file validation successful");
         return Ok(());
     }
@@ -74,12 +101,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // 创建优雅关闭顶层管理器
-    let toplevel = Toplevel::new(|s: SubsystemHandle<AppError>| async move {
-        s.start(SubsystemBuilder::new("DNS Server", |_| async {
-            components.dns_server.run().await
+    let toplevel = Toplevel::new(|s| async move {
+        // 启动DNS服务器子系统
+        let dns_server = components.dns_server;
+        s.start(SubsystemBuilder::new("dns_server", move |s| async move {
+            dns_server.run(s).await
         }));
-        s.start(SubsystemBuilder::new("Health Server", |_| async {
-            components.health_server.run().await
+        
+        // 启动健康检查服务器子系统
+        let health_server = components.health_server;
+        s.start(SubsystemBuilder::new("health_server", move |_| async move {
+            health_server.run().await
         }));
     });
 
@@ -170,9 +202,17 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
     // 创建请求处理器
     let handler = Arc::new(RequestHandler::new(cache, router, upstream));
 
+    // 创建DNS服务器配置
+    let server_config = server::DnsServerConfig {
+        udp_bind_addr: config.server.listen_udp.parse()?,
+        tcp_bind_addr: config.server.listen_tcp.parse()?,
+        tcp_timeout: config.server.tcp_timeout,
+    };
+    
     // 创建 DNS 服务器
-    let bind_addr = config.server.listen_udp.parse().unwrap();
-    let dns_server = DnsServer::new(bind_addr, handler);
+    let dns_server = DnsServer::new(server_config, handler);
+    info!("DNS server initialized with UDP: {}, TCP: {}", 
+          config.server.listen_udp, config.server.listen_tcp);
 
     // 返回应用组件
     Ok(AppComponents {

@@ -1,5 +1,6 @@
 use hickory_proto::error::ProtoError;
 use std::io;
+use std::net::AddrParseError;
 use thiserror::Error;
 use crate::upstream::{InvalidProxyConfig, HttpClientError};
 
@@ -67,6 +68,12 @@ impl From<reqwest_middleware::Error> for AppError {
 impl From<serde_json::Error> for AppError {
     fn from(err: serde_json::Error) -> Self {
         Self::JsonError(err.to_string())
+    }
+}
+
+impl From<AddrParseError> for AppError {
+    fn from(err: AddrParseError) -> Self {
+        Self::Config(ConfigError::InvalidListenAddress(err.to_string()))
     }
 }
 
