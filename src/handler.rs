@@ -123,12 +123,12 @@ impl RequestHandler {
             .inc();
         
         debug!(
-            "Route match: {} -> Rule type: {}, Pattern: {}, Action: {:?}, Target: {:?}",
+            "Route match: {} -> Rule type: '{}', Pattern: '{}', Action: {:?}, Target: {}",
             query_name.to_utf8(),
             route_match.rule_type,
             route_match.pattern,
             route_match.action,
-            route_match.target
+            route_match.target.as_deref().unwrap_or("None")
         );
         
         // 根据路由动作处理请求

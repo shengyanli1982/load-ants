@@ -233,13 +233,18 @@ impl Router {
     // 查找匹配的规则
     pub fn find_match(&self, query_name: &Name) -> Result<RouteMatch, AppError> {
         // 将查询名称转换为小写字符串，便于匹配
-        let domain = query_name.to_string().to_lowercase();
+        let mut domain = query_name.to_string().to_lowercase();
+        
+        // 移除末尾可能存在的点，确保正则表达式等能正确匹配
+        if domain.ends_with('.') {
+            domain.pop();
+        }
         
         // 尝试精确匹配
         if let Some((action, target)) = self.exact_rules.get(&domain) {
             debug!(
-                "Rule match: Exact match '{}' -> target: {:?}",
-                domain, target
+                "Rule match: Exact match '{}' -> Target: {}",
+                domain, target.as_deref().unwrap_or("None")
             );
             
             // 记录路由匹配指标
@@ -275,8 +280,8 @@ impl Router {
                     // 在通配符匹配树中查找
                     if let Some((action, target, pattern)) = self.wildcard_rules.get(&lookup_key) {
                         debug!(
-                            "Rule match: Wildcard match '{}' -> pattern: '{}', target: {:?}",
-                            domain, pattern, target
+                            "Rule match: Wildcard match '{}' -> Pattern: '{}', Target: {}",
+                            domain, pattern, target.as_deref().unwrap_or("None")
                         );
                         
                         // 记录路由匹配指标
@@ -293,27 +298,6 @@ impl Router {
                         });
                     }
                 }
-            }
-            
-            // 4. 如果没有找到特定匹配，尝试全局通配符
-            if let Some((action, target, pattern)) = &self.global_wildcard_rule {
-                debug!(
-                    "Rule match: Global wildcard match '{}' -> pattern: '{}', target: {:?}",
-                    domain, pattern, target
-                );
-                
-                // 记录路由匹配指标
-                METRICS.route_matches_total()
-                    .with_label_values(&[rule_type_labels::WILDCARD, target.as_deref().unwrap_or(rule_type_labels::NO_TARGET)])
-                    .inc();
-                
-                return Ok(RouteMatch {
-                    domain: domain.clone(),
-                    action: action.clone(),
-                    target: target.clone(),
-                    rule_type: "wildcard".to_string(),
-                    pattern: pattern.clone(),
-                });
             }
         }
         
@@ -351,8 +335,8 @@ impl Router {
             let rule: &CompiledRegexRule = &self.regex_rules[index];
             if rule.regex.is_match(&domain) {
                 debug!(
-                    "Rule match: Regex match '{}' -> pattern: '{}', target: {:?}",
-                    domain, rule.pattern, rule.target
+                    "Rule match: Regex match '{}' -> Pattern: '{}', Target: {}",
+                    domain, rule.pattern, rule.target.as_deref().unwrap_or("None")
                 );
                 
                 // 记录路由匹配指标
@@ -368,6 +352,27 @@ impl Router {
                     pattern: rule.pattern.clone(),
                 });
             }
+        }
+        
+        // 最后尝试全局通配符匹配
+        if let Some((action, target, pattern)) = &self.global_wildcard_rule {
+            debug!(
+                "Rule match: Global wildcard match '{}' -> Pattern: '{}', Target: {}",
+                domain, pattern, target.as_deref().unwrap_or("None")
+            );
+            
+            // 记录路由匹配指标
+            METRICS.route_matches_total()
+                .with_label_values(&[rule_type_labels::WILDCARD, target.as_deref().unwrap_or(rule_type_labels::NO_TARGET)])
+                .inc();
+            
+            return Ok(RouteMatch {
+                domain: domain.clone(),
+                action: action.clone(),
+                target: target.clone(),
+                rule_type: "wildcard".to_string(),
+                pattern: pattern.clone(),
+            });
         }
         
         // 没有匹配的规则

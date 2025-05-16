@@ -482,6 +482,15 @@ upstream_groups:
 
 ### Routing Rules
 
+Load Ants uses a priority-based matching system for DNS routing:
+
+1. **Exact Match** (highest priority) - Direct match for full domain names (e.g., `example.com`)
+2. **Specific Wildcard Match** - Matches domains using wildcards (e.g., `*.example.com`)
+3. **Regex Match** - Matches domains using regular expressions (e.g., `^(mail|audio)\\.google\\.com$`)
+4. **Global Wildcard Match** (lowest priority) - The catch-all rule (`*`) that matches any domain
+
+When configuring routing rules, keep this priority order in mind. The global wildcard (`*`) should typically be placed as the last rule to serve as a default when no other rules match.
+
 ```yaml
 routing_rules:
     # Block specific domains
