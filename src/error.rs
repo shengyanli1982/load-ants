@@ -114,6 +114,9 @@ pub enum ConfigError {
     #[error("Invalid route rule: {0}")]
     InvalidRouteRule(String),
 
+    #[error("Invalid pattern: {0}")]
+    InvalidPattern(String),
+
     #[error("Invalid regular expression: {0}")]
     InvalidRegex(#[from] regex::Error),
 

@@ -151,10 +151,12 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
     // 创建 DNS 缓存
     let cache = Arc::new(DnsCache::new(
         config.cache.max_size,
-        config.cache.min_ttl
+        config.cache.min_ttl,
+        Some(config.cache.negative_ttl)
     ));
     if config.cache.enabled {
-        info!("DNS cache enabled, size: {}", config.cache.max_size);
+        info!("DNS cache enabled, size: {}, min TTL: {}s, negative TTL: {}s", 
+              config.cache.max_size, config.cache.min_ttl, config.cache.negative_ttl);
         
         // 设置缓存容量指标
         METRICS.cache_capacity().set(config.cache.max_size as i64);

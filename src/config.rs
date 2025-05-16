@@ -213,6 +213,8 @@ pub struct CacheConfig {
     pub min_ttl: u32,
     // 最大TTL（秒）
     pub max_ttl: u32,
+    // 负面缓存TTL（秒）
+    pub negative_ttl: u32,
 }
 
 impl Default for CacheConfig {
@@ -222,6 +224,7 @@ impl Default for CacheConfig {
             max_size: crate::r#const::DEFAULT_CACHE_SIZE,
             min_ttl: 60,
             max_ttl: crate::r#const::DEFAULT_CACHE_TTL,
+            negative_ttl: crate::r#const::DEFAULT_NEGATIVE_CACHE_TTL,
         }
     }
 }
@@ -354,6 +357,13 @@ impl Config {
             if self.cache.max_ttl < cache_limits::MIN_TTL || self.cache.max_ttl > cache_limits::MAX_TTL {
                 return Err(ConfigError::InvalidCacheConfig(
                     format!("max_ttl must be between {} and {} seconds", cache_limits::MIN_TTL, cache_limits::MAX_TTL)
+                ));
+            }
+            
+            // 验证negative_ttl是否在合理范围内
+            if self.cache.negative_ttl < cache_limits::MIN_TTL || self.cache.negative_ttl > cache_limits::MAX_TTL {
+                return Err(ConfigError::InvalidCacheConfig(
+                    format!("negative_ttl must be between {} and {} seconds", cache_limits::MIN_TTL, cache_limits::MAX_TTL)
                 ));
             }
         }

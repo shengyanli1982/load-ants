@@ -228,7 +228,7 @@ impl UpstreamManager {
             // 使用指数退避策略，基于组的重试配置
             let retry_policy = ExponentialBackoff::builder()
                 // 设置指数退避的基数
-                .base(retry.delay as u32)
+                .base(retry.delay)
                 // 使用有界抖动来避免多个客户端同时重试
                 .jitter(Jitter::Bounded)
                 // 配置最大重试次数
@@ -453,7 +453,7 @@ impl UpstreamManager {
                 // 从查询中提取参数
                 let query_param = match query.queries().first() {
                     Some(q) => q,
-                    None => return Err(AppError::Internal("DNS查询为空".to_string())),
+                    None => return Err(AppError::Internal("DNS query is empty".to_string())),
                 };
                 
                 // 添加查询参数
@@ -495,16 +495,16 @@ impl UpstreamManager {
             req = match auth.r#type {
                 AuthType::Basic => {
                     let username = auth.username.as_ref().ok_or_else(|| {
-                        AppError::Upstream("Basic认证缺少用户名".to_string())
+                        AppError::Upstream("Missing username for Basic authentication".to_string())
                     })?;
                     let password = auth.password.as_ref().ok_or_else(|| {
-                        AppError::Upstream("Basic认证缺少密码".to_string())
+                        AppError::Upstream("Missing password for Basic authentication".to_string())
                     })?;
                     req.basic_auth(username, Some(password))
                 }
                 AuthType::Bearer => {
                     let token = auth.token.as_ref().ok_or_else(|| {
-                        AppError::Upstream("Bearer认证缺少令牌".to_string())
+                        AppError::Upstream("Missing token for Bearer authentication".to_string())
                     })?;
                     req.header("Authorization", format!("Bearer {}", token))
                 }
@@ -525,7 +525,7 @@ impl UpstreamManager {
         // 检查状态码
         if !response.status().is_success() {
             return Err(AppError::Upstream(format!(
-                "上游服务器返回错误: {}",
+                "Upstream server returned error: {}",
                 response.status()
             )));
         }

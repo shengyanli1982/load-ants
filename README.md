@@ -52,6 +52,9 @@ Traditional DNS queries are transmitted in plaintext, exposing your browsing his
 -   ⚡ **Performance Enhancements**
 
     -   **Intelligent Caching** - Built-in DNS cache reduces latency and upstream load
+        -   **Positive Caching** - Stores successful DNS responses for faster resolution
+        -   **Negative Caching** - Caches error responses (NXDOMAIN, ServFail) to avoid repeated queries for non-existent domains
+        -   **Configurable TTL** - Set different TTLs for positive and negative cache entries
     -   **Connection Pooling** - Reuses HTTP connections for efficiency
     -   **Adjustable TTL** - Configure minimum and maximum TTL for cached responses
 
@@ -95,7 +98,8 @@ Load Ants provides comprehensive Prometheus metrics to monitor the performance, 
 -   **loadants_cache_entries** (gauge) - Current number of DNS cache entries
 -   **loadants_cache_capacity** (gauge) - Maximum capacity of the DNS cache
 -   **loadants_cache_operations_total** (counter) - Total cache operations, labeled by operation type (hit, miss, insert, evict, expire)
--   **loadants_cache_ttl_seconds** (histogram) - TTL distribution of DNS cache entries in seconds
+-   **loadants_cache_ttl_seconds** (histogram) - TTL distribution of DNS cache entries in seconds, labeled by TTL source (original, min_ttl, adjusted, negative_ttl)
+-   **loadants_negative_cache_hits_total** (counter) - Total negative cache hits, helping track efficiency of negative caching
 
 ### DNS Query Metrics
 
@@ -241,6 +245,7 @@ For production environments, Kubernetes provides scaling, high availability, and
               max_size: 10000
               min_ttl: 60
               max_ttl: 3600
+              negative_ttl: 300
             # Add the rest of your configuration...
     ```
 
@@ -435,7 +440,18 @@ cache:
     max_size: 10000 # Maximum number of entries (10-1000000)
     min_ttl: 60 # Minimum TTL in seconds (1-86400)
     max_ttl: 3600 # Maximum TTL in seconds (1-86400)
+    negative_ttl: 300 # Negative caching TTL in seconds (1-86400)
 ```
+
+The cache configuration allows fine-tuning of DNS response caching behavior:
+
+-   **enabled**: Turn caching on/off
+-   **max_size**: Maximum number of DNS records to store in cache
+-   **min_ttl**: Minimum time-to-live for positive responses (overrides smaller TTLs)
+-   **max_ttl**: Maximum time-to-live cap for any cached entry
+-   **negative_ttl**: Specific TTL for negative responses (errors, non-existent domains)
+
+Negative caching is a performance optimization that caches DNS error responses (like NXDOMAIN or ServFail) for a specified time. This prevents repeated queries to upstream servers for domains that don't exist or temporarily fail to resolve, reducing latency and upstream load.
 
 ### HTTP Client Settings
 
@@ -481,6 +497,15 @@ upstream_groups:
 ```
 
 ### Routing Rules
+
+Load Ants uses a priority-based matching system for DNS routing:
+
+1. **Exact Match** (highest priority) - Direct match for full domain names (e.g., `example.com`)
+2. **Specific Wildcard Match** - Matches domains using wildcards (e.g., `*.example.com`)
+3. **Regex Match** - Matches domains using regular expressions (e.g., `^(mail|audio)\\.google\\.com$`)
+4. **Global Wildcard Match** (lowest priority) - The catch-all rule (`*`) that matches any domain
+
+When configuring routing rules, keep this priority order in mind. The global wildcard (`*`) should typically be placed as the last rule to serve as a default when no other rules match.
 
 ```yaml
 routing_rules:

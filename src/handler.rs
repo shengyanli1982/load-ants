@@ -119,16 +119,16 @@ impl RequestHandler {
         
         // 记录路由匹配指标
         METRICS.route_matches_total()
-            .with_label_values(&[&route_match.rule_type, route_match.target.as_deref().unwrap_or(rule_type_labels::NO_TARGET)])
+            .with_label_values(&[route_match.rule_type, route_match.target.as_deref().unwrap_or(rule_type_labels::NO_TARGET)])
             .inc();
         
         debug!(
-            "Route match: {} -> Rule type: {}, Pattern: {}, Action: {:?}, Target: {:?}",
+            "Route match: {} -> Rule type: '{}', Pattern: '{}', Action: {:?}, Target: {}",
             query_name.to_utf8(),
             route_match.rule_type,
             route_match.pattern,
             route_match.action,
-            route_match.target
+            route_match.target.as_deref().unwrap_or("None")
         );
         
         // 根据路由动作处理请求
@@ -182,8 +182,8 @@ impl RequestHandler {
             .with_label_values(&[response.response_code().to_string().as_str()])
             .inc();
         
-        // 缓存响应（只缓存成功响应，且缓存已启用）
-        if self.cache.is_enabled() && response.response_code() == ResponseCode::NoError {
+        // 缓存响应（缓存已启用的情况下，同时缓存成功和错误响应）
+        if self.cache.is_enabled() {
             let cache_insert_time = Instant::now();
             if let Err(e) = self.cache.insert(request, response.clone()).await {
                 warn!("Cache insertion failed: {}", e);
