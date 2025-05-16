@@ -182,8 +182,8 @@ impl RequestHandler {
             .with_label_values(&[response.response_code().to_string().as_str()])
             .inc();
         
-        // 缓存响应（只缓存成功响应，且缓存已启用）
-        if self.cache.is_enabled() && response.response_code() == ResponseCode::NoError {
+        // 缓存响应（缓存已启用的情况下，同时缓存成功和错误响应）
+        if self.cache.is_enabled() {
             let cache_insert_time = Instant::now();
             if let Err(e) = self.cache.insert(request, response.clone()).await {
                 warn!("Cache insertion failed: {}", e);

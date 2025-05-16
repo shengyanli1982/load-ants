@@ -2,6 +2,7 @@ use crate::error::AppError;
 use crate::r#const::cache_labels;
 use crate::r#const::cache_limits;
 use crate::r#const::ttl_source_labels;
+use crate::r#const::DEFAULT_NEGATIVE_CACHE_TTL;
 use crate::metrics::METRICS;
 use hickory_proto::op::{Message, ResponseCode};
 use hickory_proto::rr::{RecordType, DNSClass};
@@ -52,14 +53,20 @@ pub struct DnsCache {
     size: usize,
     // 最小TTL (秒)
     min_ttl: u32,
+    // 负面缓存TTL (秒)
+    negative_ttl: u32,
 }
 
 impl DnsCache {
     // 创建新的DNS缓存
-    pub fn new(size: usize, min_ttl: u32) -> Self {
+    pub fn new(size: usize, min_ttl: u32, negative_ttl: Option<u32>) -> Self {
         // 验证配置
         let size = size.clamp(cache_limits::MIN_SIZE, cache_limits::MAX_SIZE);
         let min_ttl = min_ttl.clamp(cache_limits::MIN_TTL, cache_limits::MAX_TTL);
+        // 使用配置的负面缓存TTL或默认值
+        let negative_ttl = negative_ttl
+            .unwrap_or(DEFAULT_NEGATIVE_CACHE_TTL)
+            .clamp(cache_limits::MIN_TTL, cache_limits::MAX_TTL);
         
         // 创建缓存
         let cache = Cache::builder()
@@ -68,7 +75,7 @@ impl DnsCache {
             .time_to_live(Duration::from_secs(cache_limits::MAX_TTL as u64))
             .build();
         
-        info!("Creating DNS cache - Size: {}, Min TTL: {}s", size, min_ttl);
+        info!("Creating DNS cache - Size: {}, Min TTL: {}s, Negative TTL: {}s", size, min_ttl, negative_ttl);
         
         // 设置缓存容量指标
         METRICS.cache_capacity().set(size as i64);
@@ -77,6 +84,7 @@ impl DnsCache {
             cache,
             size,
             min_ttl,
+            negative_ttl,
         }
     }
     
@@ -171,15 +179,10 @@ impl DnsCache {
     
     // 检查响应是否可缓存
     fn is_cacheable(&self, response: &Message) -> bool {
-        // 检查响应是否包含答案
-        if response.answer_count() == 0 {
-            debug!("Response contains no answer records, not caching");
-            return false;
-        }
-        
-        // 检查响应码
-        if response.response_code() != ResponseCode::NoError {
-            debug!("Response code not normal, not caching: {:?}", response.response_code());
+        // 所有响应都可以缓存，无论是成功响应还是错误响应
+        // 但仍然需要确保查询部分存在
+        if response.queries().is_empty() {
+            debug!("Response contains no query, not caching");
             return false;
         }
         
@@ -188,6 +191,19 @@ impl DnsCache {
     
     // 计算响应中所有记录的最小TTL
     fn calculate_min_ttl(&self, response: &Message) -> u32 {
+        // 对于错误响应或没有答案的响应，使用负面缓存TTL
+        if response.response_code() != ResponseCode::NoError || response.answer_count() == 0 {
+            // 记录使用负面缓存TTL指标
+            METRICS.cache_ttl_seconds()
+                .with_label_values(&[ttl_source_labels::NEGATIVE_TTL])
+                .observe(self.negative_ttl as f64);
+            
+            debug!("Using negative cache TTL ({} seconds) for response code: {:?}", 
+                  self.negative_ttl, response.response_code());
+            
+            return self.negative_ttl;
+        }
+        
         let mut min_ttl = u32::MAX;
         
         // 检查所有回答记录的TTL

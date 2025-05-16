@@ -3,6 +3,9 @@
 // 默认DNS缓存TTL（秒）
 pub const DEFAULT_CACHE_TTL: u32 = 300;
 
+// 默认负面缓存TTL（秒）
+pub const DEFAULT_NEGATIVE_CACHE_TTL: u32 = 300;
+
 // 默认DNS缓存大小
 pub const DEFAULT_CACHE_SIZE: usize = 10000;
 
@@ -145,6 +148,8 @@ pub mod ttl_source_labels {
     pub const MIN_TTL: &str = "min_ttl";
     // TTL已调整
     pub const ADJUSTED: &str = "adjusted";
+    // 负面缓存TTL
+    pub const NEGATIVE_TTL: &str = "negative_ttl";
 }
 
 // 上游标签

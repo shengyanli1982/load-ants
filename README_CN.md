@@ -52,6 +52,9 @@
 -   ⚡ **性能增强**
 
     -   **智能缓存** - 内置 DNS 缓存减少延迟和上游负载
+        -   **正面缓存** - 存储成功的 DNS 响应以加快解析速度
+        -   **负面缓存** - 缓存错误响应（NXDOMAIN、ServFail 等），避免对不存在域名的重复查询
+        -   **可配置 TTL** - 为正面和负面缓存条目设置不同的生存时间
     -   **连接池** - 复用 HTTP 连接提高效率
     -   **可调 TTL** - 配置缓存响应的最小和最大 TTL
 
@@ -95,7 +98,8 @@ Load Ants 提供全面的 Prometheus 指标，用于监控服务的性能、健�
 -   **loadants_cache_entries** (仪表盘) - 当前 DNS 缓存条目数
 -   **loadants_cache_capacity** (仪表盘) - DNS 缓存的最大容量
 -   **loadants_cache_operations_total** (计数器) - 缓存操作总数，按操作类型标记（命中、未命中、插入、驱逐、过期）
--   **loadants_cache_ttl_seconds** (直方图) - DNS 缓存条目的 TTL 分布（秒）
+-   **loadants_cache_ttl_seconds** (直方图) - DNS 缓存条目的 TTL 分布（秒），按 TTL 来源标记（原始、最小 TTL、调整后、负面缓存 TTL）
+-   **loadants_negative_cache_hits_total** (计数器) - 负面缓存命中总数，帮助跟踪负面缓存的效率
 
 ### DNS 查询指标
 
@@ -242,6 +246,7 @@ Docker 提供了一种简单的方式来运行 Load Ants，无需直接在系统
               max_size: 10000
               min_ttl: 60
               max_ttl: 3600
+              negative_ttl: 300
             # 添加其余配置...
     ```
 
@@ -436,7 +441,18 @@ cache:
     max_size: 10000 # 最大条目数（10-1000000）
     min_ttl: 60 # 最小 TTL，单位秒（1-86400）
     max_ttl: 3600 # 最大 TTL，单位秒（1-86400）
+    negative_ttl: 300 # 负面缓存 TTL，单位秒（1-86400）
 ```
+
+缓存配置允许精细调整 DNS 响应缓存行为：
+
+-   **enabled**：启用或禁用缓存
+-   **max_size**：缓存中存储的 DNS 记录最大数量
+-   **min_ttl**：正面响应的最小生存时间（覆盖更小的 TTL 值）
+-   **max_ttl**：任何缓存条目的最大生存时间上限
+-   **negative_ttl**：负面响应（错误、不存在域名）的特定 TTL
+
+负面缓存是一种性能优化，它将 DNS 错误响应（如 NXDOMAIN 或 ServFail）缓存指定时间。这可以防止对不存在或暂时无法解析的域名重复查询上游服务器，从而减少延迟并降低上游负载。
 
 ### HTTP 客户端设置
 
