@@ -7,6 +7,11 @@ use regex::Regex;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use tracing::debug;
 
+// 规则类型常量
+const RULE_TYPE_EXACT: &str = "exact";
+const RULE_TYPE_WILDCARD: &str = "wildcard";
+const RULE_TYPE_REGEX: &str = "regex";
+
 // 编译后的正则表达式规则
 struct CompiledRegexRule {
     // 原始模式
@@ -45,7 +50,7 @@ pub struct RouteMatch {
     // 目标上游组
     pub target: Option<String>,
     // 匹配规则类型
-    pub rule_type: String,
+    pub rule_type: &'static str,
     // 匹配的模式
     pub pattern: String,
 }
@@ -240,137 +245,200 @@ impl Router {
             domain.pop();
         }
         
-        // 尝试精确匹配
+        // 为结果准备一些重用变量
+        let target_default = rule_type_labels::NO_TARGET;
+        
+        // 尝试精确匹配 - 使用引用而非克隆
         if let Some((action, target)) = self.exact_rules.get(&domain) {
+            let target_str = target.as_deref().unwrap_or(target_default);
+            
             debug!(
                 "Rule match: Exact match '{}' -> Target: {}",
-                domain, target.as_deref().unwrap_or("None")
+                domain, target_str
             );
             
             // 记录路由匹配指标
             METRICS.route_matches_total()
-                .with_label_values(&[rule_type_labels::EXACT, target.as_deref().unwrap_or(rule_type_labels::NO_TARGET)])
+                .with_label_values(&[rule_type_labels::EXACT, target_str])
                 .inc();
             
             return Ok(RouteMatch {
                 domain: domain.clone(),
                 action: action.clone(),
                 target: target.clone(),
-                rule_type: "exact".to_string(),
+                rule_type: RULE_TYPE_EXACT,
                 pattern: domain.clone(),
             });
         }
         
-        // 尝试通配符匹配 - 优化版本
-        // 1. 验证域名格式
+        // 预先分析域名部分 - 只分割一次，后续复用
         if !domain.is_empty() {
-            // 2. 将域名按'.'分割成标签列表
+            // 只有当域名非空时才进行处理
             let domain_labels: Vec<&str> = domain.split('.').filter(|s| !s.is_empty()).collect();
             let num_labels = domain_labels.len();
             
             if num_labels > 0 {
-                // 3. 从最长可能的后缀开始，迭代尝试匹配
+                // 尝试通配符匹配
+                // 从最长可能的后缀开始，避免了字符串复制
+                // 预分配缓冲区以减少内存分配
+                let mut current_suffix = String::with_capacity(domain.len());
+                
                 for k in (1..=num_labels).rev() {
-                    // 获取最后k个标签组成的后缀
-                    let current_suffix = domain_labels[num_labels - k..].join(".");
+                    // 重置缓冲区而非创建新的
+                    current_suffix.clear();
+                    
+                    // 构建当前后缀
+                    let start_idx = num_labels - k;
+                    for (i, label) in domain_labels[start_idx..].iter().enumerate() {
+                        if i > 0 {
+                            current_suffix.push('.');
+                        }
+                        current_suffix.push_str(label);
+                    }
                     
                     // 计算查找键（反转后缀）
                     let lookup_key = Self::reverse_domain_labels(&current_suffix);
                     
                     // 在通配符匹配树中查找
                     if let Some((action, target, pattern)) = self.wildcard_rules.get(&lookup_key) {
+                        let target_str = target.as_deref().unwrap_or(target_default);
+                        
                         debug!(
                             "Rule match: Wildcard match '{}' -> Pattern: '{}', Target: {}",
-                            domain, pattern, target.as_deref().unwrap_or("None")
+                            domain, pattern, target_str
                         );
                         
                         // 记录路由匹配指标
                         METRICS.route_matches_total()
-                            .with_label_values(&[rule_type_labels::WILDCARD, target.as_deref().unwrap_or(rule_type_labels::NO_TARGET)])
+                            .with_label_values(&[rule_type_labels::WILDCARD, target_str])
                             .inc();
                         
                         return Ok(RouteMatch {
                             domain: domain.clone(),
                             action: action.clone(),
                             target: target.clone(),
-                            rule_type: "wildcard".to_string(),
+                            rule_type: RULE_TYPE_WILDCARD,
+                            pattern: pattern.clone(),
+                        });
+                    }
+                }
+                
+                // 尝试正则表达式匹配 (使用预筛选优化)
+                // 直接复用已有的 domain_labels 而非重新分割
+                
+                // 查找符合条件的候选键，使用小容量预分配
+                let mut candidate_keys = Vec::with_capacity(3);
+                candidate_keys.push("*".to_string()); // 通配符键
+                
+                // 复用域名部分提取，避免重复查找点号位置
+                if num_labels >= 1 {
+                    // 添加顶级域名作为候选键
+                    let tld = domain_labels[num_labels - 1];
+                    let tld_key = format!(".{}", tld);
+                    candidate_keys.push(tld_key);  // 存储整个字符串而非引用
+                    
+                    if num_labels >= 2 {
+                        // 添加二级域名作为候选键
+                        let sld = domain_labels[num_labels - 2];
+                        // 构建 .sld.tld，避免重复字符串操作
+                        let sld_tld = format!(".{}.{}", sld, tld);
+                        candidate_keys.push(sld_tld);  // 存储整个字符串而非引用
+                    }
+                }
+                
+                // 改进匹配候选正则表达式，减少HashSet操作
+                // 先检查是否有可能匹配的规则
+                let mut has_candidate = false;
+                let mut matched_rule_index = None;
+                
+                // 首先统计所有候选索引
+                for key in &candidate_keys {
+                    if let Some(indices) = self.regex_prefilter.get(key) {
+                        // 尝试直接匹配，避免临时构建哈希集
+                        for &index in indices {
+                            has_candidate = true;
+                            let rule = &self.regex_rules[index];
+                            if rule.regex.is_match(&domain) {
+                                matched_rule_index = Some(index);
+                                break;
+                            }
+                        }
+                        
+                        if matched_rule_index.is_some() {
+                            break;
+                        }
+                    }
+                }
+                
+                // 如果找到匹配的规则，处理匹配结果
+                if let Some(index) = matched_rule_index {
+                    let rule = &self.regex_rules[index];
+                    let target_str = rule.target.as_deref().unwrap_or(target_default);
+                    
+                    debug!(
+                        "Rule match: Regex match '{}' -> Pattern: '{}', Target: {}",
+                        domain, rule.pattern, target_str
+                    );
+                    
+                    // 记录路由匹配指标
+                    METRICS.route_matches_total()
+                        .with_label_values(&[rule_type_labels::REGEX, target_str])
+                        .inc();
+                    
+                    return Ok(RouteMatch {
+                        domain: domain.clone(),
+                        action: rule.action.clone(),
+                        target: rule.target.clone(),
+                        rule_type: RULE_TYPE_REGEX,
+                        pattern: rule.pattern.clone(),
+                    });
+                }
+                
+                // 如果没有匹配的正则规则但有候选规则，不再检查全局通配符
+                if !has_candidate {
+                    // 最后尝试全局通配符匹配
+                    if let Some((action, target, pattern)) = &self.global_wildcard_rule {
+                        let target_str = target.as_deref().unwrap_or(target_default);
+                        
+                        debug!(
+                            "Rule match: Global wildcard match '{}' -> Pattern: '{}', Target: {}",
+                            domain, pattern, target_str
+                        );
+                        
+                        // 记录路由匹配指标
+                        METRICS.route_matches_total()
+                            .with_label_values(&[rule_type_labels::WILDCARD, target_str])
+                            .inc();
+                        
+                        return Ok(RouteMatch {
+                            domain: domain.clone(),
+                            action: action.clone(),
+                            target: target.clone(),
+                            rule_type: RULE_TYPE_WILDCARD,
                             pattern: pattern.clone(),
                         });
                     }
                 }
             }
-        }
-        
-        // 尝试正则表达式匹配 (使用预筛选优化)
-        let domain_parts: Vec<&str> = domain.split('.').collect();
-        let _domain_len = domain_parts.len();
-        
-        // 查找符合条件的候选键
-        let mut candidate_keys = Vec::new();
-        candidate_keys.push("*".to_string()); // 通配符键
-        
-        if let Some(tld_pos) = domain.rfind('.') {
-            if let Some(tld) = domain.get(tld_pos..) {
-                candidate_keys.push(tld.to_string());
-            }
+        } else if let Some((action, target, pattern)) = &self.global_wildcard_rule {
+            // 空域名只检查全局通配符
+            let target_str = target.as_deref().unwrap_or(target_default);
             
-            if let Some(sld_pos) = domain[..tld_pos].rfind('.') {
-                if let Some(sld) = domain.get(sld_pos..) {
-                    candidate_keys.push(sld.to_string());
-                }
-            }
-        }
-        
-        // 收集所有可能匹配的规则索引
-        let mut candidate_indices: HashSet<usize> = HashSet::new();
-        
-        for key in candidate_keys {
-            if let Some(indices) = self.regex_prefilter.get(&key) {
-                candidate_indices.extend(indices);
-            }
-        }
-        
-        // 尝试匹配候选正则表达式
-        for &index in &candidate_indices {
-            let rule: &CompiledRegexRule = &self.regex_rules[index];
-            if rule.regex.is_match(&domain) {
-                debug!(
-                    "Rule match: Regex match '{}' -> Pattern: '{}', Target: {}",
-                    domain, rule.pattern, rule.target.as_deref().unwrap_or("None")
-                );
-                
-                // 记录路由匹配指标
-                METRICS.route_matches_total()
-                    .with_label_values(&[rule_type_labels::REGEX, rule.target.as_deref().unwrap_or(rule_type_labels::NO_TARGET)])
-                    .inc();
-                
-                return Ok(RouteMatch {
-                    domain: domain.clone(),
-                    action: rule.action.clone(),
-                    target: rule.target.clone(),
-                    rule_type: "regex".to_string(),
-                    pattern: rule.pattern.clone(),
-                });
-            }
-        }
-        
-        // 最后尝试全局通配符匹配
-        if let Some((action, target, pattern)) = &self.global_wildcard_rule {
             debug!(
                 "Rule match: Global wildcard match '{}' -> Pattern: '{}', Target: {}",
-                domain, pattern, target.as_deref().unwrap_or("None")
+                domain, pattern, target_str
             );
             
             // 记录路由匹配指标
             METRICS.route_matches_total()
-                .with_label_values(&[rule_type_labels::WILDCARD, target.as_deref().unwrap_or(rule_type_labels::NO_TARGET)])
+                .with_label_values(&[rule_type_labels::WILDCARD, target_str])
                 .inc();
             
             return Ok(RouteMatch {
                 domain: domain.clone(),
                 action: action.clone(),
                 target: target.clone(),
-                rule_type: "wildcard".to_string(),
+                rule_type: RULE_TYPE_WILDCARD,
                 pattern: pattern.clone(),
             });
         }

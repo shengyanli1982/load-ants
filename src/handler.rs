@@ -119,7 +119,7 @@ impl RequestHandler {
         
         // 记录路由匹配指标
         METRICS.route_matches_total()
-            .with_label_values(&[&route_match.rule_type, route_match.target.as_deref().unwrap_or(rule_type_labels::NO_TARGET)])
+            .with_label_values(&[route_match.rule_type, route_match.target.as_deref().unwrap_or(rule_type_labels::NO_TARGET)])
             .inc();
         
         debug!(
