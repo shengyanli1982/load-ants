@@ -343,7 +343,7 @@ impl UpstreamManager {
 
         // 创建请求URL
         let url = Url::parse(&server.url).map_err(|e| {
-            AppError::Upstream(format!("无效的上游URL: {} - {}", server.url, e))
+            AppError::Upstream(format!("Invalid upstream URL: {} - {}", server.url, e))
         })?;
         
         // 根据内容类型处理
@@ -415,7 +415,7 @@ impl UpstreamManager {
         
         // 创建请求URL
         let mut url = Url::parse(&server.url).map_err(|e| {
-            AppError::Upstream(format!("无效的上游URL: {} - {}", server.url, e))
+            AppError::Upstream(format!("Invalid upstream URL: {} - {}", server.url, e))
         })?;
         
         // 根据内容类型处理
