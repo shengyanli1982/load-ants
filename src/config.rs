@@ -487,14 +487,14 @@ impl Config {
             // 验证组名称非空
             if group.name.trim().is_empty() {
                 return Err(ConfigError::InvalidGroupName(
-                    "上游组名称不能为空".to_string()
+                    "Upstream group name cannot be empty".to_string()
                 ));
             }
             
             // 验证服务器列表非空
             if group.servers.is_empty() {
                 return Err(ConfigError::InvalidGroupName(format!(
-                    "组'{}'的服务器列表不能为空",
+                    "Server list for group '{}' cannot be empty",
                     group.name
                 )));
             }
@@ -503,7 +503,7 @@ impl Config {
             if let Some(proxy) = &group.proxy {
                 if !proxy.starts_with("http://") && !proxy.starts_with("https://") && !proxy.starts_with("socks5://") {
                     return Err(ConfigError::InvalidGroupName(format!(
-                        "组'{}'的代理URL格式无效，应以http://、https://或socks5://开头",
+                        "Invalid proxy URL format for group '{}', should start with http://, https:// or socks5://",
                         group.name
                     )));
                 }
@@ -517,7 +517,7 @@ impl Config {
                     
                     if sum_weights == 0 {
                         return Err(ConfigError::InvalidWeightConfig(format!(
-                            "组'{}'使用加权策略，但所有服务器的权重和为0",
+                            "Group '{}' uses weighted strategy, but the sum of all server weights is 0",
                             group.name
                         )));
                     }
@@ -525,7 +525,7 @@ impl Config {
                     // 检查有无权重为0的服务器
                     if group.servers.iter().any(|s| s.weight == 0) {
                         return Err(ConfigError::InvalidWeightConfig(format!(
-                            "组'{}'中存在权重为0的服务器",
+                            "Group '{}' contains servers with weight 0",
                             group.name
                         )));
                     }
@@ -543,7 +543,7 @@ impl Config {
                 // 验证服务器权重是否在合理范围内
                 if server.weight > 0 && (server.weight < weight_limits::MIN_WEIGHT || server.weight > weight_limits::MAX_WEIGHT) {
                     return Err(ConfigError::InvalidWeightConfig(format!(
-                        "服务器权重必须在{}到{}之间",
+                        "Server weight must be between {} and {}",
                         weight_limits::MIN_WEIGHT,
                         weight_limits::MAX_WEIGHT
                     )));
@@ -556,7 +556,7 @@ impl Config {
                             // Basic认证必须提供用户名和密码
                             if auth.username.is_none() || auth.password.is_none() {
                                 return Err(ConfigError::InvalidAuthConfig(
-                                    "Basic认证必须提供username和password".into(),
+                                    "Basic authentication requires username and password".into(),
                                 ));
                             }
                             
@@ -564,7 +564,7 @@ impl Config {
                             if let Some(username) = &auth.username {
                                 if username.trim().is_empty() {
                                     return Err(ConfigError::InvalidAuthConfig(
-                                        "Basic认证的username不能为空".into(),
+                                        "Username for Basic authentication cannot be empty".into(),
                                     ));
                                 }
                             }
@@ -573,7 +573,7 @@ impl Config {
                             if let Some(password) = &auth.password {
                                 if password.trim().is_empty() {
                                     return Err(ConfigError::InvalidAuthConfig(
-                                        "Basic认证的password不能为空".into(),
+                                        "Password for Basic authentication cannot be empty".into(),
                                     ));
                                 }
                             }
@@ -582,7 +582,7 @@ impl Config {
                             // Bearer认证必须提供令牌
                             if auth.token.is_none() {
                                 return Err(ConfigError::InvalidAuthConfig(
-                                    "Bearer认证必须提供token".into(),
+                                    "Bearer authentication requires token".into(),
                                 ));
                             }
                             
@@ -590,7 +590,7 @@ impl Config {
                             if let Some(token) = &auth.token {
                                 if token.trim().is_empty() {
                                     return Err(ConfigError::InvalidAuthConfig(
-                                        "Bearer认证的token不能为空".into(),
+                                        "Token for Bearer authentication cannot be empty".into(),
                                     ));
                                 }
                             }
@@ -604,7 +604,7 @@ impl Config {
                 // 验证重试次数
                 if retry.attempts == 0 {
                     return Err(ConfigError::ValidationError(format!(
-                        "组'{}'的重试次数必须大于0",
+                        "Retry attempts for group '{}' must be greater than 0",
                         group.name
                     )));
                 }
@@ -612,7 +612,7 @@ impl Config {
                 // 验证重试次数是否在合理范围内
                 if retry.attempts < retry_limits::MIN_ATTEMPTS || retry.attempts > retry_limits::MAX_ATTEMPTS {
                     return Err(ConfigError::ValidationError(format!(
-                        "组'{}'的重试次数必须在{}到{}之间",
+                        "Retry attempts for group '{}' must be between {} and {}",
                         group.name,
                         retry_limits::MIN_ATTEMPTS,
                         retry_limits::MAX_ATTEMPTS
@@ -622,7 +622,7 @@ impl Config {
                 // 验证重试延迟是否在合理范围内
                 if retry.delay < retry_limits::MIN_DELAY || retry.delay > retry_limits::MAX_DELAY {
                     return Err(ConfigError::ValidationError(format!(
-                        "组'{}'的重试延迟必须在{}到{}秒之间",
+                        "Retry delay for group '{}' must be between {} and {} seconds",
                         group.name,
                         retry_limits::MIN_DELAY,
                         retry_limits::MAX_DELAY
@@ -645,7 +645,7 @@ impl Config {
             // 验证匹配模式非空
             if rule.pattern.trim().is_empty() {
                 return Err(ConfigError::InvalidRouteRule(
-                    format!("规则#{}的匹配模式不能为空", i + 1)
+                    format!("Match pattern for rule #{} cannot be empty", i + 1)
                 ));
             }
             
@@ -655,7 +655,7 @@ impl Config {
                     // 确保精确匹配的域名不包含通配符
                     if rule.pattern.contains('*') {
                         return Err(ConfigError::InvalidRouteRule(format!(
-                            "精确匹配模式'{}' (规则#{})不应包含通配符(*)",
+                            "Exact match pattern '{}' (rule #{}) should not contain wildcards (*)",
                             rule.pattern, i + 1
                         )));
                     }
@@ -664,7 +664,7 @@ impl Config {
                     // 验证通配符格式
                     if rule.pattern != "*" && !rule.pattern.starts_with("*.") {
                         return Err(ConfigError::InvalidRouteRule(format!(
-                            "通配符模式'{}' (规则#{})无效，应为'*'或'*.domain.com'格式",
+                            "Wildcard pattern '{}' (rule #{}) is invalid, should be in format '*' or '*.domain.com'",
                             rule.pattern, i + 1
                         )));
                     }
@@ -672,7 +672,7 @@ impl Config {
                     // 确保通配符后面有内容（对于*.domain.com格式）
                     if rule.pattern.starts_with("*.") && rule.pattern.len() <= 2 {
                         return Err(ConfigError::InvalidRouteRule(format!(
-                            "通配符模式'{}' (规则#{})无效，'*.'后必须有内容",
+                            "Wildcard pattern '{}' (rule #{}) is invalid, must have content after '*.'",
                             rule.pattern, i + 1
                         )));
                     }
@@ -683,7 +683,7 @@ impl Config {
                         Ok(_) => (), // 正则表达式有效
                         Err(e) => {
                             return Err(ConfigError::InvalidRouteRule(format!(
-                                "正则表达式'{}' (规则#{})无效: {}",
+                                "Regular expression '{}' (rule #{}) is invalid: {}",
                                 rule.pattern, i + 1, e
                             )));
                         }
@@ -700,13 +700,13 @@ impl Config {
                             // 验证目标上游组是否存在
                             if !group_names.contains(target) {
                                 return Err(ConfigError::NonExistentGroupReference(
-                                    format!("规则#{}引用了不存在的上游组'{}'", i + 1, target)
+                                    format!("Rule #{} references non-existent upstream group '{}'", i + 1, target)
                                 ));
                             }
                         }
                         None => {
                             return Err(ConfigError::InvalidRouteRule(
-                                format!("规则#{}使用Forward动作必须提供target字段", i + 1)
+                                format!("Rule #{} with Forward action must provide a target field", i + 1)
                             ));
                         }
                     }
@@ -716,7 +716,7 @@ impl Config {
                     if let Some(target) = &rule.target {
                         if !target.trim().is_empty() && !group_names.contains(target) {
                             return Err(ConfigError::InvalidRouteRule(
-                                format!("规则#{}的Block动作引用了不存在的上游组'{}'。Block动作不需要提供target。", 
+                                format!("Rule #{} with Block action references non-existent upstream group '{}'. Block action does not need a target.", 
                                         i + 1, target)
                             ));
                         }
