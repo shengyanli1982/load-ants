@@ -2,13 +2,12 @@ use crate::config::{AuthConfig, AuthType, DoHContentType, DoHMethod, HttpClientC
 use crate::error::AppError;
 use crate::metrics::METRICS;
 use crate::r#const::{error_labels, upstream_labels};
-use async_trait::async_trait;
+use crate::balancer::{LoadBalancer, RandomBalancer, RoundRobinBalancer, WeightedBalancer};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use hickory_proto::{
     op::{Message, MessageType, ResponseCode},
     rr::{Name, Record, RecordType, RData},
 };
-use rand::{seq::SliceRandom, thread_rng};
 use reqwest::Url;
 use reqwest_middleware::ClientWithMiddleware;
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
@@ -16,129 +15,12 @@ use serde_json::{json, Value as JsonValue};
 use std::{
     collections::HashMap,
     net::{Ipv4Addr, Ipv6Addr},
-    sync::{Arc, atomic::{AtomicUsize, Ordering}},
+    sync::Arc,
     time::Duration,
 };
 use tracing::{debug, error, info, warn};
 use hickory_proto::rr::rdata as HickoryRData;
 use retry_policies::{Jitter};
-
-// 负载均衡器特性
-#[async_trait]
-pub trait LoadBalancer: Send + Sync {
-    // 选择一个上游服务器
-    async fn select_server(&self) -> Result<UpstreamServerConfig, AppError>;
-    
-    // 报告服务器失败
-    async fn report_failure(&self, server: &UpstreamServerConfig);
-}
-
-// 轮询负载均衡器
-pub struct RoundRobinBalancer {
-    // 服务器列表
-    servers: Vec<UpstreamServerConfig>,
-    // 当前索引（原子操作）
-    current: AtomicUsize,
-}
-
-impl RoundRobinBalancer {
-    // 创建新的轮询负载均衡器
-    pub fn new(servers: Vec<UpstreamServerConfig>) -> Self {
-        Self {
-            servers,
-            current: AtomicUsize::new(0),
-        }
-    }
-}
-
-#[async_trait]
-impl LoadBalancer for RoundRobinBalancer {
-    async fn select_server(&self) -> Result<UpstreamServerConfig, AppError> {
-        if self.servers.is_empty() {
-            return Err(AppError::NoUpstreamAvailable);
-        }
-        
-        let current = self.current.fetch_add(1, Ordering::SeqCst) % self.servers.len();
-        Ok(self.servers[current].clone())
-    }
-    
-    async fn report_failure(&self, _server: &UpstreamServerConfig) {
-        // 轮询策略下不需要特殊处理失败
-    }
-}
-
-// 加权轮询负载均衡器
-pub struct WeightedBalancer {
-    // 服务器列表，按权重复制
-    servers: Vec<UpstreamServerConfig>,
-    // 当前索引（原子操作）
-    current: AtomicUsize,
-}
-
-impl WeightedBalancer {
-    // 创建新的加权轮询负载均衡器
-    pub fn new(servers: Vec<UpstreamServerConfig>) -> Self {
-        // 根据权重复制服务器
-        let mut weighted_servers = Vec::with_capacity(servers.iter().map(|s| s.weight as usize).sum());
-        
-        for server in servers {
-            // 对于每个服务器，按其权重添加多个副本
-            for _ in 0..server.weight {
-                weighted_servers.push(server.clone());
-            }
-        }
-        
-        Self {
-            servers: weighted_servers,
-            current: AtomicUsize::new(0),
-        }
-    }
-}
-
-#[async_trait]
-impl LoadBalancer for WeightedBalancer {
-    async fn select_server(&self) -> Result<UpstreamServerConfig, AppError> {
-        if self.servers.is_empty() {
-            return Err(AppError::NoUpstreamAvailable);
-        }
-        
-        let current = self.current.fetch_add(1, Ordering::SeqCst) % self.servers.len();
-        Ok(self.servers[current].clone())
-    }
-    
-    async fn report_failure(&self, _server: &UpstreamServerConfig) {
-        // 加权轮询策略下不需要特殊处理失败
-    }
-}
-
-// 随机负载均衡器
-pub struct RandomBalancer {
-    // 服务器列表
-    servers: Vec<UpstreamServerConfig>,
-}
-
-impl RandomBalancer {
-    // 创建新的随机负载均衡器
-    pub fn new(servers: Vec<UpstreamServerConfig>) -> Self {
-        Self { servers }
-    }
-}
-
-#[async_trait]
-impl LoadBalancer for RandomBalancer {
-    async fn select_server(&self) -> Result<UpstreamServerConfig, AppError> {
-        if self.servers.is_empty() {
-            return Err(AppError::NoUpstreamAvailable);
-        }
-        
-        let server = self.servers.choose(&mut thread_rng()).ok_or(AppError::NoUpstreamAvailable)?;
-        Ok(server.clone())
-    }
-    
-    async fn report_failure(&self, _server: &UpstreamServerConfig) {
-        // 随机策略下不需要特殊处理失败
-    }
-}
 
 // 上游管理器
 pub struct UpstreamManager {

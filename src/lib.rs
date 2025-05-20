@@ -1,4 +1,5 @@
 pub mod args;
+pub mod balancer;
 pub mod cache;
 pub mod config;
 pub mod r#const;
@@ -12,6 +13,7 @@ pub mod upstream;
 
 // 重导出常用组件
 pub use args::Args;
+pub use balancer::{LoadBalancer, RandomBalancer, RoundRobinBalancer, WeightedBalancer};
 pub use cache::DnsCache;
 pub use config::Config;
 pub use error::AppError;

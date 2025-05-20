@@ -1,4 +1,5 @@
 mod args;
+mod balancer;
 mod cache;
 mod config;
 mod error;
