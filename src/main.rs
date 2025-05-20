@@ -37,13 +37,13 @@ fn init_logging(args: &Args) {
     // 根据命令行参数决定日志级别，优先使用 --debug 参数
     let filter = if args.debug {
         // 启用调试模式，显示更详细的日志
-        EnvFilter::new("loadants=debug,tower_http=debug,info")
+        EnvFilter::new("loadants=debug,tower_http=debug,tokio_graceful_shutdown=debug,tokio=debug,axum=debug,reqwest=debug,reqwest_middleware=debug,reqwest_retry=debug,hickory-server=debug,hickory-proto=debug,moka=debug")
     } else if let Ok(filter) = EnvFilter::try_from_default_env() {
         // 如果没有设置 --debug，但设置了环境变量，则使用环境变量
         filter
     } else {
         // 正常模式，仅显示 info 级别及以上
-        EnvFilter::new("loadants=info,tokio_graceful_shutdown=info")
+        EnvFilter::new("loadants=info,tower_http=info,tokio_graceful_shutdown=info,tokio=info,axum=info,reqwest=info,reqwest_middleware=info,reqwest_retry=info,hickory-server=info,hickory-proto=info,moka=info")
     };
     
     // 创建日志格式化器
