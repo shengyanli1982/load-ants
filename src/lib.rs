@@ -22,4 +22,4 @@ pub use health::HealthServer;
 pub use metrics::DnsMetrics;
 pub use router::Router;
 pub use server::DnsServer;
-pub use upstream::UpstreamManager; 
+pub use upstream::UpstreamManager;

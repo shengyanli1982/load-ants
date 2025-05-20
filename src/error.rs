@@ -1,8 +1,8 @@
+use crate::upstream::{HttpClientError, InvalidProxyConfig};
 use hickory_proto::error::ProtoError;
 use std::io;
 use std::net::AddrParseError;
 use thiserror::Error;
-use crate::upstream::{InvalidProxyConfig, HttpClientError};
 
 // Unified error type
 #[derive(Error, Debug)]
@@ -44,7 +44,7 @@ pub enum AppError {
 
     #[error("Internal error: {0}")]
     Internal(String),
-    
+
     #[error("JSON serialization/deserialization error: {0}")]
     JsonError(String),
 
@@ -134,4 +134,4 @@ pub enum ConfigError {
 
     #[error("Configuration validation error: {0}")]
     ValidationError(String),
-} 
+}
