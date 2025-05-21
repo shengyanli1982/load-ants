@@ -1,3 +1,4 @@
+mod admin;
 mod args;
 mod balancer;
 mod cache;
@@ -5,19 +6,18 @@ mod config;
 mod r#const;
 mod error;
 mod handler;
-mod health;
 mod metrics;
 mod router;
 mod server;
 mod upstream;
 
+use crate::admin::AdminServer;
 use crate::args::Args;
 use crate::cache::DnsCache;
 use crate::config::Config;
 use crate::config::MatchType::{Exact, Regex, Wildcard};
 use crate::error::AppError;
 use crate::handler::RequestHandler;
-use crate::health::HealthServer;
 use crate::metrics::METRICS;
 use crate::router::Router;
 use crate::server::DnsServer;
@@ -111,11 +111,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }));
 
         // 启动健康检查服务器子系统
-        let health_server = components.health_server;
-        s.start(SubsystemBuilder::new(
-            "health_server",
-            move |s| async move { health_server.run(s).await },
-        ));
+        let admin_server = components.admin_server;
+        s.start(SubsystemBuilder::new("admin_server", move |s| async move {
+            admin_server.run(s).await
+        }));
     });
 
     // 等待关闭
@@ -141,14 +140,14 @@ struct AppComponents {
     // DNS 服务器
     dns_server: DnsServer,
     // 健康检查服务器
-    health_server: HealthServer,
+    admin_server: AdminServer,
 }
 
 // 创建应用组件
 async fn create_components(config: Config) -> Result<AppComponents, AppError> {
     // 创建健康检查服务器
-    let health_listen_addr = config.health.listen.parse().unwrap();
-    let health_server = HealthServer::new(health_listen_addr);
+    let admin_listen_addr = config.health.listen.parse().unwrap();
+    let admin_server = AdminServer::new(admin_listen_addr);
 
     // 创建 DNS 缓存
     let cache = Arc::new(DnsCache::new(
@@ -227,6 +226,6 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
     // 返回应用组件
     Ok(AppComponents {
         dns_server,
-        health_server,
+        admin_server,
     })
 }

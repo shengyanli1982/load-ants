@@ -10,7 +10,7 @@ use tokio_graceful_shutdown::{IntoSubsystem, SubsystemHandle};
 use tracing::{error, info};
 
 // 健康检查服务器
-pub struct HealthServer {
+pub struct AdminServer {
     // 监听地址
     listen_addr: SocketAddr,
     // 停止信号接收端
@@ -19,7 +19,7 @@ pub struct HealthServer {
     shutdown_tx: Option<oneshot::Sender<()>>,
 }
 
-impl HealthServer {
+impl AdminServer {
     // 创建新的健康检查服务器
     pub fn new(listen_addr: SocketAddr) -> Self {
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
@@ -76,7 +76,7 @@ impl HealthServer {
 }
 
 #[async_trait::async_trait]
-impl IntoSubsystem<AppError> for HealthServer {
+impl IntoSubsystem<AppError> for AdminServer {
     async fn run(mut self, subsys: SubsystemHandle) -> Result<(), AppError> {
         tokio::select! {
             res = self.start() => {
