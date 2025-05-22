@@ -167,10 +167,10 @@ pub struct HttpClientConfig {
 impl Default for HttpClientConfig {
     fn default() -> Self {
         Self {
-            connect_timeout: crate::r#const::DEFAULT_CONNECT_TIMEOUT,
-            request_timeout: crate::r#const::DEFAULT_REQUEST_TIMEOUT,
-            idle_timeout: Some(crate::r#const::DEFAULT_TCP_IDLE_TIMEOUT),
-            keepalive: Some(30),
+            connect_timeout: http_client_limits::DEFAULT_CONNECT_TIMEOUT,
+            request_timeout: http_client_limits::DEFAULT_REQUEST_TIMEOUT,
+            idle_timeout: Some(http_client_limits::DEFAULT_IDLE_TIMEOUT),
+            keepalive: Some(http_client_limits::DEFAULT_KEEPALIVE),
             agent: None,
         }
     }
@@ -221,10 +221,10 @@ impl Default for CacheConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            max_size: crate::r#const::DEFAULT_CACHE_SIZE,
-            min_ttl: 60,
-            max_ttl: crate::r#const::DEFAULT_CACHE_TTL,
-            negative_ttl: crate::r#const::DEFAULT_NEGATIVE_CACHE_TTL,
+            max_size: cache_limits::DEFAULT_SIZE,
+            min_ttl: cache_limits::MIN_TTL,
+            max_ttl: cache_limits::MAX_TTL,
+            negative_ttl: cache_limits::DEFAULT_NEGATIVE_TTL,
         }
     }
 }

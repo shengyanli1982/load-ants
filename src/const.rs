@@ -1,23 +1,5 @@
 // 应用常量定义
 
-// 默认DNS缓存TTL（秒）
-pub const DEFAULT_CACHE_TTL: u32 = 300;
-
-// 默认负面缓存TTL（秒）
-pub const DEFAULT_NEGATIVE_CACHE_TTL: u32 = 300;
-
-// 默认DNS缓存大小
-pub const DEFAULT_CACHE_SIZE: usize = 10000;
-
-// 默认DNS请求超时时间（秒）
-pub const DEFAULT_REQUEST_TIMEOUT: u64 = 5;
-
-// 默认DNS连接超时时间（秒）
-pub const DEFAULT_CONNECT_TIMEOUT: u64 = 3;
-
-// 默认TCP会话空闲超时时间（秒）
-pub const DEFAULT_TCP_IDLE_TIMEOUT: u64 = 10;
-
 //
 // 配置参数限制常量
 //
@@ -34,34 +16,46 @@ pub mod shutdown_timeout {
 
 // 缓存配置限制
 pub mod cache_limits {
+    // 默认缓存大小
+    pub const DEFAULT_SIZE: usize = 10000;
     // 最小缓存大小
     pub const MIN_SIZE: usize = 10;
     // 最大缓存大小
-    pub const MAX_SIZE: usize = 1000000; // 100万条
-                                         // 最小TTL值（秒）
+    pub const MAX_SIZE: usize = 1000000;
+    // 默认负面缓存TTL值（秒）
+    pub const DEFAULT_NEGATIVE_TTL: u32 = 300;
+    // 最小TTL值（秒）
     pub const MIN_TTL: u32 = 1;
     // 最大TTL值（秒）
-    pub const MAX_TTL: u32 = 86400; // 24小时
+    pub const MAX_TTL: u32 = 86400;
 }
 
 // HTTP客户端配置限制
 pub mod http_client_limits {
+    // 默认连接超时（秒）
+    pub const DEFAULT_CONNECT_TIMEOUT: u64 = 3;
     // 最小连接超时（秒）
     pub const MIN_CONNECT_TIMEOUT: u64 = 1;
     // 最大连接超时（秒）
-    pub const MAX_CONNECT_TIMEOUT: u64 = 120; // 2分钟
-                                              // 最小请求超时（秒）
+    pub const MAX_CONNECT_TIMEOUT: u64 = 120;
+    // 默认请求超时（秒）
+    pub const DEFAULT_REQUEST_TIMEOUT: u64 = 5;
+    // 最小请求超时（秒）
     pub const MIN_REQUEST_TIMEOUT: u64 = 1;
     // 最大请求超时（秒）
-    pub const MAX_REQUEST_TIMEOUT: u64 = 1200; // 20分钟
-                                               // 最小空闲超时（秒）
+    pub const MAX_REQUEST_TIMEOUT: u64 = 1200;
+    // 默认空闲超时（秒）
+    pub const DEFAULT_IDLE_TIMEOUT: u64 = 10;
+    // 最小空闲超时（秒）
     pub const MIN_IDLE_TIMEOUT: u64 = 5;
     // 最大空闲超时（秒）
-    pub const MAX_IDLE_TIMEOUT: u64 = 1800; // 30分钟
-                                            // 最小keepalive时间（秒）
+    pub const MAX_IDLE_TIMEOUT: u64 = 1800;
+    // 默认keepalive时间（秒）
+    pub const DEFAULT_KEEPALIVE: u32 = 30;
+    // 最小keepalive时间（秒）
     pub const MIN_KEEPALIVE: u32 = 5;
     // 最大keepalive时间（秒）
-    pub const MAX_KEEPALIVE: u32 = 600; // 10分钟
+    pub const MAX_KEEPALIVE: u32 = 600;
 }
 
 // 重试配置限制

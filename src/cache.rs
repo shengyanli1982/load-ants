@@ -1,9 +1,6 @@
 use crate::error::AppError;
 use crate::metrics::METRICS;
-use crate::r#const::cache_labels;
-use crate::r#const::cache_limits;
-use crate::r#const::ttl_source_labels;
-use crate::r#const::DEFAULT_NEGATIVE_CACHE_TTL;
+use crate::r#const::{cache_labels, cache_limits, ttl_source_labels};
 use hickory_proto::op::{Message, ResponseCode};
 use hickory_proto::rr::{DNSClass, RecordType};
 use moka::future::Cache;
@@ -65,7 +62,7 @@ impl DnsCache {
         let min_ttl = min_ttl.clamp(cache_limits::MIN_TTL, cache_limits::MAX_TTL);
         // 使用配置的负面缓存TTL或默认值
         let negative_ttl = negative_ttl
-            .unwrap_or(DEFAULT_NEGATIVE_CACHE_TTL)
+            .unwrap_or(cache_limits::DEFAULT_NEGATIVE_TTL)
             .clamp(cache_limits::MIN_TTL, cache_limits::MAX_TTL);
 
         // 创建缓存
