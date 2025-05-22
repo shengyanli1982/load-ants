@@ -1,5 +1,7 @@
 use clap::{Parser, ArgAction};
 use std::path::PathBuf;
+use crate::r#const::shutdown_timeout;
+use crate::error::AppError;
 
 // DNS UDP/TCP to DoH 代理服务
 #[derive(Parser, Debug, Clone)]
@@ -42,11 +44,29 @@ pub struct Args {
         help = "Enable debug level logging for detailed output"
     )]
     pub debug: bool,
+
+    // 关闭超时
+    #[arg(
+        long = "shutdown-timeout",
+        help = "Maximum time in seconds to wait for complete shutdown",
+        default_value_t = shutdown_timeout::DEFAULT
+    )]
+    pub shutdown_timeout: u64,
 }
 
 impl Args {
     // 解析命令行参数
     pub fn parse_args() -> Self {
         Args::parse()
+    }
+
+    // 验证参数
+    pub fn validation(&self) -> Result<(), AppError> {
+        if self.shutdown_timeout < shutdown_timeout::MIN
+            || self.shutdown_timeout > shutdown_timeout::MAX
+        {
+            return Err(AppError::InvalidShutdownTimeout);
+        }
+        Ok(())
     }
 }

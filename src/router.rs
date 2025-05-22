@@ -90,7 +90,7 @@ impl Router {
         }
 
         // 反向处理其他段
-        for i in (0..segments.len()-1).rev() {
+        for i in (0..segments.len() - 1).rev() {
             let (start, end) = segments[i];
             result.push('.');
             result.push_str(&domain_suffix[start..end]);
@@ -105,16 +105,13 @@ impl Router {
         let mut wildcard_rules = BTreeMap::new();
         let mut global_wildcard_rule = None;
         let mut regex_rules = Vec::new();
-        
+
         // 处理所有规则
         for rule in rules {
             match rule.match_type {
                 MatchType::Exact => {
                     // 添加精确匹配规则
-                    exact_rules.insert(
-                        rule.pattern.clone(),
-                        (rule.action, rule.target),
-                    );
+                    exact_rules.insert(rule.pattern.clone(), (rule.action, rule.target));
                 }
                 MatchType::Wildcard => {
                     if rule.pattern == "*" {
@@ -127,33 +124,33 @@ impl Router {
                         // 验证通配符格式正确（必须是 *.suffix 格式）
                         if suffix.is_empty() || suffix.starts_with('.') {
                             return Err(ConfigError::InvalidPattern(format!(
-                                "Invalid wildcard rule format: {}", rule.pattern
+                                "Invalid wildcard rule format: {}",
+                                rule.pattern
                             )));
                         }
-                        
+
                         // 生成反转后缀键
                         let reversed_key = Self::reverse_domain_labels(suffix);
-                        
+
                         // 检查是否存在冲突
                         if wildcard_rules.contains_key(&reversed_key) {
                             debug!("Wildcard rule '{}' conflicts with existing rule, using the last one", rule.pattern);
                         }
-                        
+
                         // 插入到通配符匹配树中
-                        wildcard_rules.insert(
-                            reversed_key,
-                            (rule.action, rule.target, rule.pattern),
-                        );
+                        wildcard_rules
+                            .insert(reversed_key, (rule.action, rule.target, rule.pattern));
                     } else {
                         return Err(ConfigError::InvalidPattern(format!(
-                            "Invalid wildcard rule format: {}", rule.pattern
+                            "Invalid wildcard rule format: {}",
+                            rule.pattern
                         )));
                     }
                 }
                 MatchType::Regex => {
                     // 编译正则表达式
                     let regex = Regex::new(&rule.pattern)?;
-                    
+
                     // 添加正则表达式规则
                     regex_rules.push(CompiledRegexRule {
                         pattern: rule.pattern,
@@ -164,17 +161,31 @@ impl Router {
                 }
             }
         }
-        
+
         // 创建正则表达式预筛选映射
         let regex_prefilter = Self::build_regex_prefilter(&regex_rules);
-        
+
         // 更新路由规则数量指标
-        METRICS.route_rules_count().with_label_values(&[rule_type_labels::EXACT]).set(exact_rules.len() as f64);
-        METRICS.route_rules_count().with_label_values(&[rule_type_labels::WILDCARD]).set(
-            wildcard_rules.len() as f64 + if global_wildcard_rule.is_some() { 1.0 } else { 0.0 }
-        );
-        METRICS.route_rules_count().with_label_values(&[rule_type_labels::REGEX]).set(regex_rules.len() as f64);
-        
+        METRICS
+            .route_rules_count()
+            .with_label_values(&[rule_type_labels::EXACT])
+            .set(exact_rules.len() as f64);
+        METRICS
+            .route_rules_count()
+            .with_label_values(&[rule_type_labels::WILDCARD])
+            .set(
+                wildcard_rules.len() as f64
+                    + if global_wildcard_rule.is_some() {
+                        1.0
+                    } else {
+                        0.0
+                    },
+            );
+        METRICS
+            .route_rules_count()
+            .with_label_values(&[rule_type_labels::REGEX])
+            .set(regex_rules.len() as f64);
+
         let mut router = Self {
             exact_rules,
             wildcard_rules,
@@ -183,26 +194,26 @@ impl Router {
             regex_prefilter,
             sorted_rules: Vec::new(),
         };
-        
+
         // 对所有规则进行排序，确保它们按照正确的优先级顺序处理
         let sorted_rules = router.sort_rules()?;
         debug!("Sort {} routing rules in total", sorted_rules.len());
-        
+
         // 保存排序后的规则
         router.sorted_rules = sorted_rules;
-        
+
         Ok(router)
     }
 
     // 构建正则表达式预筛选映射
     fn build_regex_prefilter(regex_rules: &[CompiledRegexRule]) -> HashMap<String, HashSet<usize>> {
         let mut prefilter = HashMap::new();
-        
+
         for (index, rule) in regex_rules.iter().enumerate() {
             // 尝试从正则表达式中提取固定子串作为预筛选键
             // 这是一个简单的启发式方法，实际上可以使用更复杂的算法
             let pattern = &rule.pattern;
-            
+
             // 提取顶级域名和二级域名作为特征
             if let Some(tld_pos) = pattern.rfind('.') {
                 if let Some(domain_part) = pattern.get(tld_pos..) {
@@ -212,7 +223,7 @@ impl Router {
                         .or_insert_with(HashSet::new)
                         .insert(index);
                 }
-                
+
                 // 尝试提取二级域名
                 if let Some(sld_pos) = pattern[..tld_pos].rfind('.') {
                     if let Some(domain_part) = pattern.get(sld_pos..) {
@@ -224,14 +235,14 @@ impl Router {
                     }
                 }
             }
-            
+
             // 为所有正则表达式规则添加一个全局键，以确保所有规则都能被尝试
             prefilter
                 .entry("*".to_string())
                 .or_insert_with(HashSet::new)
                 .insert(index);
         }
-        
+
         prefilter
     }
 
@@ -239,29 +250,30 @@ impl Router {
     pub fn find_match(&self, query_name: &Name) -> Result<RouteMatch, AppError> {
         // 将查询名称转换为小写字符串，便于匹配
         let mut domain = query_name.to_string().to_lowercase();
-        
+
         // 移除末尾可能存在的点，确保正则表达式等能正确匹配
         if domain.ends_with('.') {
             domain.pop();
         }
-        
+
         // 为结果准备一些重用变量
         let target_default = rule_type_labels::NO_TARGET;
-        
+
         // 尝试精确匹配 - 使用引用而非克隆
         if let Some((action, target)) = self.exact_rules.get(&domain) {
             let target_str = target.as_deref().unwrap_or(target_default);
-            
+
             debug!(
                 "Rule match: Exact match '{}' -> Target: {}",
                 domain, target_str
             );
-            
+
             // 记录路由匹配指标
-            METRICS.route_matches_total()
+            METRICS
+                .route_matches_total()
                 .with_label_values(&[rule_type_labels::EXACT, target_str])
                 .inc();
-            
+
             return Ok(RouteMatch {
                 domain: domain.clone(),
                 action: action.clone(),
@@ -270,23 +282,23 @@ impl Router {
                 pattern: domain.clone(),
             });
         }
-        
+
         // 预先分析域名部分 - 只分割一次，后续复用
         if !domain.is_empty() {
             // 只有当域名非空时才进行处理
             let domain_labels: Vec<&str> = domain.split('.').filter(|s| !s.is_empty()).collect();
             let num_labels = domain_labels.len();
-            
+
             if num_labels > 0 {
                 // 尝试通配符匹配
                 // 从最长可能的后缀开始，避免了字符串复制
                 // 预分配缓冲区以减少内存分配
                 let mut current_suffix = String::with_capacity(domain.len());
-                
+
                 for k in (1..=num_labels).rev() {
                     // 重置缓冲区而非创建新的
                     current_suffix.clear();
-                    
+
                     // 构建当前后缀
                     let start_idx = num_labels - k;
                     for (i, label) in domain_labels[start_idx..].iter().enumerate() {
@@ -295,24 +307,25 @@ impl Router {
                         }
                         current_suffix.push_str(label);
                     }
-                    
+
                     // 计算查找键（反转后缀）
                     let lookup_key = Self::reverse_domain_labels(&current_suffix);
-                    
+
                     // 在通配符匹配树中查找
                     if let Some((action, target, pattern)) = self.wildcard_rules.get(&lookup_key) {
                         let target_str = target.as_deref().unwrap_or(target_default);
-                        
+
                         debug!(
                             "Rule match: Wildcard match '{}' -> Pattern: '{}', Target: {}",
                             domain, pattern, target_str
                         );
-                        
+
                         // 记录路由匹配指标
-                        METRICS.route_matches_total()
+                        METRICS
+                            .route_matches_total()
                             .with_label_values(&[rule_type_labels::WILDCARD, target_str])
                             .inc();
-                        
+
                         return Ok(RouteMatch {
                             domain: domain.clone(),
                             action: action.clone(),
@@ -322,35 +335,35 @@ impl Router {
                         });
                     }
                 }
-                
+
                 // 尝试正则表达式匹配 (使用预筛选优化)
                 // 直接复用已有的 domain_labels 而非重新分割
-                
+
                 // 查找符合条件的候选键，使用小容量预分配
                 let mut candidate_keys = Vec::with_capacity(3);
                 candidate_keys.push("*".to_string()); // 通配符键
-                
+
                 // 复用域名部分提取，避免重复查找点号位置
                 if num_labels >= 1 {
                     // 添加顶级域名作为候选键
                     let tld = domain_labels[num_labels - 1];
                     let tld_key = format!(".{}", tld);
-                    candidate_keys.push(tld_key);  // 存储整个字符串而非引用
-                    
+                    candidate_keys.push(tld_key); // 存储整个字符串而非引用
+
                     if num_labels >= 2 {
                         // 添加二级域名作为候选键
                         let sld = domain_labels[num_labels - 2];
                         // 构建 .sld.tld，避免重复字符串操作
                         let sld_tld = format!(".{}.{}", sld, tld);
-                        candidate_keys.push(sld_tld);  // 存储整个字符串而非引用
+                        candidate_keys.push(sld_tld); // 存储整个字符串而非引用
                     }
                 }
-                
+
                 // 改进匹配候选正则表达式，减少HashSet操作
                 // 先检查是否有可能匹配的规则
                 let mut has_candidate = false;
                 let mut matched_rule_index = None;
-                
+
                 // 首先统计所有候选索引
                 for key in &candidate_keys {
                     if let Some(indices) = self.regex_prefilter.get(key) {
@@ -363,28 +376,29 @@ impl Router {
                                 break;
                             }
                         }
-                        
+
                         if matched_rule_index.is_some() {
                             break;
                         }
                     }
                 }
-                
+
                 // 如果找到匹配的规则，处理匹配结果
                 if let Some(index) = matched_rule_index {
                     let rule = &self.regex_rules[index];
                     let target_str = rule.target.as_deref().unwrap_or(target_default);
-                    
+
                     debug!(
                         "Rule match: Regex match '{}' -> Pattern: '{}', Target: {}",
                         domain, rule.pattern, target_str
                     );
-                    
+
                     // 记录路由匹配指标
-                    METRICS.route_matches_total()
+                    METRICS
+                        .route_matches_total()
                         .with_label_values(&[rule_type_labels::REGEX, target_str])
                         .inc();
-                    
+
                     return Ok(RouteMatch {
                         domain: domain.clone(),
                         action: rule.action.clone(),
@@ -393,23 +407,24 @@ impl Router {
                         pattern: rule.pattern.clone(),
                     });
                 }
-                
+
                 // 如果没有匹配的正则规则但有候选规则，不再检查全局通配符
                 if !has_candidate {
                     // 最后尝试全局通配符匹配
                     if let Some((action, target, pattern)) = &self.global_wildcard_rule {
                         let target_str = target.as_deref().unwrap_or(target_default);
-                        
+
                         debug!(
                             "Rule match: Global wildcard match '{}' -> Pattern: '{}', Target: {}",
                             domain, pattern, target_str
                         );
-                        
+
                         // 记录路由匹配指标
-                        METRICS.route_matches_total()
+                        METRICS
+                            .route_matches_total()
                             .with_label_values(&[rule_type_labels::WILDCARD, target_str])
                             .inc();
-                        
+
                         return Ok(RouteMatch {
                             domain: domain.clone(),
                             action: action.clone(),
@@ -423,17 +438,18 @@ impl Router {
         } else if let Some((action, target, pattern)) = &self.global_wildcard_rule {
             // 空域名只检查全局通配符
             let target_str = target.as_deref().unwrap_or(target_default);
-            
+
             debug!(
                 "Rule match: Global wildcard match '{}' -> Pattern: '{}', Target: {}",
                 domain, pattern, target_str
             );
-            
+
             // 记录路由匹配指标
-            METRICS.route_matches_total()
+            METRICS
+                .route_matches_total()
                 .with_label_values(&[rule_type_labels::WILDCARD, target_str])
                 .inc();
-            
+
             return Ok(RouteMatch {
                 domain: domain.clone(),
                 action: action.clone(),
@@ -442,58 +458,58 @@ impl Router {
                 pattern: pattern.clone(),
             });
         }
-        
+
         // 没有匹配的规则
         Err(AppError::NoRouteMatch(domain))
     }
 
     // 返回所有规则的组合列表，按照优先级顺序排列
-    // 
+    //
     // 此方法在应用启动后加载规则配置时应被调用，用于确保路由规则按正确的优先级顺序处理：
     // 1. 精确匹配规则 (最高优先级)
     // 2. 通配符规则 (按特定性排序)
     // 3. 正则表达式规则
-    // 
+    //
     // 返回的列表包含所有路由动作及其可能的目标上游组
     pub fn sort_rules(&self) -> Result<Vec<(RouteAction, Option<String>)>, ConfigError> {
         let mut rules = Vec::new();
-        
+
         // 添加精确匹配规则
         for rule in self.exact_rules.values() {
             rules.push(rule.clone());
         }
-        
+
         // 收集通配符规则并按特定性排序
         let mut wildcard_rules = Vec::new();
-        
+
         // 添加特定通配符规则
         for rule in self.wildcard_rules.values() {
             wildcard_rules.push((
                 rule.0.clone(),
                 rule.1.clone(),
                 rule.2.clone(),
-                rule.2[2..].split('.').count()  // 计算特定性
+                rule.2[2..].split('.').count(), // 计算特定性
             ));
         }
-        
+
         // 按特定性从高到低排序
         wildcard_rules.sort_by(|a, b| b.3.cmp(&a.3));
-        
+
         // 将排序后的规则添加到输出列表
         for rule in wildcard_rules {
             rules.push((rule.0, rule.1));
         }
-        
+
         // 添加全局通配符规则（如果存在）
         if let Some((action, target, _)) = &self.global_wildcard_rule {
             rules.push((action.clone(), target.clone()));
         }
-        
+
         // 添加正则表达式规则
         for rule in &self.regex_rules {
             rules.push((rule.action.clone(), rule.target.clone()));
         }
-        
+
         Ok(rules)
     }
 

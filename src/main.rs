@@ -1,22 +1,23 @@
+mod admin;
 mod args;
 mod balancer;
 mod cache;
 mod config;
+mod r#const;
 mod error;
 mod handler;
-mod health;
 mod metrics;
 mod router;
 mod server;
 mod upstream;
-mod r#const;
 
+use crate::admin::AdminServer;
 use crate::args::Args;
 use crate::cache::DnsCache;
 use crate::config::Config;
+use crate::config::MatchType::{Exact, Regex, Wildcard};
 use crate::error::AppError;
 use crate::handler::RequestHandler;
-use crate::health::HealthServer;
 use crate::metrics::METRICS;
 use crate::router::Router;
 use crate::server::DnsServer;
@@ -24,10 +25,9 @@ use crate::upstream::UpstreamManager;
 use mimalloc::MiMalloc;
 use std::process;
 use std::sync::Arc;
-use tokio_graceful_shutdown::{Toplevel, SubsystemBuilder, IntoSubsystem};
-use tracing::{error, info, debug};
-use tracing_subscriber::{EnvFilter, fmt, prelude::*};
-use crate::config::MatchType::{Exact, Wildcard, Regex};
+use tokio_graceful_shutdown::{IntoSubsystem, SubsystemBuilder, Toplevel};
+use tracing::{debug, error, info};
+use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 // 使用 mimalloc 分配器提高内存效率
 #[global_allocator]
@@ -45,33 +45,39 @@ fn init_logging(args: &Args) {
         // 正常模式，仅显示 info 级别及以上
         EnvFilter::new("loadants=info,tower_http=info,tokio_graceful_shutdown=info,tokio=info,axum=info,reqwest=info,reqwest_middleware=info,reqwest_retry=info,hickory-server=info,hickory-proto=info,moka=info")
     };
-    
+
     // 创建日志格式化器
     let fmt_layer = fmt::layer()
         .with_target(true)
         .with_level(true)
         .with_ansi(false); // 关闭彩色输出
-        
+
     // 注册日志订阅器
     tracing_subscriber::registry()
         .with(filter)
         .with(fmt_layer)
         .init();
-    
+
     // 如果启用调试模式，输出调试信息
     if args.debug {
         debug!("Debug logging enabled - verbose output mode active");
     }
-} 
+}
 
 // 程序入口
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 解析命令行参数
     let args = Args::parse_args();
-    
+
     // 初始化日志
     init_logging(&args);
+
+    // 验证参数
+    if let Err(e) = args.validation() {
+        error!("Invalid command line arguments: {}", e);
+        process::exit(1);
+    }
 
     info!("Starting Load Ants DNS UDP/TCP to DoH Proxy");
 
@@ -109,11 +115,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         s.start(SubsystemBuilder::new("dns_server", move |s| async move {
             dns_server.run(s).await
         }));
-        
+
         // 启动健康检查服务器子系统
-        let health_server = components.health_server;
-        s.start(SubsystemBuilder::new("health_server", move |s| async move {
-            health_server.run(s).await
+        let admin_server = components.admin_server;
+        s.start(SubsystemBuilder::new("admin_server", move |s| async move {
+            admin_server.run(s).await
         }));
     });
 
@@ -121,7 +127,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("All services started, waiting for requests...");
     match toplevel
         .catch_signals()
-        .handle_shutdown_requests(tokio::time::Duration::from_secs(30))
+        .handle_shutdown_requests(tokio::time::Duration::from_secs(args.shutdown_timeout))
         .await
     {
         Ok(_) => {
@@ -140,25 +146,27 @@ struct AppComponents {
     // DNS 服务器
     dns_server: DnsServer,
     // 健康检查服务器
-    health_server: HealthServer,
+    admin_server: AdminServer,
 }
 
 // 创建应用组件
 async fn create_components(config: Config) -> Result<AppComponents, AppError> {
     // 创建健康检查服务器
-    let health_listen_addr = config.health.listen.parse().unwrap();
-    let health_server = HealthServer::new(health_listen_addr);
-    
+    let admin_listen_addr = config.health.listen.parse().unwrap();
+    let admin_server = AdminServer::new(admin_listen_addr);
+
     // 创建 DNS 缓存
     let cache = Arc::new(DnsCache::new(
         config.cache.max_size,
         config.cache.min_ttl,
-        Some(config.cache.negative_ttl)
+        Some(config.cache.negative_ttl),
     ));
     if config.cache.enabled {
-        info!("DNS cache enabled, size: {}, min TTL: {}s, negative TTL: {}s", 
-              config.cache.max_size, config.cache.min_ttl, config.cache.negative_ttl);
-        
+        info!(
+            "DNS cache enabled, size: {}, min TTL: {}s, negative TTL: {}s",
+            config.cache.max_size, config.cache.min_ttl, config.cache.negative_ttl
+        );
+
         // 设置缓存容量指标
         METRICS.cache_capacity().set(config.cache.max_size as i64);
     } else {
@@ -166,25 +174,23 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
     }
 
     // 创建上游管理器 - 避免不必要的克隆
-    let upstream = match UpstreamManager::new(
-        config.upstream_groups.clone(),
-        config.http_client,
-    ).await {
-        Ok(manager) => {
-            info!("Upstream manager initialized successfully");
-            Arc::new(manager)
-        }
-        Err(e) => {
-            error!("Failed to initialize upstream manager: {}", e);
-            return Err(e);
-        }
-    };
+    let upstream =
+        match UpstreamManager::new(config.upstream_groups.clone(), config.http_client).await {
+            Ok(manager) => {
+                info!("Upstream manager initialized successfully");
+                Arc::new(manager)
+            }
+            Err(e) => {
+                error!("Failed to initialize upstream manager: {}", e);
+                return Err(e);
+            }
+        };
 
     // 创建路由引擎 - 避免不必要的克隆
     let router = match Router::new(config.routing_rules.clone()) {
         Ok(router) => {
             info!("Routing engine initialized successfully");
-            
+
             // 设置路由规则数量指标
             for rule in &config.routing_rules {
                 let rule_type = match rule.match_type {
@@ -192,9 +198,12 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
                     Wildcard => "wildcard",
                     Regex => "regex",
                 };
-                METRICS.route_rules_count().with_label_values(&[rule_type]).inc();
+                METRICS
+                    .route_rules_count()
+                    .with_label_values(&[rule_type])
+                    .inc();
             }
-            
+
             Arc::new(router)
         }
         Err(e) => {
@@ -212,15 +221,17 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
         tcp_bind_addr: config.server.listen_tcp.parse()?,
         tcp_timeout: config.server.tcp_timeout,
     };
-    
+
     // 创建 DNS 服务器
     let dns_server = DnsServer::new(server_config, handler);
-    info!("DNS server initialized with UDP: {}, TCP: {}", 
-          config.server.listen_udp, config.server.listen_tcp);
+    info!(
+        "DNS server initialized with UDP: {}, TCP: {}",
+        config.server.listen_udp, config.server.listen_tcp
+    );
 
     // 返回应用组件
     Ok(AppComponents {
         dns_server,
-        health_server,
+        admin_server,
     })
 }
