@@ -22,6 +22,16 @@ pub const DEFAULT_TCP_IDLE_TIMEOUT: u64 = 10;
 // 配置参数限制常量
 //
 
+// 应用关闭等待时间限制
+pub mod shutdown_timeout {
+    // 默认值
+    pub const DEFAULT: u64 = 30;
+    // 最小值
+    pub const MIN: u64 = 1;
+    // 最大值
+    pub const MAX: u64 = 120;
+}
+
 // 缓存配置限制
 pub mod cache_limits {
     // 最小缓存大小

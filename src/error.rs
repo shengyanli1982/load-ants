@@ -64,6 +64,9 @@ pub enum AppError {
     #[error("Invalid load balancing strategy: {0}")]
     #[allow(dead_code)]
     InvalidLoadBalancingStrategy(String),
+
+    #[error("Invalid shutdown timeout: must be between minimum and maximum values")]
+    InvalidShutdownTimeout,
 }
 
 impl From<reqwest_middleware::Error> for AppError {

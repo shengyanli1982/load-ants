@@ -73,6 +73,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 初始化日志
     init_logging(&args);
 
+    // 验证参数
+    if let Err(e) = args.validation() {
+        error!("Invalid command line arguments: {}", e);
+        process::exit(1);
+    }
+
     info!("Starting Load Ants DNS UDP/TCP to DoH Proxy");
 
     // 加载配置
@@ -121,7 +127,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("All services started, waiting for requests...");
     match toplevel
         .catch_signals()
-        .handle_shutdown_requests(tokio::time::Duration::from_secs(30))
+        .handle_shutdown_requests(tokio::time::Duration::from_secs(args.shutdown_timeout))
         .await
     {
         Ok(_) => {
