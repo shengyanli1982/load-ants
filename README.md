@@ -2,201 +2,223 @@ English | [中文](./README_CN.md)
 
 <div align="center">
     <h1>LOAD ANTS</h1>
-    <h4>🐜🐜🐜 A lightweight DNS forwarder converting UDP/TCP queries to DoH.</h4></br>
+    <h4>🐜🐜🐜 High-Performance DNS Forwarder: Seamlessly Converting UDP/TCP Queries to DNS-over-HTTPS</h4></br>
     <img src="./images/logo.png" alt="logo" width="600">
 </div>
 
+<p align="center">
+  <a href="#introduction">Introduction</a>
+  |
+  <a href="#core-features">Core Features</a>
+  |
+  <a href="#architecture">Architecture</a>
+  |
+  <a href="#prometheus-metrics">Prometheus Metrics</a>
+  |
+  <a href="#api-endpoints">API Endpoints</a>
+  |
+  <a href="#use-cases">Use Cases</a>
+  |
+  <a href="#configuration-guide">Configuration</a>
+  |
+  <a href="#installation">Installation</a>
+  |
+  <a href="#usage">Usage</a>
+</p>
+
 ## Introduction
 
-**Load Ants** is a high-performance, versatile DNS proxy service that converts traditional UDP/TCP DNS queries to DNS-over-HTTPS (DoH). It acts as an intermediary between your clients using standard DNS protocols and modern secure DoH providers, enabling enhanced privacy, security, and flexible routing capabilities.
+**Load Ants** is a high-performance, enterprise-grade DNS proxy service that transforms traditional UDP/TCP DNS queries into secure DNS-over-HTTPS (DoH) requests. It functions as a seamless bridge between standard DNS clients and modern DoH providers, delivering enhanced privacy protection, robust security, and sophisticated routing capabilities.
 
 ### Why DNS-over-HTTPS?
 
-Traditional DNS queries are transmitted in plaintext, exposing your browsing history to potential monitoring, hijacking, or manipulation. DoH addresses these issues by:
+Traditional DNS queries are transmitted in plaintext, exposing your browsing history to potential monitoring, hijacking, or tampering. DNS-over-HTTPS (DoH) addresses these vulnerabilities by:
 
--   **Encrypting DNS traffic** - Prevents snooping by network intermediaries
--   **Enhancing privacy** - Hides DNS queries from ISPs and other network observers
--   **Improving security** - Reduces vulnerability to DNS poisoning and spoofing attacks
--   **Bypassing censorship** - Helps circumvent DNS-based blocking techniques
+-   **Encrypting DNS traffic** - Protecting against network surveillance and man-in-the-middle attacks
+-   **Enhancing privacy** - Preventing ISPs and network operators from inspecting DNS query contents
+-   **Strengthening security** - Mitigating DNS poisoning, spoofing, and injection attacks
+-   **Circumventing censorship** - Bypassing DNS-based content blocking and network restrictions
 
-## Key Features
+## Core Features
 
 -   🔄 **Protocol Conversion**
 
-    -   Seamlessly transforms UDP/53 and TCP/53 DNS requests to DoH (RFC 8484)
-    -   Fully supports both GET and POST HTTP methods
-    -   Handles multiple content formats including `application/dns-message` and `application/dns-json`
+    -   Efficient transformation of UDP/53 and TCP/53 DNS requests to DoH (RFC 8484 compliant)
+    -   Comprehensive support for both GET and POST HTTP methods
+    -   Versatile content format handling, including `application/dns-message` and `application/dns-json`
 
 -   🧠 **Intelligent Routing**
 
-    -   **Flexible Matching** - Route DNS queries based on domain patterns:
-        -   Exact domain name matching
-        -   Wildcard domain matching (`*.example.com`)
-        -   Regular expression domain matching
-    -   **Custom Actions** - Define what happens for each match:
-        -   Forward to specific upstream DoH group
-        -   Block queries (responds with NXDOMAIN)
+    -   **Advanced Domain Matching** - Route DNS queries with precision based on flexible pattern matching:
+        -   Exact domain matching for specific hostnames
+        -   Wildcard domain matching (e.g., `*.example.com`) for domain families
+        -   Regular expression matching for complex pattern needs
+    -   **Granular Action Control** - Define precise handling for each matched domain:
+        -   Forward queries to designated upstream DoH groups
+        -   Block malicious or unwanted domains (return NXDOMAIN)
 
--   🌐 **Flexible Upstream Management**
+-   🌐 **Sophisticated Upstream Management**
 
-    -   **Grouping** - Organize DoH servers into logical groups with independent settings
-    -   **Load Balancing** - Configure per-group balancing strategies:
-        -   Round Robin (RR) - Equal distribution among servers
-        -   Weighted Round Robin (WRR) - Prioritize servers by capacity
-        -   Random - Non-deterministic selection for enhanced privacy
-    -   **Authentication Support** - Secure communication with private DoH providers:
-        -   HTTP Basic Authentication
-        -   Bearer Token Authentication
-    -   **Resource Optimization** - All upstream groups share HTTP client pool for efficiency
+    -   **Strategic Grouping** - Organize DoH servers into independently configured logical groups
+    -   **Advanced Load Balancing** - Implement optimal distribution strategies for each server group:
+        -   Round Robin (RR) - Distribute requests sequentially for even load distribution
+        -   Weighted Round Robin (WRR) - Prioritize higher-capacity servers with custom weighting
+        -   Random Selection - Enhance privacy through non-deterministic server selection
+    -   **Comprehensive Authentication** - Secure communication with private DoH providers:
+        -   HTTP Basic Authentication for username/password authentication
+        -   Bearer Token Authentication for API key or OAuth token authentication
+    -   **Optimized Resource Management** - Shared HTTP client connection pool across all upstream groups for maximized efficiency
 
--   ⚡ **Performance Enhancements**
+-   ⚡ **Performance Optimization**
 
-    -   **Intelligent Caching** - Built-in DNS cache reduces latency and upstream load
-        -   **Positive Caching** - Stores successful DNS responses for faster resolution
-        -   **Negative Caching** - Caches error responses (NXDOMAIN, ServFail) to avoid repeated queries for non-existent domains
-        -   **Configurable TTL** - Set different TTLs for positive and negative cache entries
-    -   **Connection Pooling** - Reuses HTTP connections for efficiency
-    -   **Adjustable TTL** - Configure minimum and maximum TTL for cached responses
+    -   **Intelligent Caching** - Sophisticated DNS caching engine dramatically reduces latency and upstream load
+        -   **Positive Caching** - Store successful DNS responses for rapid subsequent resolution
+        -   **Negative Caching** - Cache error responses to prevent redundant queries for non-existent domains
+        -   **Configurable TTL Management** - Set customized time-to-live values for optimal cache freshness
+    -   **Connection Pooling** - Efficient HTTP connection reuse for reduced overhead and improved performance
+    -   **TTL Optimization** - Configurable minimum and maximum TTL boundaries for optimized cache behavior
 
--   🔁 **Reliability**
+-   🔁 **Enterprise-Grade Reliability**
 
-    -   **Retry Mechanism** - Automatically retry failed DoH requests with configurable attempts
-    -   **Customizable Timeouts** - Fine-tune connect and request timeouts
+    -   **Resilient Request Handling** - Automatically retry failed DoH requests with configurable attempt limits
+    -   **Comprehensive Timeout Management** - Fine-tune connection and request timeout parameters for optimal reliability
 
--   ⚙️ **Administration**
-    -   **YAML Configuration** - Simple, human-readable configuration
-    -   **Configuration Validation** - Strict validation at startup or with test mode
-    -   **Health Endpoint** - Monitoring integration for operations teams
-    -   **Prometheus Metrics** - Comprehensive metrics for monitoring via `/metrics` endpoint
+-   ⚙️ **Advanced Management Capabilities**
+    -   **Structured YAML Configuration** - Clean, human-readable configuration format
+    -   **Strict Configuration Validation** - Robust configuration checks at startup or in test mode
+    -   **Comprehensive Health Monitoring** - Complete integration with modern monitoring infrastructure
+    -   **Rich Prometheus Metrics** - Detailed performance and operational metrics via the `/metrics` endpoint
 
 ## Architecture
 
-Load Ants follows a modular architecture with the following key components:
+Load Ants implements a modular, microservices-inspired architecture with the following key components:
 
--   **Server**: UDP/TCP listeners accepting traditional DNS queries
--   **Router**: Matches domain names against rules to determine processing action
--   **Upstream Manager**: Handles communication with DoH servers, including load balancing and authentication
--   **Cache**: Stores DNS responses to improve performance and reduce upstream load
--   **Handler**: Processes DNS queries by coordinating between other components
+-   **Server Module**: Highly efficient UDP/TCP listeners that receive and parse traditional DNS queries
+-   **Routing Module**: Sophisticated pattern-matching engine that determines optimal processing strategy
+-   **Upstream Management Module**: Advanced client that manages DoH server communication, load balancing, and authentication
+-   **Cache Module**: Performance-optimized storage system for DNS responses to minimize latency and upstream load
+-   **Processor Module**: Orchestration layer that coordinates component interactions throughout the DNS resolution workflow
 
 ![architecture](./images/architecture.png)
 
 ## Prometheus Metrics
 
-Load Ants provides comprehensive Prometheus metrics to monitor the performance, health, and operational status of the service. These metrics are exposed via the `/metrics` endpoint, which can be scraped by Prometheus or other compatible monitoring systems.
+Load Ants delivers comprehensive Prometheus metrics for real-time monitoring of service performance, health status, and operational efficiency. These metrics are exposed via the standard `/metrics` endpoint and can be collected by Prometheus or any compatible monitoring platform.
 
 ![metrics](./images/metrics.png)
 
 ### DNS Performance Metrics
 
--   **loadants_dns_requests_total** (counter) - Total DNS requests processed by the proxy, labeled by protocol (UDP/TCP)
--   **loadants_dns_request_duration_seconds** (histogram) - DNS request processing duration in seconds, labeled by protocol and query type
--   **loadants_dns_request_errors_total** (counter) - Total DNS request processing errors, labeled by error type
+-   **loadants_dns_requests_total** (Counter) - Total DNS requests processed, segmented by protocol (UDP/TCP)
+-   **loadants_dns_request_duration_seconds** (Histogram) - DNS request processing latency, segmented by protocol and query type
+-   **loadants_dns_request_errors_total** (Counter) - DNS request processing errors, segmented by error category
 
 ### Cache Efficiency Metrics
 
--   **loadants_cache_entries** (gauge) - Current number of DNS cache entries
--   **loadants_cache_capacity** (gauge) - Maximum capacity of the DNS cache
--   **loadants_cache_operations_total** (counter) - Total cache operations, labeled by operation type (hit, miss, insert, evict, expire)
--   **loadants_cache_ttl_seconds** (histogram) - TTL distribution of DNS cache entries in seconds, labeled by TTL source (original, min_ttl, adjusted, negative_ttl)
--   **loadants_negative_cache_hits_total** (counter) - Total negative cache hits, helping track efficiency of negative caching
+-   **loadants_cache_entries** (Gauge) - Current DNS cache entry count
+-   **loadants_cache_capacity** (Gauge) - Maximum configured cache capacity
+-   **loadants_cache_operations_total** (Counter) - Cache operations by type (hit, miss, insert, eviction, expiration)
+-   **loadants_cache_ttl_seconds** (Histogram) - Distribution of cache entry TTLs, segmented by TTL source
+-   **loadants_negative_cache_hits_total** (Counter) - Negative cache hit count for efficiency analysis
 
 ### DNS Query Metrics
 
--   **loadants_dns_query_type_total** (counter) - Total DNS queries by record type (A, AAAA, MX, etc.)
--   **loadants_dns_response_codes_total** (counter) - Total DNS responses by response code (RCODE)
+-   **loadants_dns_query_type_total** (Counter) - DNS queries by record type (A, AAAA, MX, etc.)
+-   **loadants_dns_response_codes_total** (Counter) - DNS responses by response code (NOERROR, NXDOMAIN, etc.)
 
 ### Upstream Resolver Metrics
 
--   **loadants_upstream_requests_total** (counter) - Total requests sent to upstream DoH resolvers, labeled by group and server
--   **loadants_upstream_errors_total** (counter) - Total upstream DoH resolver errors, labeled by error type, group and server
--   **loadants_upstream_duration_seconds** (histogram) - Upstream DoH query duration in seconds, labeled by group and server
+-   **loadants_upstream_requests_total** (Counter) - Requests to upstream DoH resolvers, segmented by group and server
+-   **loadants_upstream_errors_total** (Counter) - Upstream DoH resolver errors, segmented by error type, group, and server
+-   **loadants_upstream_duration_seconds** (Histogram) - Upstream DoH query latency, segmented by group and server
 
 ### DNS Routing Metrics
 
--   **loadants_route_matches_total** (counter) - Total routing rule matches, labeled by rule type (exact, wildcard, regex) and target group
--   **loadants_route_rules_count** (gauge) - Current number of active routing rules, labeled by rule type (exact, wildcard, regex)
+-   **loadants_route_matches_total** (Counter) - Routing rule matches, segmented by rule type and target group
+-   **loadants_route_rules_count** (Gauge) - Active routing rules count, segmented by rule type
 
-These metrics enable detailed monitoring and analysis of Load Ants performance and behavior, making it easier to identify issues, optimize configurations, and ensure the service meets your performance requirements.
+These comprehensive metrics enable detailed performance analysis, rapid troubleshooting, and data-driven optimization of Load Ants deployments.
 
 ## API Endpoints
 
-Load Ants provides the following HTTP API endpoints for DNS resolution and service monitoring:
+Load Ants provides streamlined API endpoints for DNS resolution and operational monitoring:
 
 ### DNS Endpoints
 
 -   **UDP and TCP Port 53**
-    -   _Description_: Standard DNS ports for receiving traditional DNS queries
-    -   _Protocol_: DNS over UDP/TCP (RFC 1035)
-    -   _Usage_: Applications and systems using standard DNS resolution will send queries to these ports
+    -   _Description_: Standard DNS service ports compliant with RFC 1035
+    -   _Protocol_: DNS over UDP/TCP
+    -   _Usage_: Compatible with all standard DNS clients, applications, and operating systems
 
-### Monitoring and Health Endpoints
+### Monitoring and Health Check Endpoints
 
 -   **GET /health**
 
-    -   _Description_: Health check endpoint for monitoring services and Kubernetes probes
-    -   _Returns_: 200 OK when service is healthy
+    -   _Description_: Health check endpoint for monitoring systems and Kubernetes liveness/readiness probes
+    -   _Returns_: 200 OK when service is operational
     -   _Usage_: `curl http://localhost:8080/health`
 
 -   **GET /metrics**
-    -   _Description_: Prometheus metrics endpoint exposing performance and operational statistics
-    -   _Content Type_: text/plain
+    -   _Description_: Prometheus-compatible metrics endpoint exposing operational telemetry
+    -   _Content Type_: text/plain; version=0.0.4
     -   _Usage_: `curl http://localhost:8080/metrics`
 
-These endpoints adhere to standard HTTP status codes:
+All endpoints implement standard HTTP status codes:
 
--   200: Successful query/operation
--   500: Server error during processing
+-   200: Successful operation
+-   500: Internal server error
 
 ## Use Cases
 
-Load Ants is well-suited for the following scenarios:
+Load Ants delivers exceptional value in diverse deployment scenarios:
 
--   **Enterprise/Internal Networks**: Centralize DNS resolution, enforce encryption, and implement internal name resolution policies
--   **Personal Users/Developers**: Bypass ISP DNS restrictions/poisoning, improve privacy, and flexibly control specific domain resolution
--   **Cloud Environments**: Deploy as a sidecar or standalone service providing DNS resolution capabilities
+-   **Enterprise Networks**: Implement centralized, secure DNS resolution with encrypted traffic, granular routing policies, and comprehensive monitoring
+-   **Privacy-Focused Users**: Protect browsing history from ISP surveillance, bypass DNS censorship, and enhance online privacy
+-   **Cloud-Native Environments**: Deploy as a sidecar or dedicated service in Kubernetes clusters for secure, high-performance DNS resolution
+-   **Content Filtering**: Implement domain-based access controls by selectively blocking or redirecting specific DNS queries
 
 ## Installation
 
-### Prerequisites
+### Requirements
 
--   Administrative/root privileges (for binding to port 53)
+-   Rust toolchain 1.56+ (for building from source)
+-   Privileged access (for binding to port 53)
 
-### From Source
+### Building from Source
 
 1. Clone the repository:
 
     ```bash
-    git clone https://github.com/yourusername/load-ants.git
+    git clone https://github.com/shengyanli1982/load-ants.git
     cd load-ants
     ```
 
-2. Build the application:
+2. Build the optimized release binary:
 
     ```bash
     cargo build --release
     ```
 
-3. The compiled binary can be downloaded from the [releases](https://github.com/shengyanli1982/load-ants/releases) page.
+3. Pre-compiled binaries for major platforms are available on the [releases page](https://github.com/shengyanli1982/load-ants/releases).
 
-### Using Docker
+### Deploying with Docker
 
-Docker provides a simple way to run Load Ants without installing Rust or dependencies directly on your system.
+Docker provides a frictionless deployment option without installing Rust or dependencies directly:
 
-1. Create a directory for your configuration:
+1. Create a configuration directory:
 
     ```bash
     mkdir -p ./load-ants-config
     ```
 
-2. Create a configuration file:
+2. Prepare your configuration file:
 
     ```bash
     cp config.default.yaml ./load-ants-config/config.yaml
-    # Edit the configuration file to suit your needs
+    # Edit the configuration file to suit your environment
     ```
 
-3. Run Load Ants as a Docker container:
+3. Launch the Load Ants container:
 
     ```bash
     docker run -d \
@@ -205,16 +227,16 @@ Docker provides a simple way to run Load Ants without installing Rust or depende
       -p 53:53/tcp \
       -p 8080:8080 \
       -v $(pwd)/load-ants-config:/etc/load-ants \
-      yourusername/load-ants:latest -c /etc/load-ants/config.yaml
+      shengyanli1982/load-ants:latest -c /etc/load-ants/config.yaml
     ```
 
-4. Check container logs:
+4. Monitor container logs:
 
     ```bash
     docker logs load-ants
     ```
 
-5. Stop the container:
+5. Manage the container:
     ```bash
     docker stop load-ants
     docker rm load-ants
@@ -222,9 +244,9 @@ Docker provides a simple way to run Load Ants without installing Rust or depende
 
 ### Kubernetes Deployment
 
-For production environments, Kubernetes provides scaling, high availability, and easier management.
+For production environments, Kubernetes offers superior scalability, resilience, and operational management:
 
-1. Create a ConfigMap for the configuration:
+1. Create a ConfigMap with your configuration:
 
     ```yaml
     # configmap.yaml
@@ -246,10 +268,10 @@ For production environments, Kubernetes provides scaling, high availability, and
               min_ttl: 60
               max_ttl: 3600
               negative_ttl: 300
-            # Add the rest of your configuration...
+            # Additional configuration as needed...
     ```
 
-2. Create a Deployment:
+2. Define a Deployment resource:
 
     ```yaml
     # deployment.yaml
@@ -269,10 +291,14 @@ For production environments, Kubernetes provides scaling, high availability, and
             metadata:
                 labels:
                     app: load-ants
+                annotations:
+                    prometheus.io/scrape: "true"
+                    prometheus.io/port: "8080"
+                    prometheus.io/path: "/metrics"
             spec:
                 containers:
                     - name: load-ants
-                      image: yourusername/load-ants:latest
+                      image: shengyanli1982/load-ants:latest
                       args: ["-c", "/etc/load-ants/config.yaml"]
                       ports:
                           - containerPort: 53
@@ -282,7 +308,7 @@ For production environments, Kubernetes provides scaling, high availability, and
                             name: dns-tcp
                             protocol: TCP
                           - containerPort: 8080
-                            name: health
+                            name: metrics
                       volumeMounts:
                           - name: config-volume
                             mountPath: /etc/load-ants
@@ -299,13 +325,19 @@ For production environments, Kubernetes provides scaling, high availability, and
                               port: 8080
                           initialDelaySeconds: 5
                           periodSeconds: 10
+                      readinessProbe:
+                          httpGet:
+                              path: /health
+                              port: 8080
+                          initialDelaySeconds: 3
+                          periodSeconds: 5
                 volumes:
                     - name: config-volume
                       configMap:
                           name: load-ants-config
     ```
 
-3. Create a Service:
+3. Create a Service resource:
 
     ```yaml
     # service.yaml
@@ -329,7 +361,7 @@ For production environments, Kubernetes provides scaling, high availability, and
         type: ClusterIP
     ```
 
-4. Apply the configurations:
+4. Apply the configuration to your cluster:
 
     ```bash
     kubectl create namespace dns
@@ -338,27 +370,37 @@ For production environments, Kubernetes provides scaling, high availability, and
     kubectl apply -f service.yaml
     ```
 
-5. Check the deployment status:
+5. Verify deployment status:
     ```bash
     kubectl -n dns get pods
     kubectl -n dns get svc
     ```
 
-### Using as a Service
+### Running as a System Service
 
 #### Linux (systemd)
 
-1. Create a service file `/etc/systemd/system/load-ants.service`:
+1. Create a service unit file at `/etc/systemd/system/load-ants.service`:
 
     ```ini
     [Unit]
-    Description=Load Ants DNS to DoH Proxy
+    Description=Load Ants DNS-over-HTTPS Proxy Service
+    Documentation=https://github.com/shengyanli1982/load-ants
     After=network.target
+    Wants=network-online.target
 
     [Service]
-    ExecStart=/path/to/load-ants -c /etc/load-ants/config.yaml
+    Type=simple
+    ExecStart=/usr/local/bin/load-ants -c /etc/load-ants/config.yaml
     Restart=on-failure
+    RestartSec=5
     User=root
+    LimitNOFILE=65536
+
+    # Security enhancements (optional)
+    CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+    AmbientCapabilities=CAP_NET_BIND_SERVICE
+    NoNewPrivileges=true
 
     [Install]
     WantedBy=multi-user.target
@@ -369,30 +411,32 @@ For production environments, Kubernetes provides scaling, high availability, and
     ```bash
     mkdir -p /etc/load-ants
     cp config.default.yaml /etc/load-ants/config.yaml
-    # Edit the config file to match your needs
+    # Customize configuration as needed
     ```
 
 3. Enable and start the service:
     ```bash
+    systemctl daemon-reload
     systemctl enable load-ants
     systemctl start load-ants
+    systemctl status load-ants
     ```
 
 ## Usage
 
-### Command Line Options
+### Command Line Arguments
 
 ```
 load-ants [OPTIONS]
 
-OPTIONS:
-    -c, --config <PATH>    Path to configuration file (default: ./config.yaml)
-    -t, --test             Test configuration file and exit
-    -h, --help             Print help information
-    -V, --version          Print version information
+Options:
+    -c, --config <PATH>    Configuration file path (default: ./config.yaml)
+    -t, --test             Validate configuration and exit
+    -h, --help             Display help information
+    -V, --version          Display version information
 ```
 
-### Example
+### Quick Start Guide
 
 1. Create a configuration file based on the template:
 
@@ -400,144 +444,225 @@ OPTIONS:
     cp config.default.yaml config.yaml
     ```
 
-2. Edit the configuration file to suit your needs
+2. Edit the configuration file to specify your preferred DoH providers and routing rules
 
-3. Run Load Ants with your configuration:
+3. Launch Load Ants with appropriate permissions:
 
     ```bash
     sudo ./load-ants -c config.yaml
     ```
 
-4. Test the service by using it as a DNS server:
+4. Verify the service is operational:
     ```bash
     dig @127.0.0.1 example.com
+    curl http://localhost:8080/health
     ```
 
-## Configuration
+## Configuration Guide
 
-Load Ants is configured using a YAML file. Below is an explanation of the key sections:
+Load Ants uses YAML-formatted configuration files for maximum flexibility and readability. Below is a comprehensive reference of all configuration options:
 
-### Server Configuration
+### Server Configuration (server)
+
+| Parameter   | Type    | Default        | Description                           | Valid Range          |
+| ----------- | ------- | -------------- | ------------------------------------- | -------------------- |
+| listen_udp  | String  | "127.0.0.1:53" | UDP DNS listening address and port    | Valid IP:port format |
+| listen_tcp  | String  | "127.0.0.1:53" | TCP DNS listening address and port    | Valid IP:port format |
+| tcp_timeout | Integer | 10             | TCP connection idle timeout (seconds) | 1-3600               |
+
+### Health Check Configuration (health)
+
+| Parameter | Type   | Default          | Description                                     | Valid Range          |
+| --------- | ------ | ---------------- | ----------------------------------------------- | -------------------- |
+| listen    | String | "127.0.0.1:8080" | Health check service listening address and port | Valid IP:port format |
+
+### Cache Configuration (cache)
+
+| Parameter    | Type    | Default | Description                  | Valid Range |
+| ------------ | ------- | ------- | ---------------------------- | ----------- |
+| enabled      | Boolean | true    | Enable caching               | true/false  |
+| max_size     | Integer | 10000   | Maximum cache entries        | 10-1000000  |
+| min_ttl      | Integer | 60      | Minimum TTL (seconds)        | 1-86400     |
+| max_ttl      | Integer | 3600    | Maximum TTL (seconds)        | 1-86400     |
+| negative_ttl | Integer | 300     | Negative cache TTL (seconds) | 1-86400     |
+
+The cache system provides sophisticated DNS response caching with fine-grained control:
+
+-   **enabled**: Master switch for the caching subsystem
+-   **max_size**: Maximum number of cached DNS records (memory usage scales linearly)
+-   **min_ttl**: Floor value for DNS response TTLs (overrides shorter TTLs to reduce cache churn)
+-   **max_ttl**: Ceiling value for DNS response TTLs (caps excessively long TTLs for improved freshness)
+-   **negative_ttl**: Dedicated TTL for negative responses (NXDOMAIN, ServFail, etc.)
+
+Negative caching significantly enhances performance by temporarily storing error responses, preventing repeated upstream queries for non-existent or problematic domains, thereby reducing latency and conserving upstream bandwidth.
+
+### HTTP Client Configuration (http_client)
+
+| Parameter       | Type    | Default | Description                                  | Valid Range      |
+| --------------- | ------- | ------- | -------------------------------------------- | ---------------- |
+| connect_timeout | Integer | 5       | Connection timeout (seconds)                 | 1-120            |
+| request_timeout | Integer | 10      | Request timeout (seconds)                    | 1-1200           |
+| idle_timeout    | Integer | 60      | Idle connection timeout (seconds) (optional) | 5-1800           |
+| keepalive       | Integer | 60      | TCP Keepalive (seconds) (optional)           | 5-600            |
+| agent           | String  | -       | HTTP User-Agent (optional)                   | Non-empty string |
+
+### Upstream DoH Server Group Configuration (upstream_groups)
+
+| Parameter | Type   | Default | Description                    | Valid Range                        |
+| --------- | ------ | ------- | ------------------------------ | ---------------------------------- |
+| name      | String | -       | Group name                     | Non-empty string                   |
+| strategy  | String | -       | Load balancing strategy        | "roundrobin", "weighted", "random" |
+| servers   | Array  | -       | Server list                    | At least one server                |
+| retry     | Object | -       | Retry configuration (optional) | -                                  |
+| proxy     | String | -       | HTTP/SOCKS5 proxy (optional)   | Valid proxy URL                    |
+
+#### Server Configuration (servers)
+
+| Parameter    | Type    | Default   | Description                             | Valid Range                 |
+| ------------ | ------- | --------- | --------------------------------------- | --------------------------- |
+| url          | String  | -         | DoH server URL                          | Valid HTTP(S) URL with path |
+| weight       | Integer | 1         | Weight (only for weighted strategy)     | 1-65535                     |
+| method       | String  | "post"    | DoH request method                      | "get", "post"               |
+| content_type | String  | "message" | DoH content type                        | "message", "json"           |
+| auth         | Object  | -         | Authentication configuration (optional) | -                           |
+
+#### Authentication Configuration (auth)
+
+| Parameter | Type   | Default | Description                    | Valid Range       |
+| --------- | ------ | ------- | ------------------------------ | ----------------- |
+| type      | String | -       | Authentication type            | "basic", "bearer" |
+| username  | String | -       | Username (only for basic auth) | Non-empty string  |
+| password  | String | -       | Password (only for basic auth) | Non-empty string  |
+| token     | String | -       | Token (only for bearer auth)   | Non-empty string  |
+
+#### Retry Configuration (retry)
+
+| Parameter | Type    | Default | Description              | Valid Range |
+| --------- | ------- | ------- | ------------------------ | ----------- |
+| attempts  | Integer | -       | Number of retry attempts | 1-100       |
+| delay     | Integer | -       | Initial delay (seconds)  | 1-120       |
+
+### Routing Rules Configuration (routing_rules)
+
+| Parameter | Type   | Default | Description                                             | Valid Range                      |
+| --------- | ------ | ------- | ------------------------------------------------------- | -------------------------------- |
+| match     | String | -       | Match type                                              | "exact", "wildcard", "regex"     |
+| pattern   | String | -       | Match pattern                                           | Non-empty string                 |
+| action    | String | -       | Routing action                                          | "forward", "block"               |
+| target    | String | -       | Target upstream group (required when action is forward) | Name of a defined upstream group |
+
+Load Ants implements a sophisticated priority-based routing system:
+
+1. **Exact Matching** (highest priority) - Perfect match of the complete domain name (e.g., `example.com`)
+2. **Wildcard Matching** - Domain pattern matching with wildcards (e.g., `*.example.com`)
+3. **Regular Expression Matching** - Advanced pattern matching using regex (e.g., `^(mail|smtp)\\.example\\.com$`)
+4. **Global Wildcard** (lowest priority) - Catch-all rule using the wildcard pattern (`*`)
+
+For optimal routing configuration, rules should be ordered from most specific to least specific, with the global wildcard rule typically serving as the final fallback option.
+
+### Configuration Example
 
 ```yaml
+# Load Ants Configuration Example
+
+# Server listening configuration
 server:
     listen_udp: "0.0.0.0:53" # UDP listening address and port
     listen_tcp: "0.0.0.0:53" # TCP listening address and port
-```
+    tcp_timeout: 10 # TCP connection timeout in seconds
 
-### Health Check
-
-```yaml
+# Health check and metrics endpoint
 health:
-    listen: "0.0.0.0:8080" # Health check server listen address and port
-```
+    listen: "0.0.0.0:8080" # Health/metrics server address and port
 
-### Cache Settings
-
-```yaml
+# DNS cache configuration
 cache:
-    enabled: true
-    max_size: 10000 # Maximum number of entries (10-1000000)
-    min_ttl: 60 # Minimum TTL in seconds (1-86400)
-    max_ttl: 3600 # Maximum TTL in seconds (1-86400)
-    negative_ttl: 300 # Negative caching TTL in seconds (1-86400)
-```
+    enabled: true # Enable DNS caching
+    max_size: 10000 # Maximum cache entries
+    min_ttl: 60 # Minimum TTL in seconds
+    max_ttl: 3600 # Maximum TTL in seconds
+    negative_ttl: 300 # TTL for negative responses (NXDOMAIN, etc.)
 
-The cache configuration allows fine-tuning of DNS response caching behavior:
-
--   **enabled**: Turn caching on/off
--   **max_size**: Maximum number of DNS records to store in cache
--   **min_ttl**: Minimum time-to-live for positive responses (overrides smaller TTLs)
--   **max_ttl**: Maximum time-to-live cap for any cached entry
--   **negative_ttl**: Specific TTL for negative responses (errors, non-existent domains)
-
-Negative caching is a performance optimization that caches DNS error responses (like NXDOMAIN or ServFail) for a specified time. This prevents repeated queries to upstream servers for domains that don't exist or temporarily fail to resolve, reducing latency and upstream load.
-
-### HTTP Client Settings
-
-```yaml
+# HTTP client settings
 http_client:
-    connect_timeout: 5 # Connection timeout in seconds (1-120)
-    request_timeout: 10 # Request timeout in seconds (1-1200)
-    idle_timeout: 60 # Idle connection timeout in seconds (5-1800)
-    keepalive: 60 # TCP keepalive in seconds (5-600)
+    connect_timeout: 5 # Connection timeout in seconds
+    request_timeout: 10 # Request timeout in seconds
+    idle_timeout: 60 # Connection idle timeout in seconds
+    keepalive: 60 # TCP keepalive in seconds
     agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-```
 
-### Upstream DoH Server Groups
-
-```yaml
+# Upstream DoH server groups
 upstream_groups:
+    # Google Public DNS group with round-robin load balancing
     - name: "google_public"
-      strategy: "roundrobin" # Strategy: roundrobin, weighted, random
+      strategy: "roundrobin" # Load balancing strategy
       servers:
           - url: "https://dns.google/dns-query"
           - url: "https://8.8.4.4/dns-query"
-            method: "get" # Optional: get or post, default is post
-            content_type: "message" # Optional: message or json, default is message
+            method: "get" # HTTP method (get or post)
+            content_type: "message" # Content type (message or json)
       retry:
-          attempts: 3 # Number of retry attempts (1-100)
-          delay: 1 # Initial delay in seconds (1-120)
-      proxy: "http://user:pass@proxyserver:port" # Optional proxy
+          attempts: 3 # Number of retry attempts
+          delay: 1 # Initial delay between retries in seconds
+      proxy: "http://user:pass@proxyserver:port" # Optional HTTP/SOCKS5 proxy
 
-    - name: "secure_dns"
-      strategy: "weighted"
+    # Cloudflare DNS group with random server selection
+    - name: "cloudflare_secure"
+      strategy: "random" # Random server selection for enhanced privacy
       servers:
-          - url: "https://example-doh.com/dns-query"
-            weight: 70 # Weight for weighted strategy (1-65535)
+          - url: "https://cloudflare-dns.com/dns-query"
+            method: "post"
+          - url: "https://1.0.0.1/dns-query"
+            method: "get"
+            content_type: "json"
+
+    # NextDNS group with weighted load balancing
+    - name: "nextdns_weighted"
+      strategy: "weighted" # Weighted distribution
+      servers:
+          - url: "https://dns.nextdns.io/YOUR_CONFIG_ID"
+            weight: 70 # 70% of requests go to this server
             auth:
-                type: "bearer" # Authentication type: basic or bearer
-                token: "YOUR_API_TOKEN" # Token for bearer auth
-          - url: "https://another-doh.com/dns-query"
-            weight: 30
-            auth:
-                type: "basic"
-                username: "user"
-                password: "pass"
-```
+                type: "bearer" # Authentication type
+                token: "YOUR_API_KEY_OR_TOKEN" # API key or token
+          - url: "https://dns2.nextdns.io/YOUR_CONFIG_ID"
+            weight: 30 # 30% of requests go to this server
+      retry:
+          attempts: 2
+          delay: 2
 
-### Routing Rules
-
-Load Ants uses a priority-based matching system for DNS routing:
-
-1. **Exact Match** (highest priority) - Direct match for full domain names (e.g., `example.com`)
-2. **Specific Wildcard Match** - Matches domains using wildcards (e.g., `*.example.com`)
-3. **Regex Match** - Matches domains using regular expressions (e.g., `^(mail|audio)\\.google\\.com$`)
-4. **Global Wildcard Match** (lowest priority) - The catch-all rule (`*`) that matches any domain
-
-When configuring routing rules, keep this priority order in mind. The global wildcard (`*`) should typically be placed as the last rule to serve as a default when no other rules match.
-
-```yaml
+# DNS routing rules (processed in order)
 routing_rules:
-    # Block specific domains
-    - match: "exact" # Match type: exact, wildcard, regex
-      pattern: "ads.example.com" # Pattern to match
-      action: "block" # Action: block or forward
+    # Block specific advertising domains
+    - match: "exact"
+      pattern: "ads.example.com"
+      action: "block" # Return NXDOMAIN response
 
-    # Route internal domains to specific upstream group
+    # Route internal corporate domains to internal resolver
     - match: "wildcard"
-      pattern: "*.internal.local"
+      pattern: "*.corp.local"
       action: "forward"
-      target: "internal_dns" # Target upstream group
+      target: "internal_doh" # Target upstream group
 
-    # Use regex for pattern matching
+    # Route CDN domains using regex pattern matching
     - match: "regex"
-      pattern: "^ads-.*\\.example\\.com$"
+      pattern: "^(video|audio)-cdn\\..+\\.com$"
       action: "forward"
-      target: "adblock_dns"
+      target: "google_public"
 
-    # Default rule (catch-all)
+    # Default rule: forward all other traffic to Google Public DNS
     - match: "wildcard"
-      pattern: "*" # Match everything
+      pattern: "*"
       action: "forward"
-      target: "google_public" # Default upstream group
+      target: "google_public"
 ```
 
 ## License
 
 [MIT License](LICENSE)
 
-## Acknowledgments
+## Acknowledgements
 
--   Thanks to all the contributors who have helped shape Load Ants
--   Inspired by modern DoH implementations and the need for flexible DNS routing
+-   Thanks to all contributors who have helped improve the Load Ants project
+-   This project builds upon modern DNS security standards and DoH implementation technologies
+-   Inspired by real-world needs for flexible, secure, and efficient DNS routing solutions
