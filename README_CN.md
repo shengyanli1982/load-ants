@@ -2,133 +2,133 @@
 
 <div align="center">
     <h1>LOAD ANTS</h1>
-    <h4>🐜🐜🐜 一个轻量的 DNS 转发器，将 UDP/TCP 查询转换为 DoH。</h4></br>
+    <h4>🐜🐜🐜 轻量级 DNS 转发器，实现 UDP/TCP 查询到 DoH 的无缝转换</h4></br>
     <img src="./images/logo.png" alt="logo" width="600">
 </div>
 
 ## 项目介绍
 
-**Load Ants** 是一个高性能、多功能的 DNS 代理服务，可将传统的 UDP/TCP DNS 查询转换为 DNS-over-HTTPS (DoH)。它充当使用标准 DNS 协议的客户端与现代安全 DoH 提供商之间的中介，提供增强的隐私、安全性和灵活的路由功能。
+**Load Ants** 是一款高性能、多功能的 DNS 代理服务，能够将传统的 UDP/TCP DNS 查询转换为 DNS-over-HTTPS (DoH)。它作为使用标准 DNS 协议的客户端与现代安全 DoH 提供商之间的桥梁，提供增强的隐私保护、安全性和灵活的路由功能。
 
 ### 为什么选择 DNS-over-HTTPS？
 
-传统的 DNS 查询以明文传输，使您的浏览历史容易受到潜在的监控、劫持或操纵。DoH 通过以下方式解决这些问题：
+传统 DNS 查询采用明文传输，这使您的浏览历史容易遭受监控、劫持或篡改。DoH 通过以下方式解决这些问题：
 
--   **加密 DNS 流量** - 防止网络中介窥探
--   **增强隐私** - 隐藏 DNS 查询，避免 ISP 和其他网络观察者获取
--   **提高安全性** - 降低 DNS 投毒和欺骗攻击的风险
--   **绕过审查** - 帮助规避基于 DNS 的封锁技术
+-   **DNS 流量加密** - 防止网络中间人窥探
+-   **隐私增强** - 隐藏 DNS 查询内容，避免被运营商和其他网络观察者捕获
+-   **安全性提升** - 有效降低 DNS 投毒和欺骗攻击的风险
+-   **突破网络限制** - 帮助规避基于 DNS 的网络封锁技术
 
-## 主要特性
+## 核心功能
 
 -   🔄 **协议转换**
 
     -   无缝将 UDP/53 和 TCP/53 DNS 请求转换为 DoH (RFC 8484)
-    -   完全支持 GET 和 POST HTTP 方法
+    -   全面支持 GET 和 POST HTTP 方法
     -   处理多种内容格式，包括 `application/dns-message` 和 `application/dns-json`
 
 -   🧠 **智能路由**
 
-    -   **灵活匹配** - 根据域名模式路由 DNS 查询：
+    -   **灵活匹配** - 根据域名模式精准路由 DNS 查询：
         -   精确域名匹配
-        -   通配符域名匹配（`*.example.com`）
+        -   通配符域名匹配（如 `*.example.com`）
         -   正则表达式域名匹配
-    -   **自定义操作** - 为每次匹配定义处理方式：
-        -   转发到特定上游 DoH 组
-        -   阻止查询（返回 NXDOMAIN）
+    -   **自定义操作** - 为每次匹配定义精确处理方式：
+        -   转发至特定上游 DoH 组
+        -   拦截查询（返回 NXDOMAIN）
 
 -   🌐 **灵活的上游管理**
 
-    -   **分组** - 将 DoH 服务器组织成具有独立设置的逻辑组
-    -   **负载均衡** - 为每个组配置均衡策略：
-        -   轮询 (RR) - 在服务器之间平均分配
-        -   加权轮询 (WRR) - 根据容量优先考虑服务器
-        -   随机 - 非确定性选择，增强隐私
-    -   **认证支持** - 与需要认证的私有 DoH 提供商进行安全通信：
+    -   **分组机制** - 将 DoH 服务器组织成独立配置的逻辑组
+    -   **负载均衡** - 为每个组配置高效均衡策略：
+        -   轮询 (RR) - 在服务器之间均衡分配请求
+        -   加权轮询 (WRR) - 根据权重优先调度服务器
+        -   随机分配 - 非确定性选择，增强隐私保护
+    -   **认证支持** - 与需要认证的私有 DoH 提供商安全通信：
         -   HTTP 基本认证
         -   Bearer 令牌认证
-    -   **资源优化** - 所有上游组共享 HTTP 客户端池以提高效率
+    -   **资源优化** - 所有上游组共享 HTTP 客户端连接池，提升资源利用率
 
--   ⚡ **性能增强**
+-   ⚡ **性能优化**
 
-    -   **智能缓存** - 内置 DNS 缓存减少延迟和上游负载
-        -   **正面缓存** - 存储成功的 DNS 响应以加快解析速度
-        -   **负面缓存** - 缓存错误响应（NXDOMAIN、ServFail 等），避免对不存在域名的重复查询
-        -   **可配置 TTL** - 为正面和负面缓存条目设置不同的生存时间
-    -   **连接池** - 复用 HTTP 连接提高效率
-    -   **可调 TTL** - 配置缓存响应的最小和最大 TTL
+    -   **智能缓存** - 内置 DNS 缓存机制，显著降低延迟和上游负载
+        -   **正向缓存** - 存储成功的 DNS 响应，加速解析过程
+        -   **负向缓存** - 缓存错误响应（NXDOMAIN、ServFail 等），避免对不存在域名的重复查询
+        -   **可调整 TTL** - 为正向和负向缓存条目设置差异化的生存时间
+    -   **连接池复用** - 高效复用 HTTP 连接，提升性能
+    -   **TTL 优化** - 灵活配置缓存响应的最小和最大 TTL 值
 
--   🔁 **可靠性**
+-   🔁 **高可靠性**
 
-    -   **重试机制** - 自动重试失败的 DoH 请求，可配置尝试次数
-    -   **自定义超时** - 微调连接和请求超时
+    -   **智能重试** - 自动重试失败的 DoH 请求，支持可配置的尝试次数
+    -   **超时控制** - 精确调整连接和请求超时参数
 
--   ⚙️ **管理**
-    -   **YAML 配置** - 简单、人类可读的配置
-    -   **配置验证** - 启动时或测试模式下进行严格验证
-    -   **健康检查端点** - 为运维团队提供监控集成
+-   ⚙️ **管理能力**
+    -   **YAML 配置** - 简洁、易读的配置方式
+    -   **配置校验** - 启动时或测试模式下进行严格配置验证
+    -   **健康检查** - 为运维团队提供完整的监控集成接口
     -   **Prometheus 指标** - 通过 `/metrics` 端点提供全面的监控指标
 
-## 架构
+## 架构设计
 
-Load Ants 遵循模块化架构，具有以下关键组件：
+Load Ants 采用模块化架构设计，包含以下核心组件：
 
--   **服务器**：接受传统 DNS 查询的 UDP/TCP 监听器
--   **路由器**：将域名与规则匹配以确定处理操作
--   **上游管理器**：处理与 DoH 服务器的通信，包括负载均衡和认证
--   **缓存**：存储 DNS 响应以提高性能并减少上游负载
--   **处理器**：通过协调其他组件处理 DNS 查询
+-   **服务器模块**：接收传统 DNS 查询的 UDP/TCP 监听器
+-   **路由模块**：将域名与规则进行匹配，确定处理策略
+-   **上游管理模块**：处理与 DoH 服务器的通信，实现负载均衡和认证
+-   **缓存模块**：高效存储 DNS 响应，提升性能并减轻上游负载
+-   **处理器模块**：协调各组件，完成 DNS 查询的全流程处理
 
 ![architecture](./images/architecture.png)
 
-## Prometheus 指标
+## Prometheus 监控指标
 
-Load Ants 提供全面的 Prometheus 指标，用于监控服务的性能、健康状态和运行状况。这些指标通过 `/metrics` 端点暴露，可被 Prometheus 或其他兼容的监控系统抓取。
+Load Ants 提供完整的 Prometheus 监控指标，用于实时监控服务性能、健康状态和运行情况。这些指标通过 `/metrics` 端点暴露，可被 Prometheus 或其他兼容的监控系统采集。
 
 ![metrics](./images/metrics.png)
 
 ### DNS 性能指标
 
--   **loadants_dns_requests_total** (计数器) - 代理处理的 DNS 请求总数，按协议(UDP/TCP)标记
--   **loadants_dns_request_duration_seconds** (直方图) - DNS 请求处理持续时间（秒），按协议和查询类型标记
--   **loadants_dns_request_errors_total** (计数器) - DNS 请求处理错误总数，按错误类型标记
+-   **loadants_dns_requests_total** (计数器) - 代理处理的 DNS 请求总数，按协议(UDP/TCP)分类
+-   **loadants_dns_request_duration_seconds** (直方图) - DNS 请求处理耗时（秒），按协议和查询类型分类
+-   **loadants_dns_request_errors_total** (计数器) - DNS 请求处理错误总数，按错误类型分类
 
 ### 缓存效率指标
 
--   **loadants_cache_entries** (仪表盘) - 当前 DNS 缓存条目数
--   **loadants_cache_capacity** (仪表盘) - DNS 缓存的最大容量
--   **loadants_cache_operations_total** (计数器) - 缓存操作总数，按操作类型标记（命中、未命中、插入、驱逐、过期）
--   **loadants_cache_ttl_seconds** (直方图) - DNS 缓存条目的 TTL 分布（秒），按 TTL 来源标记（原始、最小 TTL、调整后、负面缓存 TTL）
--   **loadants_negative_cache_hits_total** (计数器) - 负面缓存命中总数，帮助跟踪负面缓存的效率
+-   **loadants_cache_entries** (仪表盘) - 当前 DNS 缓存条目数量
+-   **loadants_cache_capacity** (仪表盘) - DNS 缓存的最大容量上限
+-   **loadants_cache_operations_total** (计数器) - 缓存操作总数，按操作类型分类（命中、未命中、插入、驱逐、过期）
+-   **loadants_cache_ttl_seconds** (直方图) - DNS 缓存条目的 TTL 分布（秒），按 TTL 来源分类（原始、最小 TTL、调整后、负向缓存 TTL）
+-   **loadants_negative_cache_hits_total** (计数器) - 负向缓存命中总数，用于跟踪负向缓存的效率
 
 ### DNS 查询指标
 
--   **loadants_dns_query_type_total** (计数器) - 按记录类型(A, AAAA, MX 等)的 DNS 查询总数
--   **loadants_dns_response_codes_total** (计数器) - 按响应代码(RCODE)的 DNS 响应总数
+-   **loadants_dns_query_type_total** (计数器) - 按记录类型(A, AAAA, MX 等)统计的 DNS 查询总数
+-   **loadants_dns_response_codes_total** (计数器) - 按响应代码(RCODE)统计的 DNS 响应总数
 
 ### 上游解析器指标
 
--   **loadants_upstream_requests_total** (计数器) - 发送到上游 DoH 解析器的请求总数，按组和服务器标记
--   **loadants_upstream_errors_total** (计数器) - 上游 DoH 解析器错误总数，按错误类型、组和服务器标记
--   **loadants_upstream_duration_seconds** (直方图) - 上游 DoH 查询持续时间（秒），按组和服务器标记
+-   **loadants_upstream_requests_total** (计数器) - 发送到上游 DoH 解析器的请求总数，按组和服务器分类
+-   **loadants_upstream_errors_total** (计数器) - 上游 DoH 解析器错误总数，按错误类型、组和服务器分类
+-   **loadants_upstream_duration_seconds** (直方图) - 上游 DoH 查询耗时（秒），按组和服务器分类
 
 ### DNS 路由指标
 
--   **loadants_route_matches_total** (计数器) - 路由规则匹配总数，按规则类型（精确、通配符、正则表达式）和目标组标记
--   **loadants_route_rules_count** (仪表盘) - 当前活跃路由规则数，按规则类型（精确、通配符、正则表达式）标记
+-   **loadants_route_matches_total** (计数器) - 路由规则匹配总数，按规则类型（精确、通配符、正则表达式）和目标组分类
+-   **loadants_route_rules_count** (仪表盘) - 当前活跃路由规则数量，按规则类型（精确、通配符、正则表达式）分类
 
-这些指标支持对 Load Ants 性能和行为进行详细监控和分析，使识别问题、优化配置和确保服务满足性能要求变得更加容易。
+这些丰富的指标支持对 Load Ants 性能和行为进行精细化监控和分析，有助于快速识别问题、优化配置并确保服务满足性能需求。
 
 ## API 端点
 
-Load Ants 提供以下 HTTP API 端点用于 DNS 解析和服务监控：
+Load Ants 提供以下 HTTP API 端点，用于 DNS 解析和服务监控：
 
 ### DNS 端点
 
 -   **UDP 和 TCP 端口 53**
     -   _描述_: 接收传统 DNS 查询的标准 DNS 端口
     -   _协议_: DNS over UDP/TCP (RFC 1035)
-    -   _用途_: 使用标准 DNS 解析的应用程序和系统将查询发送到这些端口
+    -   _用途_: 使用标准 DNS 解析的应用程序和系统通过这些端口发送查询
 
 ### 监控和健康检查端点
 
@@ -146,58 +146,58 @@ Load Ants 提供以下 HTTP API 端点用于 DNS 解析和服务监控：
 这些端点遵循标准 HTTP 状态码：
 
 -   200: 查询/操作成功
--   500: 处理过程中出现服务器错误
+-   500: 处理过程中发生服务器错误
 
-## 使用场景
+## 应用场景
 
-Load Ants 非常适合以下场景：
+Load Ants 特别适合以下应用场景：
 
--   **企业/内部网络**：集中 DNS 解析，强制加密，实施内部名称解析策略
--   **个人用户/开发者**：绕过 ISP DNS 限制/投毒，提高隐私，灵活控制特定域名解析
--   **云环境**：作为 sidecar 或独立服务提供 DNS 解析能力
+-   **企业/内部网络**：集中化 DNS 解析，强制流量加密，实施精细的内部名称解析策略
+-   **个人用户/开发者**：绕过运营商 DNS 劫持/污染，提升隐私保护，精确控制特定域名解析
+-   **云原生环境**：作为 sidecar 或独立服务，提供高性能的 DNS 解析能力
 
-## 安装
+## 安装部署
 
-### 前提条件
+### 环境要求
 
--   Rust 工具链（用于从源代码构建）
--   管理员/root 权限（用于绑定到 53 端口）
+-   Rust 工具链（从源代码构建时需要）
+-   管理员/root 权限（绑定 53 端口时需要）
 
 ### 从源代码构建
 
-1. 克隆仓库：
+1. 克隆代码仓库：
 
     ```bash
     git clone https://github.com/yourusername/load-ants.git
     cd load-ants
     ```
 
-2. 构建应用：
+2. 构建应用程序：
 
     ```bash
     cargo build --release
     ```
 
-3. 编译后的二进制文件可以在 [releases](https://github.com/shengyanli1982/load-ants/releases) 页面下载。
+3. 编译后的二进制文件也可以直接从[发布页面](https://github.com/shengyanli1982/load-ants/releases)下载。
 
-### 使用 Docker
+### 使用 Docker 部署
 
-Docker 提供了一种简单的方式来运行 Load Ants，无需直接在系统上安装 Rust 或依赖项。
+Docker 提供了一种简便的方式来运行 Load Ants，无需在系统上直接安装 Rust 或其依赖项。
 
-1. 为配置创建一个目录：
+1. 创建配置目录：
 
     ```bash
     mkdir -p ./load-ants-config
     ```
 
-2. 创建配置文件：
+2. 准备配置文件：
 
     ```bash
     cp config.default.yaml ./load-ants-config/config.yaml
-    # 编辑配置文件以满足您的需求
+    # 编辑配置文件以满足您的实际需求
     ```
 
-3. 将 Load Ants 作为 Docker 容器运行：
+3. 以 Docker 容器方式运行 Load Ants：
 
     ```bash
     docker run -d \
@@ -209,23 +209,23 @@ Docker 提供了一种简单的方式来运行 Load Ants，无需直接在系统
       yourusername/load-ants:latest -c /etc/load-ants/config.yaml
     ```
 
-4. 检查容器日志：
+4. 查看容器日志：
 
     ```bash
     docker logs load-ants
     ```
 
-5. 停止容器：
+5. 停止和移除容器：
     ```bash
     docker stop load-ants
     docker rm load-ants
     ```
 
-### Kubernetes 部署
+### Kubernetes 部署方案
 
-对于生产环境，Kubernetes 提供了扩展性、高可用性和更简便的管理。
+对于生产环境，Kubernetes 提供了更好的扩展性、高可用性和管理便捷性。
 
-1. 为配置创建 ConfigMap：
+1. 创建配置 ConfigMap：
 
     ```yaml
     # configmap.yaml
@@ -247,10 +247,10 @@ Docker 提供了一种简单的方式来运行 Load Ants，无需直接在系统
               min_ttl: 60
               max_ttl: 3600
               negative_ttl: 300
-            # 添加其余配置...
+            # 添加其他必要配置...
     ```
 
-2. 创建 Deployment：
+2. 创建 Deployment 资源：
 
     ```yaml
     # deployment.yaml
@@ -306,7 +306,7 @@ Docker 提供了一种简单的方式来运行 Load Ants，无需直接在系统
                           name: load-ants-config
     ```
 
-3. 创建 Service：
+3. 创建 Service 资源：
 
     ```yaml
     # service.yaml
@@ -330,7 +330,7 @@ Docker 提供了一种简单的方式来运行 Load Ants，无需直接在系统
         type: ClusterIP
     ```
 
-4. 应用配置：
+4. 应用配置到集群：
 
     ```bash
     kubectl create namespace dns
@@ -345,7 +345,7 @@ Docker 提供了一种简单的方式来运行 Load Ants，无需直接在系统
     kubectl -n dns get svc
     ```
 
-### 作为服务使用
+### 作为系统服务使用
 
 #### Linux (systemd)
 
@@ -353,7 +353,7 @@ Docker 提供了一种简单的方式来运行 Load Ants，无需直接在系统
 
     ```ini
     [Unit]
-    Description=Load Ants DNS to DoH Proxy
+    Description=Load Ants DNS to DoH 代理服务
     After=network.target
 
     [Service]
@@ -370,7 +370,7 @@ Docker 提供了一种简单的方式来运行 Load Ants，无需直接在系统
     ```bash
     mkdir -p /etc/load-ants
     cp config.default.yaml /etc/load-ants/config.yaml
-    # 编辑配置文件以满足您的需求
+    # 根据实际需求编辑配置文件
     ```
 
 3. 启用并启动服务：
@@ -379,44 +379,44 @@ Docker 提供了一种简单的方式来运行 Load Ants，无需直接在系统
     systemctl start load-ants
     ```
 
-## 使用方法
+## 使用指南
 
-### 命令行选项
+### 命令行参数
 
 ```
 load-ants [OPTIONS]
 
 选项:
-    -c, --config <PATH>    配置文件路径（默认：./config.yaml）
-    -t, --test             测试配置文件并退出
-    -h, --help             打印帮助信息
-    -V, --version          打印版本信息
+    -c, --config <PATH>    指定配置文件路径（默认：./config.yaml）
+    -t, --test             测试配置文件有效性并退出
+    -h, --help             显示帮助信息
+    -V, --version          显示版本信息
 ```
 
-### 示例
+### 使用示例
 
-1. 基于模板创建配置文件：
+1. 基于默认模板创建配置文件：
 
     ```bash
     cp config.default.yaml config.yaml
     ```
 
-2. 编辑配置文件以满足您的需求
+2. 根据实际需求编辑配置文件
 
-3. 使用您的配置运行 Load Ants：
+3. 启动 Load Ants 服务：
 
     ```bash
     sudo ./load-ants -c config.yaml
     ```
 
-4. 通过将其用作 DNS 服务器来测试服务：
+4. 测试服务是否正常工作：
     ```bash
     dig @127.0.0.1 example.com
     ```
 
-## 配置
+## 配置详解
 
-Load Ants 使用 YAML 文件进行配置。以下是主要部分的说明：
+Load Ants 使用 YAML 格式的配置文件。以下是主要配置部分的详细说明：
 
 ### 服务器配置
 
@@ -426,69 +426,69 @@ server:
     listen_tcp: "0.0.0.0:53" # TCP 监听地址和端口
 ```
 
-### 健康检查
+### 健康检查配置
 
 ```yaml
 health:
-    listen: "0.0.0.0:8080" # 健康检查服务器监听地址和端口
+    listen: "0.0.0.0:8080" # 健康检查服务监听地址和端口
 ```
 
-### 缓存设置
+### 缓存配置
 
 ```yaml
 cache:
-    enabled: true
-    max_size: 10000 # 最大条目数（10-1000000）
-    min_ttl: 60 # 最小 TTL，单位秒（1-86400）
-    max_ttl: 3600 # 最大 TTL，单位秒（1-86400）
-    negative_ttl: 300 # 负面缓存 TTL，单位秒（1-86400）
+    enabled: true # 是否启用缓存
+    max_size: 10000 # 最大缓存条目数（范围：10-1000000）
+    min_ttl: 60 # 最小 TTL，单位秒（范围：1-86400）
+    max_ttl: 3600 # 最大 TTL，单位秒（范围：1-86400）
+    negative_ttl: 300 # 负向缓存 TTL，单位秒（范围：1-86400）
 ```
 
-缓存配置允许精细调整 DNS 响应缓存行为：
+缓存配置允许精细调整 DNS 响应的缓存行为：
 
--   **enabled**：启用或禁用缓存
--   **max_size**：缓存中存储的 DNS 记录最大数量
--   **min_ttl**：正面响应的最小生存时间（覆盖更小的 TTL 值）
--   **max_ttl**：任何缓存条目的最大生存时间上限
--   **negative_ttl**：负面响应（错误、不存在域名）的特定 TTL
+-   **enabled**：控制缓存功能的开关
+-   **max_size**：缓存中可存储的 DNS 记录最大数量
+-   **min_ttl**：正向响应的最小生存时间（会覆盖原始响应中更小的 TTL 值）
+-   **max_ttl**：所有缓存条目的最大生存时间上限
+-   **negative_ttl**：负向响应（如错误、不存在域名）的特定生存时间
 
-负面缓存是一种性能优化，它将 DNS 错误响应（如 NXDOMAIN 或 ServFail）缓存指定时间。这可以防止对不存在或暂时无法解析的域名重复查询上游服务器，从而减少延迟并降低上游负载。
+负向缓存是一种重要的性能优化技术，它将 DNS 错误响应（如 NXDOMAIN 或 ServFail）缓存指定时间。这能有效防止对不存在或暂时无法解析的域名重复查询上游服务器，从而减少延迟并降低上游服务器负载。
 
-### HTTP 客户端设置
+### HTTP 客户端配置
 
 ```yaml
 http_client:
-    connect_timeout: 5 # 连接超时，单位秒（1-120）
-    request_timeout: 10 # 请求超时，单位秒（1-1200）
-    idle_timeout: 60 # 空闲连接超时，单位秒（5-1800）
-    keepalive: 60 # TCP keepalive，单位秒（5-600）
+    connect_timeout: 5 # 连接超时时间，单位秒（范围：1-120）
+    request_timeout: 10 # 请求超时时间，单位秒（范围：1-1200）
+    idle_timeout: 60 # 空闲连接超时时间，单位秒（范围：5-1800）
+    keepalive: 60 # TCP keepalive 时间，单位秒（范围：5-600）
     agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 ```
 
-### 上游 DoH 服务器组
+### 上游 DoH 服务器组配置
 
 ```yaml
 upstream_groups:
-    - name: "google_public"
-      strategy: "roundrobin" # 策略：roundrobin, weighted, random
+    - name: "google_public" # 组名称
+      strategy: "roundrobin" # 负载均衡策略：roundrobin（轮询）, weighted（加权）, random（随机）
       servers:
           - url: "https://dns.google/dns-query"
           - url: "https://8.8.4.4/dns-query"
             method: "get" # 可选：get 或 post，默认为 post
             content_type: "message" # 可选：message 或 json，默认为 message
       retry:
-          attempts: 3 # 重试次数（1-100）
-          delay: 1 # 初始延迟，单位秒（1-120）
-      proxy: "http://user:pass@proxyserver:port" # 可选代理
+          attempts: 3 # 重试次数（范围：1-100）
+          delay: 1 # 初始延迟时间，单位秒（范围：1-120）
+      proxy: "http://user:pass@proxyserver:port" # 可选的 HTTP 代理
 
     - name: "secure_dns"
       strategy: "weighted"
       servers:
           - url: "https://example-doh.com/dns-query"
-            weight: 70 # 加权策略的权重（1-65535）
+            weight: 70 # 加权策略的权重值（范围：1-65535）
             auth:
-                type: "bearer" # 认证类型：basic 或 bearer
-                token: "YOUR_API_TOKEN" # bearer 认证的令牌
+                type: "bearer" # 认证类型：basic（基本认证）或 bearer（令牌认证）
+                token: "YOUR_API_TOKEN" # bearer 认证的令牌值
           - url: "https://another-doh.com/dns-query"
             weight: 30
             auth:
@@ -497,48 +497,48 @@ upstream_groups:
                 password: "pass"
 ```
 
-### 路由规则
+### 路由规则配置
 
-Load Ants 使用基于优先级的匹配系统进行 DNS 路由：
+Load Ants 采用基于优先级的匹配系统进行 DNS 路由决策：
 
-1. **精确匹配**（最高优先级）- 完整域名的直接匹配（例如 `example.com`）
-2. **特定通配符匹配** - 使用通配符匹配域名（例如 `*.example.com`）
-3. **正则表达式匹配** - 使用正则表达式匹配域名（例如 `^(mail|audio)\\.google\\.com$`）
-4. **全局通配符匹配**（最低优先级）- 匹配任何域名的通配规则（`*`）
+1. **精确匹配**（最高优先级）- 完全匹配完整域名（如 `example.com`）
+2. **特定通配符匹配** - 使用通配符匹配特定域名模式（如 `*.example.com`）
+3. **正则表达式匹配** - 使用正则表达式进行复杂匹配（如 `^(mail|audio)\\.google\\.com$`）
+4. **全局通配符匹配**（最低优先级）- 使用通配规则（`*`）匹配任何域名
 
-配置路由规则时，请牢记这个优先级顺序。全局通配符（`*`）通常应该放在最后一条规则，作为其他规则都不匹配时的默认选项。
+配置路由规则时，应充分考虑这个优先级顺序。全局通配符（`*`）通常应作为最后一条规则，作为其他规则都不匹配时的默认选项。
 
 ```yaml
 routing_rules:
-    # 阻止特定域名
-    - match: "exact" # 匹配类型：exact, wildcard, regex
+    # 阻止特定广告域名
+    - match: "exact" # 匹配类型：exact（精确）, wildcard（通配符）, regex（正则表达式）
       pattern: "ads.example.com" # 要匹配的模式
-      action: "block" # 动作：block 或 forward
+      action: "block" # 操作类型：block（阻止）或 forward（转发）
 
     # 将内部域名路由到特定上游组
     - match: "wildcard"
       pattern: "*.internal.local"
       action: "forward"
-      target: "internal_dns" # 目标上游组
+      target: "internal_dns" # 目标上游组名称
 
-    # 使用正则表达式进行模式匹配
+    # 使用正则表达式匹配广告域名
     - match: "regex"
       pattern: "^ads-.*\\.example\\.com$"
       action: "forward"
       target: "adblock_dns"
 
-    # 默认规则（捕获所有）
+    # 默认路由规则（匹配所有未匹配域名）
     - match: "wildcard"
-      pattern: "*" # 匹配所有内容
+      pattern: "*" # 匹配所有域名
       action: "forward"
-      target: "google_public" # 默认上游组
+      target: "google_public" # 默认上游组名称
 ```
 
-## 许可证
+## 开源许可
 
 [MIT 许可证](LICENSE)
 
 ## 致谢
 
--   感谢所有帮助塑造 Load Ants 的贡献者
--   受现代 DoH 实现和灵活 DNS 路由需求的启发
+-   感谢所有为 Load Ants 项目做出贡献的开发者
+-   本项目受现代 DoH 实现技术和灵活 DNS 路由需求的启发
