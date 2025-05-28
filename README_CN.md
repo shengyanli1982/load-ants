@@ -6,6 +6,26 @@
     <img src="./images/logo.png" alt="logo" width="600">
 </div>
 
+<p align="center">
+  <a href="#项目介绍">简介</a>
+  |
+  <a href="#核心功能">核心功能</a>
+  |
+  <a href="#架构设计">架构</a>
+  |
+  <a href="#prometheus-监控指标">Prometheus 指标</a>
+  |
+  <a href="#api-端点">API 端点</a>
+  |
+  <a href="#应用场景">应用场景</a>
+  |
+  <a href="#配置详解">配置</a>
+  |
+  <a href="#安装部署">部署指南</a>
+  |
+  <a href="#使用指南">使用指南</a>
+</p>
+
 ## 项目介绍
 
 **Load Ants** 是一款高性能、多功能的 DNS 代理服务，能够将传统的 UDP/TCP DNS 查询转换为 DNS-over-HTTPS (DoH)。它作为使用标准 DNS 协议的客户端与现代安全 DoH 提供商之间的桥梁，提供增强的隐私保护、安全性和灵活的路由功能。
@@ -416,33 +436,31 @@ load-ants [OPTIONS]
 
 ## 配置详解
 
-Load Ants 使用 YAML 格式的配置文件。以下是主要配置部分的详细说明：
+Load Ants 使用 YAML 格式的配置文件。以下是完整的配置选项参考：
 
-### 服务器配置
+### 服务器配置 (server)
 
-```yaml
-server:
-    listen_udp: "0.0.0.0:53" # UDP 监听地址和端口
-    listen_tcp: "0.0.0.0:53" # TCP 监听地址和端口
-```
+| 参数        | 类型   | 默认值         | 描述                   | 有效范围            |
+| ----------- | ------ | -------------- | ---------------------- | ------------------- |
+| listen_udp  | 字符串 | "127.0.0.1:53" | UDP DNS 监听地址和端口 | 有效的 IP:端口 格式 |
+| listen_tcp  | 字符串 | "127.0.0.1:53" | TCP DNS 监听地址和端口 | 有效的 IP:端口 格式 |
+| tcp_timeout | 整数   | 10             | TCP 连接空闲超时（秒） | -                   |
 
-### 健康检查配置
+### 健康检查配置 (health)
 
-```yaml
-health:
-    listen: "0.0.0.0:8080" # 健康检查服务监听地址和端口
-```
+| 参数   | 类型   | 默认值           | 描述                       | 有效范围            |
+| ------ | ------ | ---------------- | -------------------------- | ------------------- |
+| listen | 字符串 | "127.0.0.1:8080" | 健康检查服务监听地址和端口 | 有效的 IP:端口 格式 |
 
-### 缓存配置
+### 缓存配置 (cache)
 
-```yaml
-cache:
-    enabled: true # 是否启用缓存
-    max_size: 10000 # 最大缓存条目数（范围：10-1000000）
-    min_ttl: 60 # 最小 TTL，单位秒（范围：1-86400）
-    max_ttl: 3600 # 最大 TTL，单位秒（范围：1-86400）
-    negative_ttl: 300 # 负向缓存 TTL，单位秒（范围：1-86400）
-```
+| 参数         | 类型   | 默认值 | 描述               | 有效范围   |
+| ------------ | ------ | ------ | ------------------ | ---------- |
+| enabled      | 布尔值 | true   | 是否启用缓存       | true/false |
+| max_size     | 整数   | 10000  | 最大缓存条目数     | 10-1000000 |
+| min_ttl      | 整数   | 60     | 最小 TTL（秒）     | 1-86400    |
+| max_ttl      | 整数   | 3600   | 最大 TTL（秒）     | 1-86400    |
+| negative_ttl | 整数   | 300    | 负向缓存 TTL（秒） | 1-86400    |
 
 缓存配置允许精细调整 DNS 响应的缓存行为：
 
@@ -454,50 +472,60 @@ cache:
 
 负向缓存是一种重要的性能优化技术，它将 DNS 错误响应（如 NXDOMAIN 或 ServFail）缓存指定时间。这能有效防止对不存在或暂时无法解析的域名重复查询上游服务器，从而减少延迟并降低上游服务器负载。
 
-### HTTP 客户端配置
+### HTTP 客户端配置 (http_client)
 
-```yaml
-http_client:
-    connect_timeout: 5 # 连接超时时间，单位秒（范围：1-120）
-    request_timeout: 10 # 请求超时时间，单位秒（范围：1-1200）
-    idle_timeout: 60 # 空闲连接超时时间，单位秒（范围：5-1800）
-    keepalive: 60 # TCP keepalive 时间，单位秒（范围：5-600）
-    agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-```
+| 参数            | 类型   | 默认值 | 描述                        | 有效范围   |
+| --------------- | ------ | ------ | --------------------------- | ---------- |
+| connect_timeout | 整数   | 5      | 连接超时（秒）              | 1-120      |
+| request_timeout | 整数   | 10     | 请求超时（秒）              | 1-1200     |
+| idle_timeout    | 整数   | 60     | 空闲连接超时（秒）（可选）  | 5-1800     |
+| keepalive       | 整数   | 60     | TCP Keepalive（秒）（可选） | 5-600      |
+| agent           | 字符串 | -      | HTTP 用户代理（可选）       | 非空字符串 |
 
-### 上游 DoH 服务器组配置
+### 上游 DoH 服务器组配置 (upstream_groups)
 
-```yaml
-upstream_groups:
-    - name: "google_public" # 组名称
-      strategy: "roundrobin" # 负载均衡策略：roundrobin（轮询）, weighted（加权）, random（随机）
-      servers:
-          - url: "https://dns.google/dns-query"
-          - url: "https://8.8.4.4/dns-query"
-            method: "get" # 可选：get 或 post，默认为 post
-            content_type: "message" # 可选：message 或 json，默认为 message
-      retry:
-          attempts: 3 # 重试次数（范围：1-100）
-          delay: 1 # 初始延迟时间，单位秒（范围：1-120）
-      proxy: "http://user:pass@proxyserver:port" # 可选的 HTTP 代理
+| 参数     | 类型   | 默认值 | 描述                     | 有效范围                           |
+| -------- | ------ | ------ | ------------------------ | ---------------------------------- |
+| name     | 字符串 | -      | 组名称                   | 非空字符串                         |
+| strategy | 字符串 | -      | 负载均衡策略             | "roundrobin", "weighted", "random" |
+| servers  | 数组   | -      | 服务器列表               | 至少包含一个服务器                 |
+| retry    | 对象   | -      | 重试配置（可选）         | -                                  |
+| proxy    | 字符串 | -      | HTTP/SOCKS5 代理（可选） | 有效的代理 URL                     |
 
-    - name: "secure_dns"
-      strategy: "weighted"
-      servers:
-          - url: "https://example-doh.com/dns-query"
-            weight: 70 # 加权策略的权重值（范围：1-65535）
-            auth:
-                type: "bearer" # 认证类型：basic（基本认证）或 bearer（令牌认证）
-                token: "YOUR_API_TOKEN" # bearer 认证的令牌值
-          - url: "https://another-doh.com/dns-query"
-            weight: 30
-            auth:
-                type: "basic"
-                username: "user"
-                password: "pass"
-```
+#### 服务器配置 (servers)
 
-### 路由规则配置
+| 参数         | 类型   | 默认值    | 描述                   | 有效范围                     |
+| ------------ | ------ | --------- | ---------------------- | ---------------------------- |
+| url          | 字符串 | -         | DoH 服务器 URL         | 有效的 HTTP(S) URL，包含路径 |
+| weight       | 整数   | 1         | 权重（仅用于加权策略） | 1-65535                      |
+| method       | 字符串 | "post"    | DoH 请求方法           | "get", "post"                |
+| content_type | 字符串 | "message" | DoH 内容类型           | "message", "json"            |
+| auth         | 对象   | -         | 认证配置（可选）       | -                            |
+
+#### 认证配置 (auth)
+
+| 参数     | 类型   | 默认值 | 描述                        | 有效范围          |
+| -------- | ------ | ------ | --------------------------- | ----------------- |
+| type     | 字符串 | -      | 认证类型                    | "basic", "bearer" |
+| username | 字符串 | -      | 用户名（仅用于 basic 认证） | 非空字符串        |
+| password | 字符串 | -      | 密码（仅用于 basic 认证）   | 非空字符串        |
+| token    | 字符串 | -      | 令牌（仅用于 bearer 认证）  | 非空字符串        |
+
+#### 重试配置 (retry)
+
+| 参数     | 类型 | 默认值 | 描述           | 有效范围 |
+| -------- | ---- | ------ | -------------- | -------- |
+| attempts | 整数 | -      | 重试次数       | 1-100    |
+| delay    | 整数 | -      | 初始延迟（秒） | 1-120    |
+
+### 路由规则配置 (routing_rules)
+
+| 参数    | 类型   | 默认值 | 描述                                          | 有效范围                     |
+| ------- | ------ | ------ | --------------------------------------------- | ---------------------------- |
+| match   | 字符串 | -      | 匹配类型                                      | "exact", "wildcard", "regex" |
+| pattern | 字符串 | -      | 匹配模式                                      | 非空字符串                   |
+| action  | 字符串 | -      | 路由动作                                      | "forward", "block"           |
+| target  | 字符串 | -      | 目标上游组（当 action 为 forward 时必须提供） | 已定义的上游组名称           |
 
 Load Ants 采用基于优先级的匹配系统进行 DNS 路由决策：
 
@@ -508,30 +536,97 @@ Load Ants 采用基于优先级的匹配系统进行 DNS 路由决策：
 
 配置路由规则时，应充分考虑这个优先级顺序。全局通配符（`*`）通常应作为最后一条规则，作为其他规则都不匹配时的默认选项。
 
+### 配置示例
+
 ```yaml
+# Load Ants 配置示例
+
+# 服务器监听设置
+server:
+    listen_udp: "0.0.0.0:53" # UDP 监听地址和端口
+    listen_tcp: "0.0.0.0:53" # TCP 监听地址和端口
+
+# 健康检查服务器设置
+health:
+    listen: "0.0.0.0:8080" # 健康检查服务器监听地址和端口
+
+# 缓存设置
+cache:
+    enabled: true
+    max_size: 10000 # 最大缓存条目数
+    min_ttl: 60 # 缓存条目最小 TTL（秒）
+    max_ttl: 3600 # 缓存条目最大 TTL（秒）
+    negative_ttl: 300 # 负面缓存 TTL（秒），用于缓存错误响应
+
+# HTTP 客户端设置
+http_client:
+    connect_timeout: 5 # 连接超时（秒）
+    request_timeout: 10 # 请求超时（秒）
+    idle_timeout: 60 # 空闲连接超时（秒）
+    keepalive: 60 # TCP Keepalive（秒）
+    agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+# 上游 DoH 服务器组
+upstream_groups:
+    - name: "google_public"
+      strategy: "roundrobin" # roundrobin, weighted, random
+      servers:
+          - url: "https://dns.google/dns-query"
+          - url: "https://8.8.4.4/dns-query"
+            method: "get"
+            content_type: "message"
+      retry:
+          attempts: 3
+          delay: 1
+      proxy: "http://user:pass@proxyserver:port" # 可选的代理
+
+    - name: "cloudflare_secure"
+      strategy: "random"
+      servers:
+          - url: "https://cloudflare-dns.com/dns-query"
+            method: "post"
+          - url: "https://1.0.0.1/dns-query"
+            method: "get"
+            content_type: "json"
+
+    - name: "nextdns_weighted"
+      strategy: "weighted"
+      servers:
+          - url: "https://dns.nextdns.io/YOUR_CONFIG_ID"
+            weight: 70
+            auth:
+                type: "bearer"
+                token: "YOUR_API_KEY_OR_TOKEN"
+          - url: "https://dns2.nextdns.io/YOUR_CONFIG_ID"
+            weight: 30
+      retry:
+          attempts: 2
+          delay: 2
+
+# 路由规则（按顺序处理）
 routing_rules:
-    # 阻止特定广告域名
-    - match: "exact" # 匹配类型：exact（精确）, wildcard（通配符）, regex（正则表达式）
-      pattern: "ads.example.com" # 要匹配的模式
-      action: "block" # 操作类型：block（阻止）或 forward（转发）
+    # 阻止特定域名
+    - match: "exact"
+      pattern: "ads.example.com"
+      action: "block"
 
-    # 将内部域名路由到特定上游组
+    # 将内部域名路由到内部解析器
     - match: "wildcard"
-      pattern: "*.internal.local"
+      pattern: "*.corp.local"
       action: "forward"
-      target: "internal_dns" # 目标上游组名称
+      target: "internal_doh"
 
-    # 使用正则表达式匹配广告域名
+    # 使用正则表达式进行模式匹配
     - match: "regex"
-      pattern: "^ads-.*\\.example\\.com$"
+      pattern: "^(video|audio)-cdn\\..+\\.com$"
       action: "forward"
-      target: "adblock_dns"
+      target: "google_public"
 
-    # 默认路由规则（匹配所有未匹配域名）
+    # 默认规则：将所有其他流量转发到 google_public
     - match: "wildcard"
-      pattern: "*" # 匹配所有域名
+      pattern: "*"
       action: "forward"
-      target: "google_public" # 默认上游组名称
+      target: "google_public"
 ```
 
 ## 开源许可
