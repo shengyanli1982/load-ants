@@ -229,14 +229,14 @@ impl Default for CacheConfig {
     }
 }
 
-// 健康检查服务器配置
+// 管理服务器配置
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
-pub struct HealthConfig {
-    // 健康检查服务器监听地址
+pub struct AdminConfig {
+    // 管理服务器监听地址
     pub listen: String,
 }
 
-impl Default for HealthConfig {
+impl Default for AdminConfig {
     fn default() -> Self {
         Self {
             listen: "127.0.0.1:8080".to_string(),
@@ -249,8 +249,8 @@ impl Default for HealthConfig {
 pub struct Config {
     // 服务器配置
     pub server: ServerConfig,
-    // 健康检查服务器配置
-    pub health: HealthConfig,
+    // 管理服务器配置
+    pub admin: AdminConfig,
     // 缓存配置
     pub cache: CacheConfig,
     // HTTP客户端配置
@@ -282,8 +282,8 @@ impl Config {
         // 验证服务器配置
         self.validate_server_config()?;
 
-        // 验证健康检查服务器配置
-        self.validate_health_config()?;
+        // 验证管理服务器配置
+        self.validate_admin_config()?;
 
         // 验证缓存配置
         self.validate_cache_config()?;
@@ -313,11 +313,11 @@ impl Config {
         Ok(())
     }
 
-    // 验证健康检查服务器配置
-    fn validate_health_config(&self) -> Result<(), ConfigError> {
-        // 验证健康检查服务器监听地址
-        SocketAddr::from_str(&self.health.listen)
-            .map_err(|_| ConfigError::InvalidListenAddress(self.health.listen.clone()))?;
+    // 验证管理服务器配置
+    fn validate_admin_config(&self) -> Result<(), ConfigError> {
+        // 验证管理服务器监听地址
+        SocketAddr::from_str(&self.admin.listen)
+            .map_err(|_| ConfigError::InvalidListenAddress(self.admin.listen.clone()))?;
 
         Ok(())
     }
@@ -793,7 +793,7 @@ impl Default for Config {
     fn default() -> Self {
         Config {
             server: ServerConfig::default(),
-            health: HealthConfig::default(),
+            admin: AdminConfig::default(),
             cache: CacheConfig::default(),
             http_client: HttpClientConfig::default(),
             upstream_groups: vec![UpstreamGroupConfig {
