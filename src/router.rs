@@ -361,7 +361,6 @@ impl Router {
 
                 // 改进匹配候选正则表达式，减少HashSet操作
                 // 先检查是否有可能匹配的规则
-                let mut has_candidate = false;
                 let mut matched_rule_index = None;
 
                 // 首先统计所有候选索引
@@ -369,7 +368,6 @@ impl Router {
                     if let Some(indices) = self.regex_prefilter.get(key) {
                         // 尝试直接匹配，避免临时构建哈希集
                         for &index in indices {
-                            has_candidate = true;
                             let rule = &self.regex_rules[index];
                             if rule.regex.is_match(&domain) {
                                 matched_rule_index = Some(index);
@@ -408,31 +406,28 @@ impl Router {
                     });
                 }
 
-                // 如果没有匹配的正则规则但有候选规则，不再检查全局通配符
-                if !has_candidate {
-                    // 最后尝试全局通配符匹配
-                    if let Some((action, target, pattern)) = &self.global_wildcard_rule {
-                        let target_str = target.as_deref().unwrap_or(target_default);
+                // 最后尝试全局通配符匹配
+                if let Some((action, target, pattern)) = &self.global_wildcard_rule {
+                    let target_str = target.as_deref().unwrap_or(target_default);
 
-                        debug!(
-                            "Rule match: Global wildcard match '{}' -> Pattern: '{}', Target: {}",
-                            domain, pattern, target_str
-                        );
+                    debug!(
+                        "Rule match: Global wildcard match '{}' -> Pattern: '{}', Target: {}",
+                        domain, pattern, target_str
+                    );
 
-                        // 记录路由匹配指标
-                        METRICS
-                            .route_matches_total()
-                            .with_label_values(&[rule_type_labels::WILDCARD, target_str])
-                            .inc();
+                    // 记录路由匹配指标
+                    METRICS
+                        .route_matches_total()
+                        .with_label_values(&[rule_type_labels::WILDCARD, target_str])
+                        .inc();
 
-                        return Ok(RouteMatch {
-                            domain: domain.clone(),
-                            action: action.clone(),
-                            target: target.clone(),
-                            rule_type: RULE_TYPE_WILDCARD,
-                            pattern: pattern.clone(),
-                        });
-                    }
+                    return Ok(RouteMatch {
+                        domain: domain.clone(),
+                        action: action.clone(),
+                        target: target.clone(),
+                        rule_type: RULE_TYPE_WILDCARD,
+                        pattern: pattern.clone(),
+                    });
                 }
             }
         } else if let Some((action, target, pattern)) = &self.global_wildcard_rule {
