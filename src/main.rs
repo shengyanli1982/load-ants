@@ -19,6 +19,7 @@ use crate::config::MatchType::{Exact, Regex, Wildcard};
 use crate::error::AppError;
 use crate::handler::RequestHandler;
 use crate::metrics::METRICS;
+use crate::r#const::rule_type_labels;
 use crate::router::Router;
 use crate::server::DnsServer;
 use crate::upstream::UpstreamManager;
@@ -26,42 +27,24 @@ use mimalloc::MiMalloc;
 use std::process;
 use std::sync::Arc;
 use tokio_graceful_shutdown::{IntoSubsystem, SubsystemBuilder, Toplevel};
-use tracing::{debug, error, info};
-use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+use tracing::{error, info};
 
 // 使用 mimalloc 分配器提高内存效率
 #[global_allocator]
 static GLOBAL: MiMalloc = mimalloc::MiMalloc;
 
 fn init_logging(args: &Args) {
-    // 根据命令行参数决定日志级别，优先使用 --debug 参数
-    let filter = if args.debug {
-        // 启用调试模式，显示更详细的日志
-        EnvFilter::new("loadants=debug,tower_http=debug,tokio_graceful_shutdown=debug,tokio=debug,axum=debug,reqwest=debug,reqwest_middleware=debug,reqwest_retry=debug,hickory-server=debug,hickory-proto=debug,moka=debug")
-    } else if let Ok(filter) = EnvFilter::try_from_default_env() {
-        // 如果没有设置 --debug，但设置了环境变量，则使用环境变量
-        filter
-    } else {
-        // 正常模式，仅显示 info 级别及以上
-        EnvFilter::new("loadants=info,tower_http=info,tokio_graceful_shutdown=info,tokio=info,axum=info,reqwest=info,reqwest_middleware=info,reqwest_retry=info,hickory-server=info,hickory-proto=info,moka=info")
-    };
+    let builder = tracing_subscriber::fmt()
+        .with_ansi(false)
+        .with_line_number(false);
 
-    // 创建日志格式化器
-    let fmt_layer = fmt::layer()
-        .with_target(true)
-        .with_level(true)
-        .with_ansi(false); // 关闭彩色输出
-
-    // 注册日志订阅器
-    tracing_subscriber::registry()
-        .with(filter)
-        .with(fmt_layer)
-        .init();
-
-    // 如果启用调试模式，输出调试信息
+    // 如果启用调试模式，输出调试信息，否则只输出 info 及以上级别
     if args.debug {
-        debug!("Debug logging enabled - verbose output mode active");
+        builder.with_max_level(tracing::Level::DEBUG)
+    } else {
+        builder.with_max_level(tracing::Level::INFO)
     }
+    .init();
 }
 
 // 程序入口
@@ -116,7 +99,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             dns_server.run(s).await
         }));
 
-        // 启动健康检查服务器子系统
+        // 启动管理服务器子系统
         let admin_server = components.admin_server;
         s.start(SubsystemBuilder::new("admin_server", move |s| async move {
             admin_server.run(s).await
@@ -145,16 +128,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 struct AppComponents {
     // DNS 服务器
     dns_server: DnsServer,
-    // 健康检查服务器
+    // 管理服务器
     admin_server: AdminServer,
 }
 
 // 创建应用组件
 async fn create_components(config: Config) -> Result<AppComponents, AppError> {
-    // 创建健康检查服务器
-    let admin_listen_addr = config.health.listen.parse().unwrap();
-    let admin_server = AdminServer::new(admin_listen_addr);
-
     // 创建 DNS 缓存
     let cache = Arc::new(DnsCache::new(
         config.cache.max_size,
@@ -172,6 +151,10 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
     } else {
         info!("DNS cache disabled");
     }
+
+    // 创建管理服务器
+    let admin_listen_addr = config.admin.listen.parse().unwrap();
+    let admin_server = AdminServer::new(admin_listen_addr).with_cache(Arc::clone(&cache));
 
     // 创建上游管理器 - 避免不必要的克隆
     let upstream =
@@ -191,18 +174,38 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
         Ok(router) => {
             info!("Routing engine initialized successfully");
 
-            // 设置路由规则数量指标
+            // 设置路由规则数量指标 - 考虑每个规则中的多个模式
+            let mut exact_count = 0;
+            let mut wildcard_count = 0;
+            let mut regex_count = 0;
+
             for rule in &config.routing_rules {
-                let rule_type = match rule.match_type {
-                    Exact => "exact",
-                    Wildcard => "wildcard",
-                    Regex => "regex",
-                };
-                METRICS
-                    .route_rules_count()
-                    .with_label_values(&[rule_type])
-                    .inc();
+                match rule.match_type {
+                    Exact => exact_count += rule.patterns.len(),
+                    Wildcard => wildcard_count += rule.patterns.len(),
+                    Regex => regex_count += rule.patterns.len(),
+                }
             }
+
+            METRICS
+                .route_rules_count()
+                .with_label_values(&[rule_type_labels::EXACT])
+                .set(exact_count as f64);
+
+            METRICS
+                .route_rules_count()
+                .with_label_values(&[rule_type_labels::WILDCARD])
+                .set(wildcard_count as f64);
+
+            METRICS
+                .route_rules_count()
+                .with_label_values(&[rule_type_labels::REGEX])
+                .set(regex_count as f64);
+
+            info!(
+                "Routing engine initialized successfully with {} exact, {} wildcard, {} regex rules",
+                exact_count, wildcard_count, regex_count
+            );
 
             Arc::new(router)
         }

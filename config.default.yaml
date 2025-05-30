@@ -5,9 +5,9 @@ server:
   listen_udp: "0.0.0.0:53" # UDP 监听地址和端口
   listen_tcp: "0.0.0.0:53" # TCP 监听地址和端口
 
-# 健康检查服务器设置
-health:
-  listen: "0.0.0.0:8080" # 健康检查服务器监听地址和端口
+# 管理服务器设置
+admin:
+  listen: "0.0.0.0:8080" # 管理服务器监听地址和端口
 
 # 缓存设置
 cache:
@@ -85,29 +85,29 @@ upstream_groups:
 routing_rules:
   # 阻止特定域名
   - match: "exact" # exact: 精确匹配，不支持通配符
-    pattern: "ads.example.com" # 匹配模式必须非空
+    patterns: ["ads.example.com", "ads2.example.com"] # 匹配模式必须非空
     action: "block" # 动作：block, forward
 
   # 将内部域名路由到内部解析器
   - match: "wildcard" # wildcard: 通配符匹配，格式必须是'*'或'*.domain.com'
-    pattern: "*.corp.local" # 匹配模式必须非空
+    patterns: ["*.corp.local", "*.corp.com"] # 匹配模式必须非空
     action: "forward"
     target: "internal_doh" # 目标上游组必须存在
 
   # 将特定服务路由到 Cloudflare
   - match: "exact"
-    pattern: "service.external.com"
+    patterns: ["service.external.com"]
     action: "forward"
     target: "cloudflare_secure"
 
   # 使用正则表达式进行模式匹配（谨慎使用以保证性能）
   - match: "regex" # regex: 正则表达式匹配，必须是有效的正则表达式
-    pattern: "^(video|audio)-cdn\\..+\\.com$"
+    patterns: ["^(video|audio)-cdn\\..+\\.com$"]
     action: "forward"
     target: "google_public"
 
   # 默认规则：将所有其他流量转发到 google_public（强烈推荐显式配置）
   - match: "wildcard"
-    pattern: "*" # 匹配所有域名
+    patterns: ["*"] # 匹配所有域名
     action: "forward"
     target: "google_public" # 默认上游
