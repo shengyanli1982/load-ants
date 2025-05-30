@@ -150,7 +150,7 @@ Load Ants provides streamlined API endpoints for DNS resolution and operational 
     -   _Protocol_: DNS over UDP/TCP
     -   _Usage_: Compatible with all standard DNS clients, applications, and operating systems
 
-### Monitoring and Health Check Endpoints
+### Admin Endpoints
 
 -   **GET /health**
 
