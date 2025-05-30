@@ -134,10 +134,6 @@ struct AppComponents {
 
 // 创建应用组件
 async fn create_components(config: Config) -> Result<AppComponents, AppError> {
-    // 创建管理服务器
-    let admin_listen_addr = config.admin.listen.parse().unwrap();
-    let admin_server = AdminServer::new(admin_listen_addr);
-
     // 创建 DNS 缓存
     let cache = Arc::new(DnsCache::new(
         config.cache.max_size,
@@ -155,6 +151,10 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
     } else {
         info!("DNS cache disabled");
     }
+
+    // 创建管理服务器
+    let admin_listen_addr = config.admin.listen.parse().unwrap();
+    let admin_server = AdminServer::new(admin_listen_addr).with_cache(Arc::clone(&cache));
 
     // 创建上游管理器 - 避免不必要的克隆
     let upstream =

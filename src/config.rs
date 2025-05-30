@@ -570,7 +570,7 @@ impl Config {
                 // 严格验证URL格式
                 Self::validate_url(
                     &server.url,
-                    &format!("组'{}'的服务器#{}", group.name, i + 1),
+                    &format!("Server #{} in group '{}'", i + 1, group.name),
                 )?;
 
                 // 验证服务器权重是否在合理范围内
