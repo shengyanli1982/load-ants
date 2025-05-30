@@ -159,13 +159,21 @@ Load Ants provides streamlined API endpoints for DNS resolution and operational 
     -   _Usage_: `curl http://localhost:8080/health`
 
 -   **GET /metrics**
+
     -   _Description_: Prometheus-compatible metrics endpoint exposing operational telemetry
     -   _Content Type_: text/plain; version=0.0.4
     -   _Usage_: `curl http://localhost:8080/metrics`
 
+-   **POST /api/cache/refresh**
+    -   _Description_: Administrative endpoint to clear the DNS cache
+    -   _Returns_: JSON response indicating success or error
+    -   _Usage_: `curl -X POST http://localhost:8080/api/cache/refresh`
+    -   _Response Example_: `{"status":"success","message":"DNS cache has been cleared"}`
+
 All endpoints implement standard HTTP status codes:
 
 -   200: Successful operation
+-   400: Bad request (e.g., when cache is not enabled)
 -   500: Internal server error
 
 ## Use Cases
@@ -547,7 +555,7 @@ Negative caching significantly enhances performance by temporarily storing error
 | Parameter | Type   | Default | Description                                             | Valid Range                      |
 | --------- | ------ | ------- | ------------------------------------------------------- | -------------------------------- |
 | match     | String | -       | Match type                                              | "exact", "wildcard", "regex"     |
-| pattern   | String | -       | Match pattern                                           | Non-empty string                 |
+| patterns  | Array  | -       | Match patterns                                          | Non-empty array of strings       |
 | action    | String | -       | Routing action                                          | "forward", "block"               |
 | target    | String | -       | Target upstream group (required when action is forward) | Name of a defined upstream group |
 
@@ -635,24 +643,24 @@ upstream_groups:
 routing_rules:
     # Block specific advertising domains
     - match: "exact"
-      pattern: "ads.example.com"
+      patterns: ["ads.example.com", "ads2.example.com"] # Multiple patterns in an array
       action: "block" # Return NXDOMAIN response
 
     # Route internal corporate domains to internal resolver
     - match: "wildcard"
-      pattern: "*.corp.local"
+      patterns: ["*.corp.local", "*.corp.internal"] # Multiple patterns in an array
       action: "forward"
       target: "internal_doh" # Target upstream group
 
     # Route CDN domains using regex pattern matching
     - match: "regex"
-      pattern: "^(video|audio)-cdn\\..+\\.com$"
+      patterns: ["^(video|audio)-cdn\\..+\\.com$"]
       action: "forward"
       target: "google_public"
 
     # Default rule: forward all other traffic to Google Public DNS
     - match: "wildcard"
-      pattern: "*"
+      patterns: ["*"]
       action: "forward"
       target: "google_public"
 ```

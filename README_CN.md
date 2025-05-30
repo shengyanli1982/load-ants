@@ -159,13 +159,21 @@ Load Ants 提供以下 HTTP API 端点，用于 DNS 解析和服务监控：
     -   _用法_: `curl http://localhost:8080/health`
 
 -   **GET /metrics**
+
     -   _描述_: 暴露性能和运行统计信息的 Prometheus 指标端点
     -   _内容类型_: text/plain
     -   _用法_: `curl http://localhost:8080/metrics`
 
+-   **POST /api/cache/refresh**
+    -   _描述_: 清空 DNS 缓存的管理端点
+    -   _返回_: 表示成功或错误的 JSON 响应
+    -   _用法_: `curl -X POST http://localhost:8080/api/cache/refresh`
+    -   _响应示例_: `{"status":"success","message":"DNS cache has been cleared"}`
+
 这些端点遵循标准 HTTP 状态码：
 
 -   200: 查询/操作成功
+-   400: 请求错误（例如，当缓存未启用时）
 -   500: 处理过程中发生服务器错误
 
 ## 应用场景
@@ -520,12 +528,12 @@ Load Ants 使用 YAML 格式的配置文件。以下是完整的配置选项参�
 
 ### 路由规则配置 (routing_rules)
 
-| 参数    | 类型   | 默认值 | 描述                                          | 有效范围                     |
-| ------- | ------ | ------ | --------------------------------------------- | ---------------------------- |
-| match   | 字符串 | -      | 匹配类型                                      | "exact", "wildcard", "regex" |
-| pattern | 字符串 | -      | 匹配模式                                      | 非空字符串                   |
-| action  | 字符串 | -      | 路由动作                                      | "forward", "block"           |
-| target  | 字符串 | -      | 目标上游组（当 action 为 forward 时必须提供） | 已定义的上游组名称           |
+| 参数     | 类型   | 默认值 | 描述                                          | 有效范围                     |
+| -------- | ------ | ------ | --------------------------------------------- | ---------------------------- |
+| match    | 字符串 | -      | 匹配类型                                      | "exact", "wildcard", "regex" |
+| patterns | 数组   | -      | 匹配模式                                      | 非空字符串数组               |
+| action   | 字符串 | -      | 路由动作                                      | "forward", "block"           |
+| target   | 字符串 | -      | 目标上游组（当 action 为 forward 时必须提供） | 已定义的上游组名称           |
 
 Load Ants 采用基于优先级的匹配系统进行 DNS 路由决策：
 
@@ -607,24 +615,24 @@ upstream_groups:
 routing_rules:
     # 阻止特定域名
     - match: "exact"
-      pattern: "ads.example.com"
+      patterns: ["ads.example.com", "ads2.example.com"] # 支持多个模式的数组
       action: "block"
 
     # 将内部域名路由到内部解析器
     - match: "wildcard"
-      pattern: "*.corp.local"
+      patterns: ["*.corp.local", "*.corp.internal"] # 支持多个模式的数组
       action: "forward"
       target: "internal_doh"
 
     # 使用正则表达式进行模式匹配
     - match: "regex"
-      pattern: "^(video|audio)-cdn\\..+\\.com$"
+      patterns: ["^(video|audio)-cdn\\..+\\.com$"]
       action: "forward"
       target: "google_public"
 
     # 默认规则：将所有其他流量转发到 google_public
     - match: "wildcard"
-      pattern: "*"
+      patterns: ["*"]
       action: "forward"
       target: "google_public"
 ```
