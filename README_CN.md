@@ -150,7 +150,7 @@ Load Ants 提供以下 HTTP API 端点，用于 DNS 解析和服务监控：
     -   _协议_: DNS over UDP/TCP (RFC 1035)
     -   _用途_: 使用标准 DNS 解析的应用程序和系统通过这些端口发送查询
 
-### 监控和健康检查端点
+### 管理端点
 
 -   **GET /health**
 
