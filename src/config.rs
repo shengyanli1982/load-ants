@@ -142,7 +142,7 @@ pub struct RouteRuleConfig {
     #[serde(rename = "match")]
     pub match_type: MatchType,
     // 匹配模式
-    pub pattern: String,
+    pub patterns: Vec<String>,
     // 路由动作
     pub action: RouteAction,
     // 目标上游组（当action为Forward时必须提供）
@@ -679,53 +679,61 @@ impl Config {
 
         for (i, rule) in self.routing_rules.iter().enumerate() {
             // 验证匹配模式非空
-            if rule.pattern.trim().is_empty() {
+            if rule.patterns.is_empty() {
                 return Err(ConfigError::InvalidRouteRule(format!(
-                    "Match pattern for rule #{} cannot be empty",
+                    "Match rule #{} cannot be empty",
                     i + 1
                 )));
             }
 
             // 验证匹配模式
-            match rule.match_type {
-                MatchType::Exact => {
-                    // 确保精确匹配的域名不包含通配符
-                    if rule.pattern.contains('*') {
-                        return Err(ConfigError::InvalidRouteRule(format!(
-                            "Exact match pattern '{}' (rule #{}) should not contain wildcards (*)",
-                            rule.pattern,
-                            i + 1
-                        )));
-                    }
+            for (j, pattern) in rule.patterns.iter().enumerate() {
+                if pattern.trim().is_empty() {
+                    return Err(ConfigError::InvalidRouteRule(format!(
+                        "Match pattern for rule #{} cannot be empty",
+                        j + 1
+                    )));
                 }
-                MatchType::Wildcard => {
-                    // 验证通配符格式
-                    if rule.pattern != "*" && !rule.pattern.starts_with("*.") {
-                        return Err(ConfigError::InvalidRouteRule(format!(
-                            "Wildcard pattern '{}' (rule #{}) is invalid, should be in format '*' or '*.domain.com'",
-                            rule.pattern, i + 1
-                        )));
-                    }
-
-                    // 确保通配符后面有内容（对于*.domain.com格式）
-                    if rule.pattern.starts_with("*.") && rule.pattern.len() <= 2 {
-                        return Err(ConfigError::InvalidRouteRule(format!(
-                            "Wildcard pattern '{}' (rule #{}) is invalid, must have content after '*.'",
-                            rule.pattern, i + 1
-                        )));
-                    }
-                }
-                MatchType::Regex => {
-                    // 验证正则表达式
-                    match Regex::new(&rule.pattern) {
-                        Ok(_) => (), // 正则表达式有效
-                        Err(e) => {
+                match rule.match_type {
+                    MatchType::Exact => {
+                        // 确保精确匹配的域名不包含通配符
+                        if pattern.contains('*') {
                             return Err(ConfigError::InvalidRouteRule(format!(
-                                "Regular expression '{}' (rule #{}) is invalid: {}",
-                                rule.pattern,
-                                i + 1,
-                                e
+                                "Exact match pattern '{}' (rule #{}) should not contain wildcards (*)",
+                                pattern,
+                                i + 1
                             )));
+                        }
+                    }
+                    MatchType::Wildcard => {
+                        // 验证通配符格式
+                        if pattern != "*" && !pattern.starts_with("*.") {
+                            return Err(ConfigError::InvalidRouteRule(format!(
+                                "Wildcard pattern '{}' (rule #{}) is invalid, should be in format '*' or '*.domain.com'",
+                                pattern, i + 1
+                            )));
+                        }
+
+                        // 确保通配符后面有内容（对于*.domain.com格式）
+                        if pattern.starts_with("*.") && pattern.len() <= 2 {
+                            return Err(ConfigError::InvalidRouteRule(format!(
+                                "Wildcard pattern '{}' (rule #{}) is invalid, must have content after '*.'",
+                                pattern, i + 1
+                            )));
+                        }
+                    }
+                    MatchType::Regex => {
+                        // 验证正则表达式
+                        match Regex::new(pattern) {
+                            Ok(_) => (), // 正则表达式有效
+                            Err(e) => {
+                                return Err(ConfigError::InvalidRouteRule(format!(
+                                    "Regular expression '{}' (rule #{}) is invalid: {}",
+                                    pattern,
+                                    i + 1,
+                                    e
+                                )));
+                            }
                         }
                     }
                 }
@@ -806,7 +814,7 @@ impl Default for Config {
             }],
             routing_rules: vec![RouteRuleConfig {
                 match_type: MatchType::Wildcard,
-                pattern: "*".to_string(),
+                patterns: vec!["*".to_string()],
                 action: RouteAction::Forward,
                 target: Some("default".to_string()),
             }],

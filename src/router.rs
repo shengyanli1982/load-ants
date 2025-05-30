@@ -7,11 +7,6 @@ use regex::Regex;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use tracing::debug;
 
-// 规则类型常量
-const RULE_TYPE_EXACT: &str = "exact";
-const RULE_TYPE_WILDCARD: &str = "wildcard";
-const RULE_TYPE_REGEX: &str = "regex";
-
 // 编译后的正则表达式规则
 struct CompiledRegexRule {
     // 原始模式
@@ -111,53 +106,63 @@ impl Router {
             match rule.match_type {
                 MatchType::Exact => {
                     // 添加精确匹配规则
-                    exact_rules.insert(rule.pattern.clone(), (rule.action, rule.target));
+                    for pattern in rule.patterns {
+                        exact_rules
+                            .insert(pattern.clone(), (rule.action.clone(), rule.target.clone()));
+                    }
                 }
                 MatchType::Wildcard => {
-                    if rule.pattern == "*" {
-                        // 存储全局通配符规则
-                        if global_wildcard_rule.is_some() {
-                            debug!("Multiple definitions of global wildcard rule '*', using the last one");
-                        }
-                        global_wildcard_rule = Some((rule.action, rule.target, rule.pattern));
-                    } else if let Some(suffix) = rule.pattern.strip_prefix("*.") {
-                        // 验证通配符格式正确（必须是 *.suffix 格式）
-                        if suffix.is_empty() || suffix.starts_with('.') {
+                    for pattern in rule.patterns {
+                        if pattern == "*" {
+                            // 存储全局通配符规则
+                            if global_wildcard_rule.is_some() {
+                                debug!("Multiple definitions of global wildcard rule '*', using the last one");
+                            }
+                            global_wildcard_rule =
+                                Some((rule.action.clone(), rule.target.clone(), pattern.clone()));
+                        } else if let Some(suffix) = pattern.strip_prefix("*.") {
+                            // 验证通配符格式正确（必须是 *.suffix 格式）
+                            if suffix.is_empty() || suffix.starts_with('.') {
+                                return Err(ConfigError::InvalidPattern(format!(
+                                    "Invalid wildcard rule format: {}",
+                                    pattern
+                                )));
+                            }
+
+                            // 生成反转后缀键
+                            let reversed_key = Self::reverse_domain_labels(suffix);
+
+                            // 检查是否存在冲突
+                            if wildcard_rules.contains_key(&reversed_key) {
+                                debug!("Wildcard rule '{}' conflicts with existing rule, using the last one", pattern);
+                            }
+
+                            // 插入到通配符匹配树中
+                            wildcard_rules.insert(
+                                reversed_key,
+                                (rule.action.clone(), rule.target.clone(), pattern.clone()),
+                            );
+                        } else {
                             return Err(ConfigError::InvalidPattern(format!(
                                 "Invalid wildcard rule format: {}",
-                                rule.pattern
+                                pattern
                             )));
                         }
-
-                        // 生成反转后缀键
-                        let reversed_key = Self::reverse_domain_labels(suffix);
-
-                        // 检查是否存在冲突
-                        if wildcard_rules.contains_key(&reversed_key) {
-                            debug!("Wildcard rule '{}' conflicts with existing rule, using the last one", rule.pattern);
-                        }
-
-                        // 插入到通配符匹配树中
-                        wildcard_rules
-                            .insert(reversed_key, (rule.action, rule.target, rule.pattern));
-                    } else {
-                        return Err(ConfigError::InvalidPattern(format!(
-                            "Invalid wildcard rule format: {}",
-                            rule.pattern
-                        )));
                     }
                 }
                 MatchType::Regex => {
-                    // 编译正则表达式
-                    let regex = Regex::new(&rule.pattern)?;
+                    for pattern in rule.patterns {
+                        // 编译正则表达式
+                        let regex = Regex::new(&pattern)?;
 
-                    // 添加正则表达式规则
-                    regex_rules.push(CompiledRegexRule {
-                        pattern: rule.pattern,
-                        regex,
-                        action: rule.action,
-                        target: rule.target,
-                    });
+                        // 添加正则表达式规则
+                        regex_rules.push(CompiledRegexRule {
+                            pattern,
+                            regex,
+                            action: rule.action.clone(),
+                            target: rule.target.clone(),
+                        });
+                    }
                 }
             }
         }
@@ -198,8 +203,6 @@ impl Router {
         // 对所有规则进行排序，确保它们按照正确的优先级顺序处理
         let sorted_rules = router.sort_rules()?;
         debug!("Sort {} routing rules in total", sorted_rules.len());
-
-        // 保存排序后的规则
         router.sorted_rules = sorted_rules;
 
         Ok(router)
@@ -278,7 +281,7 @@ impl Router {
                 domain: domain.clone(),
                 action: action.clone(),
                 target: target.clone(),
-                rule_type: RULE_TYPE_EXACT,
+                rule_type: rule_type_labels::EXACT,
                 pattern: domain.clone(),
             });
         }
@@ -330,7 +333,7 @@ impl Router {
                             domain: domain.clone(),
                             action: action.clone(),
                             target: target.clone(),
-                            rule_type: RULE_TYPE_WILDCARD,
+                            rule_type: rule_type_labels::WILDCARD,
                             pattern: pattern.clone(),
                         });
                     }
@@ -401,7 +404,7 @@ impl Router {
                         domain: domain.clone(),
                         action: rule.action.clone(),
                         target: rule.target.clone(),
-                        rule_type: RULE_TYPE_REGEX,
+                        rule_type: rule_type_labels::REGEX,
                         pattern: rule.pattern.clone(),
                     });
                 }
@@ -425,7 +428,7 @@ impl Router {
                         domain: domain.clone(),
                         action: action.clone(),
                         target: target.clone(),
-                        rule_type: RULE_TYPE_WILDCARD,
+                        rule_type: rule_type_labels::WILDCARD,
                         pattern: pattern.clone(),
                     });
                 }
@@ -449,7 +452,7 @@ impl Router {
                 domain: domain.clone(),
                 action: action.clone(),
                 target: target.clone(),
-                rule_type: RULE_TYPE_WILDCARD,
+                rule_type: rule_type_labels::WILDCARD,
                 pattern: pattern.clone(),
             });
         }
