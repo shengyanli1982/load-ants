@@ -1,5 +1,8 @@
 use crate::error::ConfigError;
-use crate::r#const::{cache_limits, http_client_limits, retry_limits, weight_limits};
+use crate::r#const::{
+    cache_limits, http_client_limits, retry_limits, server_defaults, upstream_defaults,
+    weight_limits,
+};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, fs, net::SocketAddr, path::Path, str::FromStr, time::Duration};
@@ -189,14 +192,14 @@ pub struct ServerConfig {
 }
 
 fn default_tcp_timeout() -> u64 {
-    10 // 默认TCP空闲超时10秒
+    server_defaults::DEFAULT_TCP_TIMEOUT
 }
 
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
-            listen_udp: "127.0.0.1:53".to_string(),
-            listen_tcp: "127.0.0.1:53".to_string(),
+            listen_udp: server_defaults::DEFAULT_DNS_LISTEN.to_string(),
+            listen_tcp: server_defaults::DEFAULT_DNS_LISTEN.to_string(),
             tcp_timeout: default_tcp_timeout(),
         }
     }
@@ -239,7 +242,7 @@ pub struct AdminConfig {
 impl Default for AdminConfig {
     fn default() -> Self {
         Self {
-            listen: "127.0.0.1:8080".to_string(),
+            listen: server_defaults::DEFAULT_ADMIN_LISTEN.to_string(),
         }
     }
 }
@@ -797,11 +800,11 @@ impl Default for Config {
             cache: CacheConfig::default(),
             http_client: HttpClientConfig::default(),
             upstream_groups: vec![UpstreamGroupConfig {
-                name: "default".to_string(),
+                name: upstream_defaults::DEFAULT_GROUP_NAME.to_string(),
                 strategy: LoadBalancingStrategy::RoundRobin,
                 servers: vec![UpstreamServerConfig {
-                    url: "https://dns.google/dns-query".to_string(),
-                    weight: 1,
+                    url: upstream_defaults::DEFAULT_DOH_SERVER.to_string(),
+                    weight: upstream_defaults::DEFAULT_WEIGHT,
                     method: DoHMethod::Post,
                     content_type: DoHContentType::Message,
                     auth: None,
@@ -816,7 +819,7 @@ impl Default for Config {
                 match_type: MatchType::Wildcard,
                 patterns: vec!["*".to_string()],
                 action: RouteAction::Forward,
-                target: Some("default".to_string()),
+                target: Some(upstream_defaults::DEFAULT_GROUP_NAME.to_string()),
             }],
         }
     }

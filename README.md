@@ -639,7 +639,7 @@ upstream_groups:
           attempts: 2
           delay: 2
 
-# DNS static rules
+# DNS routing rules (static rules)
 static_rules:
     # Block specific advertising domains
     - match: "exact"
