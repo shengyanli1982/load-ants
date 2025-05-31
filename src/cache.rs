@@ -4,6 +4,8 @@ use crate::r#const::{cache_labels, cache_limits, ttl_source_labels};
 use hickory_proto::op::{Message, ResponseCode};
 use hickory_proto::rr::{DNSClass, RecordType};
 use moka::future::Cache;
+use rand::seq::SliceRandom;
+use rand::thread_rng;
 use std::time::Duration;
 use tracing::{debug, info};
 
@@ -107,6 +109,11 @@ impl DnsCache {
         // 调整TTL
         self.adjust_message_ttl(&mut response, &entry);
 
+        // 如果是 A 或 AAAA 记录查询，对答案进行随机排序
+        if key.record_type == RecordType::A || key.record_type == RecordType::AAAA {
+            self.shuffle_message_records(&mut response, key.record_type);
+        }
+
         // 更新缓存命中指标
         METRICS
             .cache_operations_total()
@@ -114,6 +121,45 @@ impl DnsCache {
             .inc();
 
         Some(response)
+    }
+
+    // 对 DNS 中指定类型的记录进行随机排序
+    fn shuffle_message_records(&self, message: &mut Message, record_type: RecordType) {
+        // 获取所有答案记录
+        let answers = message.answers().to_vec();
+
+        // 如果记录数量小于2，无需排序
+        if answers.len() < 2 {
+            return;
+        }
+
+        // 按记录类型分组
+        let mut target_records = Vec::new();
+        let mut other_records = Vec::new();
+
+        // 只对目标类型的记录进行分组
+        for record in answers {
+            if record.record_type() == record_type {
+                target_records.push(record);
+            } else {
+                other_records.push(record);
+            }
+        }
+
+        // 如果目标类型的记录少于2个，无需随机排序
+        if target_records.len() < 2 {
+            return;
+        }
+
+        // 只对目标类型的记录进行随机排序
+        target_records.shuffle(&mut thread_rng());
+
+        // 清除原有答案并按顺序重新添加
+        message.take_answers();
+
+        // 使用 add_answers 批量添加记录，提高性能
+        message.add_answers(target_records);
+        message.add_answers(other_records);
     }
 
     // 向缓存添加响应
