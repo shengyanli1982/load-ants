@@ -81,8 +81,8 @@ upstream_groups:
           type: "bearer"
           token: "securetoken123" # 必须非空，考虑使用环境变量或密钥管理
 
-# 路由规则（按顺序处理）
-routing_rules:
+# 路由规则（静态配置）
+static_rules:
   # 阻止特定域名
   - match: "exact" # exact: 精确匹配，不支持通配符
     patterns: ["ads.example.com", "ads2.example.com"] # 匹配模式必须非空

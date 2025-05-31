@@ -170,7 +170,7 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
         };
 
     // 创建路由引擎 - 避免不必要的克隆
-    let router = match Router::new(config.routing_rules.clone()) {
+    let router = match Router::new(config.static_rules.clone()) {
         Ok(router) => {
             info!("Routing engine initialized successfully");
 
@@ -179,7 +179,7 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
             let mut wildcard_count = 0;
             let mut regex_count = 0;
 
-            for rule in &config.routing_rules {
+            for rule in &config.static_rules {
                 match rule.match_type {
                     Exact => exact_count += rule.patterns.len(),
                     Wildcard => wildcard_count += rule.patterns.len(),

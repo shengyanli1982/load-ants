@@ -30,7 +30,7 @@ data:
         retry:
           attempts: 3
           delay: 1
-    routing_rules:
+    static_rules:
       - match: "wildcard"
         pattern: "*"
         action: "forward"

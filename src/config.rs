@@ -258,7 +258,7 @@ pub struct Config {
     // 上游组配置
     pub upstream_groups: Vec<UpstreamGroupConfig>,
     // 路由规则配置
-    pub routing_rules: Vec<RouteRuleConfig>,
+    pub static_rules: Vec<RouteRuleConfig>,
 }
 
 impl Config {
@@ -295,7 +295,7 @@ impl Config {
         self.validate_upstream_groups()?;
 
         // 验证路由规则配置
-        self.validate_routing_rules()?;
+        self.validate_static_rules()?;
 
         Ok(())
     }
@@ -673,11 +673,11 @@ impl Config {
     }
 
     // 验证路由规则配置
-    fn validate_routing_rules(&self) -> Result<(), ConfigError> {
+    fn validate_static_rules(&self) -> Result<(), ConfigError> {
         // 获取所有上游组名称 - 预分配容量
         let group_names: HashSet<_> = self.upstream_groups.iter().map(|g| &g.name).collect();
 
-        for (i, rule) in self.routing_rules.iter().enumerate() {
+        for (i, rule) in self.static_rules.iter().enumerate() {
             // 验证匹配模式非空
             if rule.patterns.is_empty() {
                 return Err(ConfigError::InvalidRouteRule(format!(
@@ -812,7 +812,7 @@ impl Default for Config {
                 }),
                 proxy: None,
             }],
-            routing_rules: vec![RouteRuleConfig {
+            static_rules: vec![RouteRuleConfig {
                 match_type: MatchType::Wildcard,
                 patterns: vec!["*".to_string()],
                 action: RouteAction::Forward,
