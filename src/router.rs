@@ -467,6 +467,7 @@ impl Router {
     // 1. 精确匹配规则 (最高优先级)
     // 2. 通配符规则 (按特定性排序)
     // 3. 正则表达式规则
+    // 4. 全局通配符规则 (最低优先级)
     //
     // 返回的列表包含所有路由动作及其可能的目标上游组
     pub fn sort_rules(&self) -> Result<Vec<(RouteAction, Option<String>)>, ConfigError> {
@@ -498,14 +499,14 @@ impl Router {
             rules.push((rule.0, rule.1));
         }
 
-        // 添加全局通配符规则（如果存在）
-        if let Some((action, target, _)) = &self.global_wildcard_rule {
-            rules.push((action.clone(), target.clone()));
-        }
-
         // 添加正则表达式规则
         for rule in &self.regex_rules {
             rules.push((rule.action.clone(), rule.target.clone()));
+        }
+
+        // 添加全局通配符规则（如果存在）
+        if let Some((action, target, _)) = &self.global_wildcard_rule {
+            rules.push((action.clone(), target.clone()));
         }
 
         Ok(rules)
