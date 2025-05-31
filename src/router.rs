@@ -1,7 +1,7 @@
 use crate::config::{MatchType, RouteAction, RouteRuleConfig};
 use crate::error::{AppError, ConfigError};
 use crate::metrics::METRICS;
-use crate::r#const::rule_type_labels;
+use crate::r#const::{router::wildcards, rule_type_labels};
 use hickory_proto::rr::Name;
 use regex::Regex;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -65,7 +65,7 @@ impl Router {
         // 计算段数以确定何时添加分隔符
         let segments: Vec<(usize, usize)> = domain_suffix
             .char_indices()
-            .filter(|(_, c)| *c == '.')
+            .filter(|(_, c)| *c == wildcards::DOT)
             .map(|(i, _)| i)
             .fold(Vec::with_capacity(10), |mut acc, i| {
                 if let Some(&(_, last)) = acc.last() {
@@ -113,16 +113,16 @@ impl Router {
                 }
                 MatchType::Wildcard => {
                     for pattern in rule.patterns {
-                        if pattern == "*" {
+                        if pattern == wildcards::GLOBAL {
                             // 存储全局通配符规则
                             if global_wildcard_rule.is_some() {
                                 debug!("Multiple definitions of global wildcard rule '*', using the last one");
                             }
                             global_wildcard_rule =
                                 Some((rule.action.clone(), rule.target.clone(), pattern.clone()));
-                        } else if let Some(suffix) = pattern.strip_prefix("*.") {
+                        } else if let Some(suffix) = pattern.strip_prefix(wildcards::PREFIX) {
                             // 验证通配符格式正确（必须是 *.suffix 格式）
-                            if suffix.is_empty() || suffix.starts_with('.') {
+                            if suffix.is_empty() || suffix.starts_with(wildcards::DOT) {
                                 return Err(ConfigError::InvalidPattern(format!(
                                     "Invalid wildcard rule format: {}",
                                     pattern
@@ -241,7 +241,7 @@ impl Router {
 
             // 为所有正则表达式规则添加一个全局键，以确保所有规则都能被尝试
             prefilter
-                .entry("*".to_string())
+                .entry(wildcards::GLOBAL.to_string())
                 .or_insert_with(HashSet::new)
                 .insert(index);
         }
@@ -344,7 +344,7 @@ impl Router {
 
                 // 查找符合条件的候选键，使用小容量预分配
                 let mut candidate_keys = Vec::with_capacity(3);
-                candidate_keys.push("*".to_string()); // 通配符键
+                candidate_keys.push(wildcards::GLOBAL.to_string()); // 通配符键
 
                 // 复用域名部分提取，避免重复查找点号位置
                 if num_labels >= 1 {
@@ -467,6 +467,7 @@ impl Router {
     // 1. 精确匹配规则 (最高优先级)
     // 2. 通配符规则 (按特定性排序)
     // 3. 正则表达式规则
+    // 4. 全局通配符规则 (最低优先级)
     //
     // 返回的列表包含所有路由动作及其可能的目标上游组
     pub fn sort_rules(&self) -> Result<Vec<(RouteAction, Option<String>)>, ConfigError> {
@@ -498,14 +499,14 @@ impl Router {
             rules.push((rule.0, rule.1));
         }
 
-        // 添加全局通配符规则（如果存在）
-        if let Some((action, target, _)) = &self.global_wildcard_rule {
-            rules.push((action.clone(), target.clone()));
-        }
-
         // 添加正则表达式规则
         for rule in &self.regex_rules {
             rules.push((rule.action.clone(), rule.target.clone()));
+        }
+
+        // 添加全局通配符规则（如果存在）
+        if let Some((action, target, _)) = &self.global_wildcard_rule {
+            rules.push((action.clone(), target.clone()));
         }
 
         Ok(rules)

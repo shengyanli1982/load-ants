@@ -550,7 +550,7 @@ Negative caching significantly enhances performance by temporarily storing error
 | attempts  | Integer | -       | Number of retry attempts | 1-100       |
 | delay     | Integer | -       | Initial delay (seconds)  | 1-120       |
 
-### Routing Rules Configuration (routing_rules)
+### Routing Rules Configuration (static_rules)
 
 | Parameter | Type   | Default | Description                                             | Valid Range                      |
 | --------- | ------ | ------- | ------------------------------------------------------- | -------------------------------- |
@@ -639,8 +639,8 @@ upstream_groups:
           attempts: 2
           delay: 2
 
-# DNS routing rules (processed in order)
-routing_rules:
+# DNS routing rules (static rules)
+static_rules:
     # Block specific advertising domains
     - match: "exact"
       patterns: ["ads.example.com", "ads2.example.com"] # Multiple patterns in an array

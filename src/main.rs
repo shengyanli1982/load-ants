@@ -19,7 +19,7 @@ use crate::config::MatchType::{Exact, Regex, Wildcard};
 use crate::error::AppError;
 use crate::handler::RequestHandler;
 use crate::metrics::METRICS;
-use crate::r#const::rule_type_labels;
+use crate::r#const::{rule_type_labels, subsystem_names};
 use crate::router::Router;
 use crate::server::DnsServer;
 use crate::upstream::UpstreamManager;
@@ -95,15 +95,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let toplevel = Toplevel::new(|s| async move {
         // 启动DNS服务器子系统
         let dns_server = components.dns_server;
-        s.start(SubsystemBuilder::new("dns_server", move |s| async move {
-            dns_server.run(s).await
-        }));
+        s.start(SubsystemBuilder::new(
+            subsystem_names::DNS_SERVER,
+            move |s| async move { dns_server.run(s).await },
+        ));
 
         // 启动管理服务器子系统
         let admin_server = components.admin_server;
-        s.start(SubsystemBuilder::new("admin_server", move |s| async move {
-            admin_server.run(s).await
-        }));
+        s.start(SubsystemBuilder::new(
+            subsystem_names::ADMIN_SERVER,
+            move |s| async move { admin_server.run(s).await },
+        ));
     });
 
     // 等待关闭
@@ -170,7 +172,7 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
         };
 
     // 创建路由引擎 - 避免不必要的克隆
-    let router = match Router::new(config.routing_rules.clone()) {
+    let router = match Router::new(config.static_rules.clone()) {
         Ok(router) => {
             info!("Routing engine initialized successfully");
 
@@ -179,7 +181,7 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
             let mut wildcard_count = 0;
             let mut regex_count = 0;
 
-            for rule in &config.routing_rules {
+            for rule in &config.static_rules {
                 match rule.match_type {
                     Exact => exact_count += rule.patterns.len(),
                     Wildcard => wildcard_count += rule.patterns.len(),

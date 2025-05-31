@@ -1,6 +1,6 @@
 [package]
 name = "loadants"
-version = "0.1.4"
+version = "0.1.5"
 edition = "2021"
 description = "An lightweight DNS forwarder converting UDP/TCP queries to DoH, written in Rust."
 license = "MIT"

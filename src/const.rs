@@ -176,3 +176,44 @@ pub mod rule_type_labels {
     // 未指定目标
     pub const NO_TARGET: &str = "none";
 }
+
+// 子系统名称常量
+pub mod subsystem_names {
+    // DNS服务器子系统名称
+    pub const DNS_SERVER: &str = "dns_server";
+    // 管理服务器子系统名称
+    pub const ADMIN_SERVER: &str = "admin_server";
+}
+
+// 服务器默认值常量
+pub mod server_defaults {
+    // 默认TCP超时时间（秒）
+    pub const DEFAULT_TCP_TIMEOUT: u64 = 10;
+    // 默认DNS监听地址
+    pub const DEFAULT_DNS_LISTEN: &str = "127.0.0.1:53";
+    // 默认管理服务器监听地址
+    pub const DEFAULT_ADMIN_LISTEN: &str = "127.0.0.1:8080";
+}
+
+// 上游服务器默认值常量
+pub mod upstream_defaults {
+    // 默认上游组名称
+    pub const DEFAULT_GROUP_NAME: &str = "default";
+    // 默认DoH服务器URL
+    pub const DEFAULT_DOH_SERVER: &str = "https://dns.google/dns-query";
+    // 默认服务器权重
+    pub const DEFAULT_WEIGHT: u32 = 1;
+}
+
+// 路由引擎常量
+pub mod router {
+    // 通配符常量
+    pub mod wildcards {
+        // 全局通配符
+        pub const GLOBAL: &str = "*";
+        // 通配符前缀
+        pub const PREFIX: &str = "*.";
+        // 点号分隔符
+        pub const DOT: char = '.';
+    }
+}
