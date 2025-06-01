@@ -3,9 +3,16 @@ use crate::error::{AppError, ConfigError};
 use crate::metrics::METRICS;
 use crate::r#const::{router::wildcards, rule_type_labels};
 use hickory_proto::rr::Name;
+use lazy_static::lazy_static;
 use regex::Regex;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use tracing::debug;
+
+// 定义正则表达式特殊字符常量
+lazy_static! {
+    static ref REGEX_SPECIAL_CHARS: [char; 15] =
+        ['\\', '^', '$', '.', '|', '?', '*', '+', '(', ')', '[', ']', '{', '}', '-',];
+}
 
 // 编译后的正则表达式规则
 struct CompiledRegexRule {
@@ -79,32 +86,29 @@ impl Router {
         let mut result = String::with_capacity(domain_suffix.len() + 1);
 
         // 计算段数以确定何时添加分隔符
-        let segments: Vec<(usize, usize)> = domain_suffix
-            .char_indices()
-            .filter(|(_, c)| *c == wildcards::DOT)
-            .map(|(i, _)| i)
-            .fold(Vec::with_capacity(10), |mut acc, i| {
-                if let Some(&(_, last)) = acc.last() {
-                    acc.push((last + 1, i));
-                } else {
-                    acc.push((0, i));
-                }
-                acc
-            });
+        let mut start = 0;
+        let mut segments = Vec::with_capacity(10);
+
+        for (i, c) in domain_suffix.char_indices() {
+            if c == wildcards::DOT {
+                segments.push((start, i));
+                start = i + 1;
+            }
+        }
 
         // 处理最后一段
-        if let Some(&(start, _)) = segments.last() {
+        if !segments.is_empty() {
             result.push_str(&domain_suffix[start..]);
+
+            // 反向处理其他段
+            for i in (0..segments.len()).rev() {
+                let (start, end) = segments[i];
+                result.push(wildcards::DOT);
+                result.push_str(&domain_suffix[start..end]);
+            }
         } else {
             // 没有点号，直接返回原字符串
             return domain_suffix.to_string();
-        }
-
-        // 反向处理其他段
-        for i in (0..segments.len() - 1).rev() {
-            let (start, end) = segments[i];
-            result.push(wildcards::DOT);
-            result.push_str(&domain_suffix[start..end]);
         }
 
         result
@@ -118,14 +122,13 @@ impl Router {
         for (i, rule) in rules.iter().enumerate() {
             // 提取不包含正则表达式特殊字符的子字符串作为预筛选关键词
             let pattern = &rule.pattern;
-            let mut current_segment = String::new();
-            let mut segments = Vec::new();
+            let mut current_segment = String::with_capacity(pattern.len() / 2);
+            let mut segments = Vec::with_capacity(5);
 
             for c in pattern.chars() {
-                if "\\^$.|?*+()[]{}-".contains(c) {
+                if REGEX_SPECIAL_CHARS.contains(&c) {
                     if !current_segment.is_empty() {
-                        segments.push(current_segment);
-                        current_segment = String::new();
+                        segments.push(std::mem::take(&mut current_segment));
                     }
                 } else {
                     current_segment.push(c);
@@ -139,16 +142,13 @@ impl Router {
             // 选择最长的子字符串作为预筛选关键词（更具体更好）
             if let Some(longest_segment) = segments
                 .iter()
-                .filter(|s| !s.is_empty()) // 忽略空字符串
+                .filter(|s| s.len() >= 2) // 忽略太短的字符串
                 .max_by_key(|s| s.len())
             {
-                // 确保关键词长度大于等于2，避免过多的假阳性
-                if longest_segment.len() >= 2 {
-                    let entry = prefilter
-                        .entry(longest_segment.to_lowercase())
-                        .or_insert_with(HashSet::new);
-                    entry.insert(i);
-                }
+                prefilter
+                    .entry(longest_segment.to_lowercase())
+                    .or_insert_with(HashSet::new)
+                    .insert(i);
             }
         }
 
@@ -171,18 +171,20 @@ impl Router {
             match rule.match_type {
                 MatchType::Exact => {
                     // 添加精确匹配规则，根据动作类型分别存储
+                    let target = rule.target.clone();
                     for pattern in rule.patterns {
                         match rule.action {
                             RouteAction::Block => {
-                                exact_block_rules.insert(pattern.clone(), rule.target.clone());
+                                exact_block_rules.insert(pattern, target.clone());
                             }
                             RouteAction::Forward => {
-                                exact_forward_rules.insert(pattern.clone(), rule.target.clone());
+                                exact_forward_rules.insert(pattern, target.clone());
                             }
                         }
                     }
                 }
                 MatchType::Wildcard => {
+                    let target = rule.target.clone();
                     for pattern in rule.patterns {
                         if pattern == wildcards::GLOBAL {
                             // 根据动作类型存储全局通配符规则
@@ -191,62 +193,58 @@ impl Router {
                                     if global_wildcard_block_rule.is_some() {
                                         debug!("Multiple definitions of global wildcard block rule '*', using the last one");
                                     }
-                                    global_wildcard_block_rule =
-                                        Some((rule.target.clone(), pattern.clone()));
+                                    global_wildcard_block_rule = Some((target.clone(), pattern));
                                 }
                                 RouteAction::Forward => {
                                     if global_wildcard_forward_rule.is_some() {
                                         debug!("Multiple definitions of global wildcard forward rule '*', using the last one");
                                     }
-                                    global_wildcard_forward_rule =
-                                        Some((rule.target.clone(), pattern.clone()));
+                                    global_wildcard_forward_rule = Some((target.clone(), pattern));
                                 }
                             }
                         } else {
                             // 处理特定通配符规则：*.domain.tld
                             // 为了支持反向后缀匹配，将域名部分反转存储
-                            let suffix = pattern[2..].to_string(); // 移除前导*.
-                            let reversed_suffix = Self::reverse_domain_labels(&suffix);
+                            let suffix = &pattern[2..]; // 移除前导*.
+                            let reversed_suffix = Self::reverse_domain_labels(suffix);
 
                             // 根据动作类型存储通配符规则
                             match rule.action {
                                 RouteAction::Block => {
-                                    wildcard_block_rules.insert(
-                                        reversed_suffix,
-                                        (rule.target.clone(), pattern.clone()),
-                                    );
+                                    wildcard_block_rules
+                                        .insert(reversed_suffix, (target.clone(), pattern));
                                 }
                                 RouteAction::Forward => {
-                                    wildcard_forward_rules.insert(
-                                        reversed_suffix,
-                                        (rule.target.clone(), pattern.clone()),
-                                    );
+                                    wildcard_forward_rules
+                                        .insert(reversed_suffix, (target.clone(), pattern));
                                 }
                             }
                         }
                     }
                 }
                 MatchType::Regex => {
+                    let target = rule.target.clone();
+                    let action = rule.action.clone();
                     for pattern in rule.patterns {
                         // 编译正则表达式
                         let regex = Regex::new(&pattern)?;
 
                         // 根据动作类型添加正则表达式规则
-                        match rule.action {
+                        match action {
                             RouteAction::Block => {
                                 regex_block_rules.push(CompiledRegexRule {
                                     pattern,
                                     regex,
-                                    action: rule.action.clone(),
-                                    target: rule.target.clone(),
+                                    action: RouteAction::Block,
+                                    target: target.clone(),
                                 });
                             }
                             RouteAction::Forward => {
                                 regex_forward_rules.push(CompiledRegexRule {
                                     pattern,
                                     regex,
-                                    action: rule.action.clone(),
-                                    target: rule.target.clone(),
+                                    action: RouteAction::Forward,
+                                    target: target.clone(),
                                 });
                             }
                         }
@@ -267,16 +265,8 @@ impl Router {
 
         let wildcard_count = wildcard_block_rules.len()
             + wildcard_forward_rules.len()
-            + if global_wildcard_block_rule.is_some() {
-                1
-            } else {
-                0
-            }
-            + if global_wildcard_forward_rule.is_some() {
-                1
-            } else {
-                0
-            };
+            + global_wildcard_block_rule.is_some() as usize
+            + global_wildcard_forward_rule.is_some() as usize;
 
         METRICS
             .route_rules_count()
@@ -360,7 +350,7 @@ impl Router {
                 action: RouteAction::Block,
                 target: target.clone(),
                 rule_type: rule_type_labels::EXACT,
-                pattern: domain.clone(),
+                pattern: domain,
             });
         }
 
@@ -384,147 +374,122 @@ impl Router {
                 action: RouteAction::Forward,
                 target: target.clone(),
                 rule_type: rule_type_labels::EXACT,
-                pattern: domain.clone(),
+                pattern: domain,
             });
         }
 
         // 预先分析域名部分 - 只分割一次，后续复用
         if !domain.is_empty() {
-            // 分割域名部分以便通配符匹配
+            // 3. 先尝试block规则的通配符匹配
+            let mut current_part = domain.clone();
+
+            // 首先检查完整域名，然后逐步缩短
+            loop {
+                // 将当前域名部分反转以匹配wildcard规则
+                let reversed_suffix = Self::reverse_domain_labels(&current_part);
+
+                // 检查当前反转后缀是否匹配block规则
+                if let Some((target, pattern)) = self.wildcard_block_rules.get(&reversed_suffix) {
+                    let target_str = target.as_deref().unwrap_or(target_default);
+
+                    debug!(
+                        "Rule match: Wildcard block match '{}' -> Pattern: '{}', Target: {}",
+                        domain, pattern, target_str
+                    );
+
+                    // 记录路由匹配指标
+                    METRICS
+                        .route_matches_total()
+                        .with_label_values(&[rule_type_labels::WILDCARD, target_str])
+                        .inc();
+
+                    return Ok(RouteMatch {
+                        domain: domain.clone(),
+                        action: RouteAction::Block,
+                        target: target.clone(),
+                        rule_type: rule_type_labels::WILDCARD,
+                        pattern: pattern.clone(),
+                    });
+                }
+
+                // 找到当前部分的第一个点号
+                if let Some(dot_pos) = current_part.find('.') {
+                    // 去掉最左边的标签进行下一次匹配
+                    current_part = current_part[dot_pos + 1..].to_string();
+                } else {
+                    // 没有更多的点号，结束循环
+                    break;
+                }
+            }
+
+            // 4. 然后尝试forward规则的通配符匹配
+            current_part = domain.clone();
+
+            // 首先检查完整域名，然后逐步缩短
+            loop {
+                // 将当前域名部分反转以匹配wildcard规则
+                let reversed_suffix = Self::reverse_domain_labels(&current_part);
+
+                // 检查当前反转后缀是否匹配forward规则
+                if let Some((target, pattern)) = self.wildcard_forward_rules.get(&reversed_suffix) {
+                    let target_str = target.as_deref().unwrap_or(target_default);
+
+                    debug!(
+                        "Rule match: Wildcard forward match '{}' -> Pattern: '{}', Target: {}",
+                        domain, pattern, target_str
+                    );
+
+                    // 记录路由匹配指标
+                    METRICS
+                        .route_matches_total()
+                        .with_label_values(&[rule_type_labels::WILDCARD, target_str])
+                        .inc();
+
+                    return Ok(RouteMatch {
+                        domain: domain.clone(),
+                        action: RouteAction::Forward,
+                        target: target.clone(),
+                        rule_type: rule_type_labels::WILDCARD,
+                        pattern: pattern.clone(),
+                    });
+                }
+
+                // 找到当前部分的第一个点号
+                if let Some(dot_pos) = current_part.find('.') {
+                    // 去掉最左边的标签进行下一次匹配
+                    current_part = current_part[dot_pos + 1..].to_string();
+                } else {
+                    // 没有更多的点号，结束循环
+                    break;
+                }
+            }
+
+            // 5. 尝试regex block规则
             let domain_parts: Vec<&str> = domain.split('.').collect();
 
-            if !domain_parts.is_empty() {
-                // 通配符匹配 - 从最特定到最不特定
-                // 策略：
-                // 1. 首先检查完整域名的反转后缀
-                // 2. 然后逐步移除最左边的标签，检查更短的后缀
-                // 3. 先检查所有可能的block规则，再检查forward规则
-                // 4. 这样可以确保最特定的匹配（最长的后缀）具有最高优先级
-                // 5. 在每个特定级别上，block规则始终优先于forward规则
+            // 使用预筛选优化正则表达式匹配
+            let mut potential_rules = HashSet::new();
 
-                // 3. 先尝试block规则的通配符匹配
-                let mut current_part = domain.clone();
-
-                // 首先检查完整域名，然后逐步缩短
-                loop {
-                    // 将当前域名部分反转以匹配wildcard规则
-                    let reversed_suffix = Self::reverse_domain_labels(&current_part);
-
-                    // 检查当前反转后缀是否匹配block规则
-                    if let Some((target, pattern)) = self.wildcard_block_rules.get(&reversed_suffix)
-                    {
-                        let target_str = target.as_deref().unwrap_or(target_default);
-
-                        debug!(
-                            "Rule match: Wildcard block match '{}' -> Pattern: '{}', Target: {}",
-                            domain, pattern, target_str
-                        );
-
-                        // 记录路由匹配指标
-                        METRICS
-                            .route_matches_total()
-                            .with_label_values(&[rule_type_labels::WILDCARD, target_str])
-                            .inc();
-
-                        return Ok(RouteMatch {
-                            domain: domain.clone(),
-                            action: RouteAction::Block,
-                            target: target.clone(),
-                            rule_type: rule_type_labels::WILDCARD,
-                            pattern: pattern.clone(),
-                        });
-                    }
-
-                    // 找到当前部分的第一个点号
-                    if let Some(dot_pos) = current_part.find('.') {
-                        // 去掉最左边的标签进行下一次匹配
-                        current_part = current_part[dot_pos + 1..].to_string();
-                    } else {
-                        // 没有更多的点号，结束循环
-                        break;
-                    }
+            // 先收集所有可能匹配的block规则
+            for segment in &domain_parts {
+                if segment.len() < 2 {
+                    continue; // 跳过太短的片段
                 }
 
-                // 4. 然后尝试forward规则的通配符匹配
-                current_part = domain.clone();
-
-                // 首先检查完整域名，然后逐步缩短
-                loop {
-                    // 将当前域名部分反转以匹配wildcard规则
-                    let reversed_suffix = Self::reverse_domain_labels(&current_part);
-
-                    // 检查当前反转后缀是否匹配forward规则
-                    if let Some((target, pattern)) =
-                        self.wildcard_forward_rules.get(&reversed_suffix)
-                    {
-                        let target_str = target.as_deref().unwrap_or(target_default);
-
-                        debug!(
-                            "Rule match: Wildcard forward match '{}' -> Pattern: '{}', Target: {}",
-                            domain, pattern, target_str
-                        );
-
-                        // 记录路由匹配指标
-                        METRICS
-                            .route_matches_total()
-                            .with_label_values(&[rule_type_labels::WILDCARD, target_str])
-                            .inc();
-
-                        return Ok(RouteMatch {
-                            domain: domain.clone(),
-                            action: RouteAction::Forward,
-                            target: target.clone(),
-                            rule_type: rule_type_labels::WILDCARD,
-                            pattern: pattern.clone(),
-                        });
-                    }
-
-                    // 找到当前部分的第一个点号
-                    if let Some(dot_pos) = current_part.find('.') {
-                        // 去掉最左边的标签进行下一次匹配
-                        current_part = current_part[dot_pos + 1..].to_string();
-                    } else {
-                        // 没有更多的点号，结束循环
-                        break;
-                    }
+                if let Some(indices) = self.regex_block_prefilter.get(&segment.to_lowercase()) {
+                    potential_rules.extend(indices);
                 }
+            }
 
-                // 5. 尝试regex block规则
-                let mut matched_rule_index = None;
+            // 如果没有匹配的预筛选关键词，仍然需要尝试所有regex规则
+            if potential_rules.is_empty() && !self.regex_block_rules.is_empty() {
+                potential_rules = (0..self.regex_block_rules.len()).collect();
+            }
 
-                // 使用预筛选优化正则表达式匹配
-                let mut potential_rules = HashSet::new();
-
-                // 先收集所有可能匹配的block规则
-                for segment in domain.split('.') {
-                    if segment.len() < 2 {
-                        continue; // 跳过太短的片段
-                    }
-
-                    if let Some(indices) = self.regex_block_prefilter.get(&segment.to_lowercase()) {
-                        for &idx in indices {
-                            potential_rules.insert(idx);
-                        }
-                    }
-                }
-
-                // 如果没有匹配的预筛选关键词，仍然需要尝试所有regex规则
-                if potential_rules.is_empty() && !self.regex_block_rules.is_empty() {
-                    potential_rules = (0..self.regex_block_rules.len()).collect();
-                }
-
-                // 检查所有潜在匹配的block规则
-                for &rule_idx in &potential_rules {
-                    let rule = &self.regex_block_rules[rule_idx];
-                    if rule.regex.is_match(&domain) {
-                        matched_rule_index = Some(rule_idx);
-                        break;
-                    }
-                }
-
-                // 如果找到匹配的block规则，返回结果
-                if let Some(index) = matched_rule_index {
-                    let rule = &self.regex_block_rules[index];
+            // 检查所有潜在匹配的block规则
+            for &rule_idx in &potential_rules {
+                let rule = &self.regex_block_rules[rule_idx];
+                if rule.regex.is_match(&domain) {
                     let target_str = rule.target.as_deref().unwrap_or(target_default);
 
                     debug!(
@@ -546,42 +511,31 @@ impl Router {
                         pattern: rule.pattern.clone(),
                     });
                 }
+            }
 
-                // 6. 尝试regex forward规则
-                matched_rule_index = None;
-                potential_rules.clear();
+            // 6. 尝试regex forward规则
+            potential_rules.clear();
 
-                // 收集所有可能匹配的forward规则
-                for segment in domain.split('.') {
-                    if segment.len() < 2 {
-                        continue;
-                    }
-
-                    if let Some(indices) = self.regex_forward_prefilter.get(&segment.to_lowercase())
-                    {
-                        for &idx in indices {
-                            potential_rules.insert(idx);
-                        }
-                    }
+            // 收集所有可能匹配的forward规则
+            for segment in &domain_parts {
+                if segment.len() < 2 {
+                    continue;
                 }
 
-                // 如果没有匹配的预筛选关键词，仍然需要尝试所有regex规则
-                if potential_rules.is_empty() && !self.regex_forward_rules.is_empty() {
-                    potential_rules = (0..self.regex_forward_rules.len()).collect();
+                if let Some(indices) = self.regex_forward_prefilter.get(&segment.to_lowercase()) {
+                    potential_rules.extend(indices);
                 }
+            }
 
-                // 检查所有潜在匹配的forward规则
-                for &rule_idx in &potential_rules {
-                    let rule = &self.regex_forward_rules[rule_idx];
-                    if rule.regex.is_match(&domain) {
-                        matched_rule_index = Some(rule_idx);
-                        break;
-                    }
-                }
+            // 如果没有匹配的预筛选关键词，仍然需要尝试所有regex规则
+            if potential_rules.is_empty() && !self.regex_forward_rules.is_empty() {
+                potential_rules = (0..self.regex_forward_rules.len()).collect();
+            }
 
-                // 如果找到匹配的forward规则，返回结果
-                if let Some(index) = matched_rule_index {
-                    let rule = &self.regex_forward_rules[index];
+            // 检查所有潜在匹配的forward规则
+            for &rule_idx in &potential_rules {
+                let rule = &self.regex_forward_rules[rule_idx];
+                if rule.regex.is_match(&domain) {
                     let target_str = rule.target.as_deref().unwrap_or(target_default);
 
                     debug!(
@@ -603,54 +557,54 @@ impl Router {
                         pattern: rule.pattern.clone(),
                     });
                 }
+            }
 
-                // 7. 尝试全局通配符 block 规则
-                if let Some((target, pattern)) = &self.global_wildcard_block_rule {
-                    let target_str = target.as_deref().unwrap_or(target_default);
+            // 7. 尝试全局通配符 block 规则
+            if let Some((target, pattern)) = &self.global_wildcard_block_rule {
+                let target_str = target.as_deref().unwrap_or(target_default);
 
-                    debug!(
-                        "Rule match: Global wildcard block match '{}' -> Pattern: '{}', Target: {}",
-                        domain, pattern, target_str
-                    );
+                debug!(
+                    "Rule match: Global wildcard block match '{}' -> Pattern: '{}', Target: {}",
+                    domain, pattern, target_str
+                );
 
-                    // 记录路由匹配指标
-                    METRICS
-                        .route_matches_total()
-                        .with_label_values(&[rule_type_labels::WILDCARD, target_str])
-                        .inc();
+                // 记录路由匹配指标
+                METRICS
+                    .route_matches_total()
+                    .with_label_values(&[rule_type_labels::WILDCARD, target_str])
+                    .inc();
 
-                    return Ok(RouteMatch {
-                        domain: domain.clone(),
-                        action: RouteAction::Block,
-                        target: target.clone(),
-                        rule_type: rule_type_labels::WILDCARD,
-                        pattern: pattern.clone(),
-                    });
-                }
+                return Ok(RouteMatch {
+                    domain: domain.clone(),
+                    action: RouteAction::Block,
+                    target: target.clone(),
+                    rule_type: rule_type_labels::WILDCARD,
+                    pattern: pattern.clone(),
+                });
+            }
 
-                // 8. 最后尝试全局通配符 forward 规则
-                if let Some((target, pattern)) = &self.global_wildcard_forward_rule {
-                    let target_str = target.as_deref().unwrap_or(target_default);
+            // 8. 最后尝试全局通配符 forward 规则
+            if let Some((target, pattern)) = &self.global_wildcard_forward_rule {
+                let target_str = target.as_deref().unwrap_or(target_default);
 
-                    debug!(
-                        "Rule match: Global wildcard forward match '{}' -> Pattern: '{}', Target: {}",
-                        domain, pattern, target_str
-                    );
+                debug!(
+                    "Rule match: Global wildcard forward match '{}' -> Pattern: '{}', Target: {}",
+                    domain, pattern, target_str
+                );
 
-                    // 记录路由匹配指标
-                    METRICS
-                        .route_matches_total()
-                        .with_label_values(&[rule_type_labels::WILDCARD, target_str])
-                        .inc();
+                // 记录路由匹配指标
+                METRICS
+                    .route_matches_total()
+                    .with_label_values(&[rule_type_labels::WILDCARD, target_str])
+                    .inc();
 
-                    return Ok(RouteMatch {
-                        domain: domain.clone(),
-                        action: RouteAction::Forward,
-                        target: target.clone(),
-                        rule_type: rule_type_labels::WILDCARD,
-                        pattern: pattern.clone(),
-                    });
-                }
+                return Ok(RouteMatch {
+                    domain: domain.clone(),
+                    action: RouteAction::Forward,
+                    target: target.clone(),
+                    rule_type: rule_type_labels::WILDCARD,
+                    pattern: pattern.clone(),
+                });
             }
         } else if let Some((target, pattern)) = &self.global_wildcard_block_rule {
             // 空域名先检查全局通配符block规则
@@ -716,7 +670,15 @@ impl Router {
     //
     // 返回的列表包含所有路由动作及其可能的目标上游组
     pub fn sort_rules(&self) -> Result<Vec<(RouteAction, Option<String>)>, ConfigError> {
-        let mut rules = Vec::new();
+        let mut rules = Vec::with_capacity(
+            self.exact_block_rules.len()
+                + self.exact_forward_rules.len()
+                + self.wildcard_block_rules.len()
+                + self.wildcard_forward_rules.len()
+                + self.regex_block_rules.len()
+                + self.regex_forward_rules.len()
+                + 2, // 全局通配符规则
+        );
 
         // 1. 添加精确匹配 block 规则
         for target in self.exact_block_rules.values() {
@@ -729,7 +691,7 @@ impl Router {
         }
 
         // 3. 收集通配符 block 规则并按特定性排序
-        let mut wildcard_block_rules = Vec::new();
+        let mut wildcard_block_rules = Vec::with_capacity(self.wildcard_block_rules.len());
         for (reversed_suffix, (target, pattern)) in &self.wildcard_block_rules {
             wildcard_block_rules.push((
                 target.clone(),
@@ -745,7 +707,7 @@ impl Router {
         }
 
         // 4. 收集通配符 forward 规则并按特定性排序
-        let mut wildcard_forward_rules = Vec::new();
+        let mut wildcard_forward_rules = Vec::with_capacity(self.wildcard_forward_rules.len());
         for (reversed_suffix, (target, pattern)) in &self.wildcard_forward_rules {
             wildcard_forward_rules.push((
                 target.clone(),

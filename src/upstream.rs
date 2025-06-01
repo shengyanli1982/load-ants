@@ -5,7 +5,7 @@ use crate::config::{
 };
 use crate::error::AppError;
 use crate::metrics::METRICS;
-use crate::r#const::{error_labels, upstream_labels};
+use crate::r#const::{error_labels, http_headers, upstream_labels};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use hickory_proto::rr::rdata as HickoryRData;
 use hickory_proto::{
@@ -264,8 +264,14 @@ impl UpstreamManager {
                 // 创建POST请求
                 let mut request = client
                     .post(url)
-                    .header("Accept", "application/dns-message")
-                    .header("Content-Type", "application/dns-message")
+                    .header(
+                        http_headers::ACCEPT,
+                        http_headers::content_types::DNS_MESSAGE,
+                    )
+                    .header(
+                        http_headers::CONTENT_TYPE,
+                        http_headers::content_types::DNS_MESSAGE,
+                    )
                     .body(query_data);
 
                 // 添加认证信息
@@ -290,8 +296,11 @@ impl UpstreamManager {
                 // 创建POST请求
                 let request = client
                     .post(url)
-                    .header("Accept", "application/dns-json")
-                    .header("Content-Type", "application/dns-json")
+                    .header(http_headers::ACCEPT, http_headers::content_types::DNS_JSON)
+                    .header(
+                        http_headers::CONTENT_TYPE,
+                        http_headers::content_types::DNS_JSON,
+                    )
                     .body(json_string);
 
                 // 添加认证信息
@@ -340,7 +349,10 @@ impl UpstreamManager {
                 url.query_pairs_mut().append_pair("dns", &b64_data);
 
                 // 创建GET请求
-                let mut request = client.get(url).header("Accept", "application/dns-message");
+                let mut request = client.get(url).header(
+                    http_headers::ACCEPT,
+                    http_headers::content_types::DNS_MESSAGE,
+                );
 
                 // 添加认证信息
                 request = self.add_auth_to_middleware_request(request, &server.auth)?;
@@ -373,7 +385,9 @@ impl UpstreamManager {
                 }
 
                 // 创建GET请求
-                let mut request = client.get(url).header("Accept", "application/dns-json");
+                let mut request = client
+                    .get(url)
+                    .header(http_headers::ACCEPT, http_headers::content_types::DNS_JSON);
 
                 // 添加认证信息
                 request = self.add_auth_to_middleware_request(request, &server.auth)?;
@@ -411,7 +425,10 @@ impl UpstreamManager {
                     let token = auth.token.as_ref().ok_or_else(|| {
                         AppError::Upstream("Missing token for Bearer authentication".to_string())
                     })?;
-                    req.header("Authorization", format!("Bearer {}", token))
+                    req.header(
+                        http_headers::AUTHORIZATION,
+                        format!("{}{}", http_headers::auth::BEARER_PREFIX, token),
+                    )
                 }
             };
         }
