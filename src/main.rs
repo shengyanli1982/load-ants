@@ -192,17 +192,17 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
             METRICS
                 .route_rules_count()
                 .with_label_values(&[rule_type_labels::EXACT])
-                .set(exact_count as f64);
+                .set(exact_count as i64);
 
             METRICS
                 .route_rules_count()
                 .with_label_values(&[rule_type_labels::WILDCARD])
-                .set(wildcard_count as f64);
+                .set(wildcard_count as i64);
 
             METRICS
                 .route_rules_count()
                 .with_label_values(&[rule_type_labels::REGEX])
-                .set(regex_count as f64);
+                .set(regex_count as i64);
 
             info!(
                 "Routing engine initialized successfully with {} exact, {} wildcard, {} regex rules",

@@ -261,7 +261,7 @@ impl Router {
         METRICS
             .route_rules_count()
             .with_label_values(&[rule_type_labels::EXACT])
-            .set((exact_block_rules.len() + exact_forward_rules.len()) as f64);
+            .set((exact_block_rules.len() + exact_forward_rules.len()) as i64);
 
         let wildcard_count = wildcard_block_rules.len()
             + wildcard_forward_rules.len()
@@ -271,12 +271,12 @@ impl Router {
         METRICS
             .route_rules_count()
             .with_label_values(&[rule_type_labels::WILDCARD])
-            .set(wildcard_count as f64);
+            .set(wildcard_count as i64);
 
         METRICS
             .route_rules_count()
             .with_label_values(&[rule_type_labels::REGEX])
-            .set((regex_block_rules.len() + regex_forward_rules.len()) as f64);
+            .set((regex_block_rules.len() + regex_forward_rules.len()) as i64);
 
         let mut router = Self {
             exact_block_rules,
