@@ -212,6 +212,7 @@ pub mod router {
         // 全局通配符
         pub const GLOBAL: &str = "*";
         // 通配符前缀
+        #[allow(dead_code)]
         pub const PREFIX: &str = "*.";
         // 点号分隔符
         pub const DOT: char = '.';
