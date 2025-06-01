@@ -1,7 +1,7 @@
 use axum::http::{header, StatusCode};
 use axum::{routing::get, Router};
 use once_cell::sync::Lazy;
-use prometheus::{opts, GaugeVec, HistogramVec, IntCounterVec, IntGauge, Registry};
+use prometheus::{opts, HistogramVec, IntCounterVec, IntGauge, IntGaugeVec, Registry};
 
 // 全局静态指标实例
 pub static METRICS: Lazy<DnsMetrics> = Lazy::new(DnsMetrics::new);
@@ -32,7 +32,7 @@ pub struct DnsMetrics {
 
     // 5. 路由策略指标
     route_matches_total: IntCounterVec,
-    route_rules_count: GaugeVec,
+    route_rules_count: IntGaugeVec,
 }
 
 impl Default for DnsMetrics {
@@ -157,7 +157,7 @@ impl DnsMetrics {
             &["rule_type", "target_group"]
         ).unwrap();
 
-        let route_rules_count = GaugeVec::new(
+        let route_rules_count = IntGaugeVec::new(
             opts!("loadants_route_rules_count", "Current number of active routing rules, classified by rule type (exact, wildcard, regex)"),
             &["rule_type"]
         ).unwrap();
@@ -316,7 +316,7 @@ impl DnsMetrics {
         &self.route_matches_total
     }
 
-    pub fn route_rules_count(&self) -> &GaugeVec {
+    pub fn route_rules_count(&self) -> &IntGaugeVec {
         &self.route_rules_count
     }
 }
