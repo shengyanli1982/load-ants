@@ -212,8 +212,33 @@ pub mod router {
         // 全局通配符
         pub const GLOBAL: &str = "*";
         // 通配符前缀
+        #[allow(dead_code)]
         pub const PREFIX: &str = "*.";
         // 点号分隔符
         pub const DOT: char = '.';
+    }
+}
+
+// HTTP 头常量
+pub mod http_headers {
+    // 内容类型头
+    pub const CONTENT_TYPE: &str = "Content-Type";
+    // 接受类型头
+    pub const ACCEPT: &str = "Accept";
+    // 授权头
+    pub const AUTHORIZATION: &str = "Authorization";
+
+    // 内容类型值
+    pub mod content_types {
+        // DNS 消息格式
+        pub const DNS_MESSAGE: &str = "application/dns-message";
+        // DNS JSON 格式
+        pub const DNS_JSON: &str = "application/dns-json";
+    }
+
+    // 授权类型
+    pub mod auth {
+        // Bearer 授权前缀
+        pub const BEARER_PREFIX: &str = "Bearer ";
     }
 }

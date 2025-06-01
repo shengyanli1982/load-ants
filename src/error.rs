@@ -118,6 +118,7 @@ pub enum ConfigError {
     InvalidRouteRule(String),
 
     #[error("Invalid pattern: {0}")]
+    #[allow(dead_code)]
     InvalidPattern(String),
 
     #[error("Invalid regular expression: {0}")]
