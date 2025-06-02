@@ -298,8 +298,9 @@ async fn test_load_and_merge_rules() {
     });
     assert!(static_rule.is_some());
 
-    // 验证静态规则在最后（优先级最低）
-    assert_eq!(rules.last().unwrap().patterns[0], "static.example.com");
+    // 验证静态规则顺序
+    assert_eq!(rules.first().unwrap().patterns[0], "static.example.com");
+    assert_eq!(rules.last().unwrap().patterns[0], "forward.example.com");
 }
 
 #[tokio::test]
