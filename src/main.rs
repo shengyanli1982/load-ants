@@ -1,29 +1,16 @@
-mod admin;
-mod args;
-mod balancer;
-mod cache;
-mod config;
-mod r#const;
-mod error;
-mod handler;
-mod metrics;
-mod remote_rule;
-mod router;
-mod server;
-mod upstream;
-
-use crate::admin::AdminServer;
-use crate::args::Args;
-use crate::cache::DnsCache;
-use crate::config::Config;
-use crate::config::MatchType::{Exact, Regex, Wildcard};
-use crate::error::AppError;
-use crate::handler::RequestHandler;
-use crate::metrics::METRICS;
-use crate::r#const::{rule_source_labels, rule_type_labels, subsystem_names};
-use crate::router::Router;
-use crate::server::DnsServer;
-use crate::upstream::UpstreamManager;
+use loadants::admin::AdminServer;
+use loadants::args::Args;
+use loadants::cache::DnsCache;
+use loadants::config::Config;
+use loadants::config::MatchType::{Exact, Regex, Wildcard};
+use loadants::error::AppError;
+use loadants::handler::RequestHandler;
+use loadants::metrics::METRICS;
+use loadants::r#const::{rule_source_labels, rule_type_labels, subsystem_names};
+use loadants::router::Router;
+use loadants::server;
+use loadants::server::DnsServer;
+use loadants::upstream::UpstreamManager;
 use mimalloc::MiMalloc;
 use std::process;
 use std::sync::Arc;
@@ -182,7 +169,7 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
             "Loading {} remote rule sources...",
             config.remote_rules.len()
         );
-        match crate::remote_rule::load_and_merge_rules(
+        match loadants::remote_rule::load_and_merge_rules(
             &config.remote_rules,
             &config.static_rules,
             &config.http_client,
