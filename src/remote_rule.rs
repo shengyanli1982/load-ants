@@ -1,9 +1,8 @@
 use crate::config::{
     HttpClientConfig, MatchType, RemoteRuleConfig, RetryConfig, RouteRuleConfig, RuleFormat,
 };
-use crate::error::AppError;
 use crate::error::{AppError, HttpClientError, InvalidProxyConfig};
-use crate::r#const::{rule_action_labels, rule_source_labels};
+use crate::r#const::rule_action_labels;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use retry_policies::Jitter;
@@ -65,7 +64,7 @@ impl RuleParser for V2RayRuleParser {
 pub struct ClashRuleParser;
 
 impl RuleParser for ClashRuleParser {
-    fn parse(&self, content: &str) -> Result<Vec<(String, MatchType)>, AppError> {
+    fn parse(&self, _content: &str) -> Result<Vec<(String, MatchType)>, AppError> {
         Err(AppError::NotImplemented(
             "ClashRuleParser has not been implemented yet, it will be supported in future versions"
                 .to_string(),

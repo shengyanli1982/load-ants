@@ -21,6 +21,7 @@ struct CompiledRegexRule {
     // 编译后的正则表达式
     regex: Regex,
     // 路由动作
+    #[allow(dead_code)]
     action: RouteAction,
     // 目标上游组
     target: Option<String>,
@@ -55,7 +56,7 @@ pub struct Router {
     regex_forward_prefilter: HashMap<String, HashSet<usize>>,
 
     // 已排序的规则列表（按优先级）
-    sorted_rules: Vec<(String, RouteAction, Option<String>)>,
+    sorted_rules: Vec<(Option<String>, RouteAction, Option<String>)>,
 }
 
 // 路由匹配结果
@@ -717,7 +718,9 @@ impl Router {
     // 8. 全局通配符 forward 规则 (最低优先级)
     //
     // 返回的列表包含所有路由动作及其可能的目标上游组
-    pub fn sort_rules(&self) -> Result<Vec<(String, RouteAction, Option<String>)>, ConfigError> {
+    pub fn sort_rules(
+        &self,
+    ) -> Result<Vec<(Option<String>, RouteAction, Option<String>)>, ConfigError> {
         let mut rules = Vec::with_capacity(
             self.exact_block_rules.len()
                 + self.exact_forward_rules.len()
@@ -751,7 +754,7 @@ impl Router {
         wildcard_block_rules.sort_by(|a, b| b.0.cmp(&a.0));
         // 将排序后的 block 规则添加到输出列表
         for rule in wildcard_block_rules {
-            rules.push((rule.0, rule.1, rule.2));
+            rules.push((Some(rule.0), rule.1, rule.2));
         }
 
         // 4. 收集通配符 forward 规则并按特定性排序
@@ -767,13 +770,13 @@ impl Router {
         wildcard_forward_rules.sort_by(|a, b| b.0.cmp(&a.0));
         // 将排序后的 forward 规则添加到输出列表
         for rule in wildcard_forward_rules {
-            rules.push((rule.0, rule.1, rule.2));
+            rules.push((Some(rule.0), rule.1, rule.2));
         }
 
         // 5. 添加正则表达式 block 规则
         for rule in &self.regex_block_rules {
             rules.push((
-                rule.pattern.clone(),
+                Some(rule.pattern.clone()),
                 RouteAction::Block,
                 rule.target.clone(),
             ));
@@ -782,7 +785,7 @@ impl Router {
         // 6. 添加正则表达式 forward 规则
         for rule in &self.regex_forward_rules {
             rules.push((
-                rule.pattern.clone(),
+                Some(rule.pattern.clone()),
                 RouteAction::Forward,
                 rule.target.clone(),
             ));
@@ -790,12 +793,12 @@ impl Router {
 
         // 7. 添加全局通配符 block 规则（如果存在）
         if let Some((target, pattern)) = &self.global_wildcard_block_rule {
-            rules.push((pattern.clone(), RouteAction::Block, target.clone()));
+            rules.push((Some(pattern.clone()), RouteAction::Block, target.clone()));
         }
 
         // 8. 添加全局通配符 forward 规则（如果存在）
         if let Some((target, pattern)) = &self.global_wildcard_forward_rule {
-            rules.push((pattern.clone(), RouteAction::Forward, target.clone()));
+            rules.push((Some(pattern.clone()), RouteAction::Forward, target.clone()));
         }
 
         Ok(rules)
