@@ -3,7 +3,8 @@ use crate::config::RouteAction;
 use crate::error::AppError;
 use crate::metrics::METRICS;
 use crate::r#const::{
-    cache_labels, error_labels, processing_labels, protocol_labels, rule_type_labels,
+    cache_labels, error_labels, processing_labels, protocol_labels, rule_action_labels,
+    rule_source_labels, rule_type_labels,
 };
 use crate::router::Router;
 use crate::upstream::UpstreamManager;
@@ -149,6 +150,11 @@ impl RequestHandler {
                     .target
                     .as_deref()
                     .unwrap_or(rule_type_labels::NO_TARGET),
+                rule_source_labels::STATIC,
+                match route_match.action {
+                    RouteAction::Forward => rule_action_labels::FORWARD,
+                    RouteAction::Block => rule_action_labels::BLOCK,
+                },
             ])
             .inc();
 
