@@ -88,7 +88,7 @@ impl RemoteRuleLoader {
         // 根据配置的格式选择解析器
         let parser: Box<dyn RuleParser> = match config.format {
             RuleFormat::V2ray => Box::new(V2RayRuleParser),
-            RuleFormat::Clash => Box::new(ClashRuleParser),
+            // RuleFormat::Clash => Box::new(ClashRuleParser),
         };
 
         Ok(Self {

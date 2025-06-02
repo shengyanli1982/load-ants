@@ -60,7 +60,7 @@ pub enum RuleFormat {
     // V2Ray 规则格式
     V2ray,
     // Clash 规则格式
-    Clash,
+    // Clash,
 }
 
 // 默认规则格式为 V2Ray
