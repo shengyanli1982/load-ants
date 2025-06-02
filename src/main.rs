@@ -1,28 +1,16 @@
-mod admin;
-mod args;
-mod balancer;
-mod cache;
-mod config;
-mod r#const;
-mod error;
-mod handler;
-mod metrics;
-mod router;
-mod server;
-mod upstream;
-
-use crate::admin::AdminServer;
-use crate::args::Args;
-use crate::cache::DnsCache;
-use crate::config::Config;
-use crate::config::MatchType::{Exact, Regex, Wildcard};
-use crate::error::AppError;
-use crate::handler::RequestHandler;
-use crate::metrics::METRICS;
-use crate::r#const::{rule_type_labels, subsystem_names};
-use crate::router::Router;
-use crate::server::DnsServer;
-use crate::upstream::UpstreamManager;
+use loadants::admin::AdminServer;
+use loadants::args::Args;
+use loadants::cache::DnsCache;
+use loadants::config::Config;
+use loadants::config::MatchType::{Exact, Regex, Wildcard};
+use loadants::error::AppError;
+use loadants::handler::RequestHandler;
+use loadants::metrics::METRICS;
+use loadants::r#const::{rule_source_labels, rule_type_labels, subsystem_names};
+use loadants::router::Router;
+use loadants::server;
+use loadants::server::DnsServer;
+use loadants::upstream::UpstreamManager;
 use mimalloc::MiMalloc;
 use std::process;
 use std::sync::Arc;
@@ -159,54 +147,124 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
     let admin_server = AdminServer::new(admin_listen_addr).with_cache(Arc::clone(&cache));
 
     // 创建上游管理器 - 避免不必要的克隆
-    let upstream =
-        match UpstreamManager::new(config.upstream_groups.clone(), config.http_client).await {
-            Ok(manager) => {
-                info!("Upstream manager initialized successfully");
-                Arc::new(manager)
-            }
+    let upstream = match UpstreamManager::new(
+        config.upstream_groups.clone(),
+        config.http_client.clone(),
+    )
+    .await
+    {
+        Ok(manager) => {
+            info!("Upstream manager initialized successfully");
+            Arc::new(manager)
+        }
+        Err(e) => {
+            error!("Failed to initialize upstream manager: {}", e);
+            return Err(e);
+        }
+    };
+
+    // 加载远程规则并与静态规则合并
+    let rules = if !config.remote_rules.is_empty() {
+        info!(
+            "Loading {} remote rule sources...",
+            config.remote_rules.len()
+        );
+        match loadants::remote_rule::load_and_merge_rules(
+            &config.remote_rules,
+            &config.static_rules,
+            &config.http_client,
+        )
+        .await
+        {
+            Ok(merged_rules) => merged_rules,
             Err(e) => {
-                error!("Failed to initialize upstream manager: {}", e);
-                return Err(e);
+                error!(
+                    "Failed to load remote rules: {}, falling back to static rules only",
+                    e
+                );
+                config.static_rules.clone()
             }
-        };
+        }
+    } else {
+        // 没有远程规则，直接使用静态规则
+        config.static_rules.clone()
+    };
 
-    // 创建路由引擎 - 避免不必要的克隆
-    let router = match Router::new(config.static_rules.clone()) {
+    // 创建路由引擎 - 使用合并后的规则
+    let router = match Router::new(rules.clone()) {
         Ok(router) => {
-            info!("Routing engine initialized successfully");
-
             // 设置路由规则数量指标 - 考虑每个规则中的多个模式
-            let mut exact_count = 0;
-            let mut wildcard_count = 0;
-            let mut regex_count = 0;
+            let mut exact_count_static = 0;
+            let mut wildcard_count_static = 0;
+            let mut regex_count_static = 0;
+            let mut exact_count_remote = 0;
+            let mut wildcard_count_remote = 0;
+            let mut regex_count_remote = 0;
 
+            // 静态规则数量
             for rule in &config.static_rules {
                 match rule.match_type {
-                    Exact => exact_count += rule.patterns.len(),
-                    Wildcard => wildcard_count += rule.patterns.len(),
-                    Regex => regex_count += rule.patterns.len(),
+                    Exact => exact_count_static += rule.patterns.len(),
+                    Wildcard => wildcard_count_static += rule.patterns.len(),
+                    Regex => regex_count_static += rule.patterns.len(),
                 }
             }
 
+            // 远程规则数量 (总规则数 - 静态规则数)
+            let remote_rules_count = rules.len() - config.static_rules.len();
+            if remote_rules_count > 0 {
+                // 计算远程规则中各类型的数量
+                for rule in rules.iter().skip(config.static_rules.len()) {
+                    match rule.match_type {
+                        Exact => exact_count_remote += rule.patterns.len(),
+                        Wildcard => wildcard_count_remote += rule.patterns.len(),
+                        Regex => regex_count_remote += rule.patterns.len(),
+                    }
+                }
+            }
+
+            // 设置静态规则指标
             METRICS
                 .route_rules_count()
-                .with_label_values(&[rule_type_labels::EXACT])
-                .set(exact_count as i64);
+                .with_label_values(&[rule_type_labels::EXACT, rule_source_labels::STATIC])
+                .set(exact_count_static as i64);
 
             METRICS
                 .route_rules_count()
-                .with_label_values(&[rule_type_labels::WILDCARD])
-                .set(wildcard_count as i64);
+                .with_label_values(&[rule_type_labels::WILDCARD, rule_source_labels::STATIC])
+                .set(wildcard_count_static as i64);
 
             METRICS
                 .route_rules_count()
-                .with_label_values(&[rule_type_labels::REGEX])
-                .set(regex_count as i64);
+                .with_label_values(&[rule_type_labels::REGEX, rule_source_labels::STATIC])
+                .set(regex_count_static as i64);
+
+            // 设置远程规则指标
+            if remote_rules_count > 0 {
+                METRICS
+                    .route_rules_count()
+                    .with_label_values(&[rule_type_labels::EXACT, rule_source_labels::REMOTE])
+                    .set(exact_count_remote as i64);
+
+                METRICS
+                    .route_rules_count()
+                    .with_label_values(&[rule_type_labels::WILDCARD, rule_source_labels::REMOTE])
+                    .set(wildcard_count_remote as i64);
+
+                METRICS
+                    .route_rules_count()
+                    .with_label_values(&[rule_type_labels::REGEX, rule_source_labels::REMOTE])
+                    .set(regex_count_remote as i64);
+            }
 
             info!(
-                "Routing engine initialized successfully with {} exact, {} wildcard, {} regex rules",
-                exact_count, wildcard_count, regex_count
+                "Routing engine initialized successfully with {} rules ({} static, {} remote): {} exact, {} wildcard, {} regex",
+                rules.len(),
+                config.static_rules.len(),
+                remote_rules_count,
+                exact_count_static + exact_count_remote,
+                wildcard_count_static + wildcard_count_remote,
+                regex_count_static + regex_count_remote
             );
 
             Arc::new(router)

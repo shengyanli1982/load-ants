@@ -1,7 +1,7 @@
-use clap::{Parser, ArgAction};
-use std::path::PathBuf;
-use crate::r#const::shutdown_timeout;
 use crate::error::AppError;
+use crate::r#const::shutdown_timeout;
+use clap::{ArgAction, Parser};
+use std::path::PathBuf;
 
 // DNS UDP/TCP to DoH 代理服务
 #[derive(Parser, Debug, Clone)]
@@ -35,7 +35,7 @@ pub struct Args {
         help = "Test configuration file for validity and exit"
     )]
     pub test_config: bool,
-    
+
     // 启用调试日志
     #[arg(
         short = 'd',

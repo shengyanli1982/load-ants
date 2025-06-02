@@ -153,14 +153,18 @@ impl DnsMetrics {
 
         // 5. 路由策略指标
         let route_matches_total = IntCounterVec::new(
-            opts!("loadants_route_matches_total", "Total routing rule matches, classified by rule type (exact, wildcard, regex) and target group"),
-            &["rule_type", "target_group"]
+            opts!("loadants_route_matches_total", "Total routing rule matches, classified by rule type, target group, rule source and action"),
+            &["rule_type", "target_group", "rule_source", "action"]
         ).unwrap();
 
         let route_rules_count = IntGaugeVec::new(
-            opts!("loadants_route_rules_count", "Current number of active routing rules, classified by rule type (exact, wildcard, regex)"),
-            &["rule_type"]
-        ).unwrap();
+            opts!(
+                "loadants_route_rules_count",
+                "Current number of active routing rules, classified by rule type and rule source"
+            ),
+            &["rule_type", "rule_source"],
+        )
+        .unwrap();
 
         // 创建指标实例
         let metrics = DnsMetrics {
