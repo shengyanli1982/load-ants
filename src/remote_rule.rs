@@ -30,15 +30,15 @@ impl RuleParser for V2RayRuleParser {
             }
 
             // 处理不同类型的规则
-            if line.starts_with("full:") {
+            if let Some(stripped) = line.strip_prefix("full:") {
                 // 精确匹配规则: full:example.com
-                let domain = line[5..].trim().to_string();
+                let domain = stripped.trim().to_string();
                 if !domain.is_empty() {
                     rules.push((domain, MatchType::Exact));
                 }
-            } else if line.starts_with("regexp:") {
+            } else if let Some(stripped) = line.strip_prefix("regexp:") {
                 // 正则表达式匹配规则: regexp:.*\.example\.com$
-                let pattern = line[7..].trim().to_string();
+                let pattern = stripped.trim().to_string();
                 if !pattern.is_empty() {
                     rules.push((pattern, MatchType::Regex));
                 }

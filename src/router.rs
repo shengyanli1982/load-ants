@@ -27,6 +27,10 @@ struct CompiledRegexRule {
     target: Option<String>,
 }
 
+// 添加类型别名用于简化复杂类型
+/// 路由规则元组类型，包含(模式, 动作, 目标)
+pub type RouteRuleTuple = (Option<String>, RouteAction, Option<String>);
+
 // DNS请求路由引擎
 // 实现特点：
 // 1. 分离存储：block规则和forward规则分开存储，确保block规则始终具有更高优先级
@@ -718,9 +722,7 @@ impl Router {
     // 8. 全局通配符 forward 规则 (最低优先级)
     //
     // 返回的列表包含所有路由动作及其可能的目标上游组
-    pub fn sort_rules(
-        &self,
-    ) -> Result<Vec<(Option<String>, RouteAction, Option<String>)>, ConfigError> {
+    pub fn sort_rules(&self) -> Result<Vec<RouteRuleTuple>, ConfigError> {
         let mut rules = Vec::with_capacity(
             self.exact_block_rules.len()
                 + self.exact_forward_rules.len()
