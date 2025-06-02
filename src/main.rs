@@ -193,8 +193,6 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
     // 创建路由引擎 - 使用合并后的规则
     let router = match Router::new(rules.clone()) {
         Ok(router) => {
-            info!("Routing engine initialized successfully");
-
             // 设置路由规则数量指标 - 考虑每个规则中的多个模式
             let mut exact_count_static = 0;
             let mut wildcard_count_static = 0;

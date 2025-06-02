@@ -5,7 +5,7 @@ use crate::config::{
 };
 use crate::error::{AppError, HttpClientError, InvalidProxyConfig};
 use crate::metrics::METRICS;
-use crate::r#const::{error_labels, http_headers, upstream_labels};
+use crate::r#const::{error_labels, http_headers, retry_limits, upstream_labels};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use hickory_proto::rr::rdata as HickoryRData;
 use hickory_proto::{
@@ -129,6 +129,11 @@ impl UpstreamManager {
         let middleware_client = if let Some(retry) = retry_config {
             // 使用指数退避策略，基于组的重试配置
             let retry_policy = ExponentialBackoff::builder()
+                // 设置重试时间间隔的上下限
+                .retry_bounds(
+                    Duration::from_secs(retry_limits::MIN_DELAY as u64),
+                    Duration::from_secs(retry_limits::MAX_DELAY as u64),
+                )
                 // 设置指数退避的基数
                 .base(retry.delay)
                 // 使用有界抖动来避免多个客户端同时重试

@@ -2,7 +2,7 @@ use crate::config::{
     HttpClientConfig, MatchType, RemoteRuleConfig, RetryConfig, RouteRuleConfig, RuleFormat,
 };
 use crate::error::{AppError, HttpClientError, InvalidProxyConfig};
-use crate::r#const::rule_action_labels;
+use crate::r#const::{retry_limits, rule_action_labels};
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use retry_policies::Jitter;
@@ -152,6 +152,11 @@ impl RemoteRuleLoader {
         let middleware_client = if let Some(retry) = retry_config {
             // 使用指数退避策略，基于组的重试配置
             let retry_policy = ExponentialBackoff::builder()
+                // 设置重试时间间隔的上下限
+                .retry_bounds(
+                    Duration::from_secs(retry_limits::MIN_DELAY as u64),
+                    Duration::from_secs(retry_limits::MAX_DELAY as u64),
+                )
                 // 设置指数退避的基数
                 .base(retry.delay)
                 // 使用有界抖动来避免多个客户端同时重试
@@ -172,7 +177,7 @@ impl RemoteRuleLoader {
 
     /// 加载远程规则
     pub async fn load(&self) -> Result<Vec<RouteRuleConfig>, AppError> {
-        debug!("Loading remote rules from URL: {}", self.config.url);
+        debug!("Loading domains from URL: {}", self.config.url);
 
         // 构建请求
         let mut request = self.client.get(&self.config.url);
@@ -259,7 +264,7 @@ impl RemoteRuleLoader {
         if !exact_patterns.is_empty() {
             route_rules.push(RouteRuleConfig {
                 match_type: MatchType::Exact,
-                patterns: exact_patterns.clone(),
+                patterns: exact_patterns.clone(), // 合并精确匹配规则，存放于patterns中
                 action: self.config.action.clone(),
                 target: self.config.target.clone(),
             });
@@ -269,7 +274,7 @@ impl RemoteRuleLoader {
         if !wildcard_patterns.is_empty() {
             route_rules.push(RouteRuleConfig {
                 match_type: MatchType::Wildcard,
-                patterns: wildcard_patterns.clone(),
+                patterns: wildcard_patterns.clone(), // 合并通配符匹配规则，存放于patterns中
                 action: self.config.action.clone(),
                 target: self.config.target.clone(),
             });
@@ -279,14 +284,14 @@ impl RemoteRuleLoader {
         if !regex_patterns.is_empty() {
             route_rules.push(RouteRuleConfig {
                 match_type: MatchType::Regex,
-                patterns: regex_patterns.clone(),
+                patterns: regex_patterns.clone(), // 合并正则表达式匹配规则，存放于patterns中
                 action: self.config.action.clone(),
                 target: self.config.target.clone(),
             });
         }
 
         info!(
-            "Loaded {} remote rules from {} ({}): {} exact, {} wildcard, {} regex",
+            "Loaded {} domains from {} ({}): {} exact, {} wildcard, {} regex",
             parsed_rules.len(),
             self.config.url,
             action_label,
@@ -305,8 +310,8 @@ pub async fn load_and_merge_rules(
     static_rules: &[RouteRuleConfig],
     http_config: &HttpClientConfig,
 ) -> Result<Vec<RouteRuleConfig>, AppError> {
-    // 创建一个空的规则列表，先加载远程规则
-    let mut merged_rules = Vec::new();
+    // 创建一个规则列表
+    let mut merged_rules = static_rules.to_vec();
 
     // 加载每个远程规则
     for config in remote_configs {
@@ -315,11 +320,11 @@ pub async fn load_and_merge_rules(
                 match loader.load().await {
                     Ok(remote_rules) => {
                         // 将远程规则添加到合并规则列表
-                        merged_rules.extend(remote_rules);
+                        merged_rules.extend(remote_rules.to_vec());
                     }
                     Err(e) => {
                         // 记录错误但继续处理其他规则
-                        error!("Failed to load remote rules from {}: {}", config.url, e);
+                        error!("Failed to load domains from {}: {}", config.url, e);
                     }
                 }
             }
@@ -332,16 +337,6 @@ pub async fn load_and_merge_rules(
             }
         }
     }
-
-    // 然后将静态规则添加到远程规则后面，使静态规则能够覆盖远程规则
-    merged_rules.extend(static_rules.to_vec());
-
-    info!(
-        "Merged rules: {} total ({} static, {} from remote sources)",
-        merged_rules.len(),
-        static_rules.len(),
-        merged_rules.len() - static_rules.len()
-    );
 
     Ok(merged_rules)
 }
