@@ -264,7 +264,7 @@ impl RemoteRuleLoader {
         if !exact_patterns.is_empty() {
             route_rules.push(RouteRuleConfig {
                 match_type: MatchType::Exact,
-                patterns: exact_patterns.clone(), // 合并精确匹配规则，存放于patterns中
+                patterns: exact_patterns,
                 action: self.config.action.clone(),
                 target: self.config.target.clone(),
             });
@@ -274,7 +274,7 @@ impl RemoteRuleLoader {
         if !wildcard_patterns.is_empty() {
             route_rules.push(RouteRuleConfig {
                 match_type: MatchType::Wildcard,
-                patterns: wildcard_patterns.clone(), // 合并通配符匹配规则，存放于patterns中
+                patterns: wildcard_patterns,
                 action: self.config.action.clone(),
                 target: self.config.target.clone(),
             });
@@ -284,7 +284,7 @@ impl RemoteRuleLoader {
         if !regex_patterns.is_empty() {
             route_rules.push(RouteRuleConfig {
                 match_type: MatchType::Regex,
-                patterns: regex_patterns.clone(), // 合并正则表达式匹配规则，存放于patterns中
+                patterns: regex_patterns,
                 action: self.config.action.clone(),
                 target: self.config.target.clone(),
             });
@@ -310,8 +310,11 @@ pub async fn load_and_merge_rules(
     static_rules: &[RouteRuleConfig],
     http_config: &HttpClientConfig,
 ) -> Result<Vec<RouteRuleConfig>, AppError> {
-    // 创建一个规则列表
-    let mut merged_rules = static_rules.to_vec();
+    // 创建一个规则列表，预先分配足够的空间
+    let mut merged_rules = Vec::with_capacity(static_rules.len() + remote_configs.len() * 3);
+
+    // 首先添加静态规则（通过克隆）
+    merged_rules.extend_from_slice(static_rules);
 
     // 加载每个远程规则
     for config in remote_configs {
@@ -319,8 +322,8 @@ pub async fn load_and_merge_rules(
             Ok(loader) => {
                 match loader.load().await {
                     Ok(remote_rules) => {
-                        // 将远程规则添加到合并规则列表
-                        merged_rules.extend(remote_rules.to_vec());
+                        // 将远程规则添加到合并规则列表，避免不必要的克隆
+                        merged_rules.extend(remote_rules);
                     }
                     Err(e) => {
                         // 记录错误但继续处理其他规则

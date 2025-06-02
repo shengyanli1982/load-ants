@@ -210,11 +210,11 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
                 }
             }
 
-            // 远程规则数量 (总规则数 - 静态规则数)
-            let remote_rules_count = rules.len() - config.static_rules.len();
-            if remote_rules_count > 0 {
+            // 远程规则数量
+            let static_rules_len = config.static_rules.len();
+            if static_rules_len < rules.len() {
                 // 计算远程规则中各类型的数量
-                for rule in rules.iter().skip(config.static_rules.len()) {
+                for rule in rules.iter().skip(static_rules_len) {
                     match rule.match_type {
                         Exact => exact_count_remote += rule.patterns.len(),
                         Wildcard => wildcard_count_remote += rule.patterns.len(),
@@ -240,6 +240,7 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
                 .set(regex_count_static as i64);
 
             // 设置远程规则指标
+            let remote_rules_count = rules.len() - static_rules_len;
             if remote_rules_count > 0 {
                 METRICS
                     .route_rules_count()
@@ -260,7 +261,7 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
             info!(
                 "Routing engine initialized successfully with {} rules ({} static, {} remote): {} exact, {} wildcard, {} regex",
                 rules.len(),
-                config.static_rules.len(),
+                static_rules_len,
                 remote_rules_count,
                 exact_count_static + exact_count_remote,
                 wildcard_count_static + wildcard_count_remote,
