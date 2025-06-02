@@ -82,7 +82,7 @@ impl UpstreamManager {
         retry_config: Option<&RetryConfig>,
     ) -> Result<ClientWithMiddleware, AppError> {
         debug!(
-            "Creating HTTP client, config: {:?}, proxy: {:?}, retry_config: {:?}",
+            "Creating HTTP client for upstream, config: {:?}, proxy: {:?}, retry_config: {:?}",
             config, proxy, retry_config
         );
 

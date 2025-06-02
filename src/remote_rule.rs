@@ -1,6 +1,5 @@
 use crate::config::{
-    HttpClientConfig, MatchType, RemoteRuleConfig, RetryConfig,
-    RouteRuleConfig, RuleFormat,
+    HttpClientConfig, MatchType, RemoteRuleConfig, RetryConfig, RouteRuleConfig, RuleFormat,
 };
 use crate::error::AppError;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
@@ -170,11 +169,21 @@ impl RemoteRuleLoader {
 
         // 配置代理
         if let Some(proxy_url) = proxy {
-            client_builder = client_builder.proxy(reqwest::Proxy::all(proxy_url)?);
+            client_builder = client_builder.proxy(reqwest::Proxy::all(proxy_url).map_err(|e| {
+                AppError::InvalidProxy(InvalidProxyConfig(format!(
+                    "Proxy configuration error: {}",
+                    e
+                )))
+            })?);
         }
 
         // 创建基础HTTP客户端
-        let client = client_builder.build()?;
+        let client = client_builder.build().map_err(|e| {
+            AppError::HttpError(HttpClientError(format!(
+                "Failed to create HTTP client: {}",
+                e
+            )))
+        })?;
 
         // 配置重试策略（根据组的重试配置）
         let middleware_client = if let Some(retry) = retry_config {
