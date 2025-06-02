@@ -2,6 +2,7 @@ use crate::config::{
     HttpClientConfig, MatchType, RemoteRuleConfig, RetryConfig, RouteRuleConfig, RuleFormat,
 };
 use crate::error::AppError;
+use crate::error::{AppError, HttpClientError, InvalidProxyConfig};
 use crate::r#const::{rule_action_labels, rule_source_labels};
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
@@ -65,48 +66,10 @@ pub struct ClashRuleParser;
 
 impl RuleParser for ClashRuleParser {
     fn parse(&self, content: &str) -> Result<Vec<(String, MatchType)>, AppError> {
-        // 目前简单实现，后续可扩展
-        let mut rules = Vec::new();
-
-        for line in content.lines() {
-            // 跳过空行和注释
-            let line = line.trim();
-            if line.is_empty() || line.starts_with('#') {
-                continue;
-            }
-
-            // 简单处理为通配符规则
-            let domain = line.trim().to_string();
-            if !domain.is_empty() {
-                if domain.starts_with("DOMAIN:") {
-                    // 精确匹配: DOMAIN:example.com
-                    let domain = domain[7..].trim().to_string();
-                    if !domain.is_empty() {
-                        rules.push((domain, MatchType::Exact));
-                    }
-                } else if domain.starts_with("DOMAIN-SUFFIX:") {
-                    // 通配符匹配: DOMAIN-SUFFIX:example.com -> *.example.com
-                    let domain = domain[14..].trim().to_string();
-                    if !domain.is_empty() {
-                        rules.push((format!("*.{}", domain), MatchType::Wildcard));
-                    }
-                } else if domain.starts_with("DOMAIN-KEYWORD:") {
-                    // 关键词匹配，转换为正则表达式: DOMAIN-KEYWORD:example -> .*example.*
-                    let keyword = domain[15..].trim().to_string();
-                    if !keyword.is_empty() {
-                        rules.push((format!(".*{}.*", keyword), MatchType::Regex));
-                    }
-                } else if domain.starts_with("DOMAIN-REGEX:") {
-                    // 正则表达式匹配: DOMAIN-REGEX:.*\.example\.com$
-                    let pattern = domain[13..].trim().to_string();
-                    if !pattern.is_empty() {
-                        rules.push((pattern, MatchType::Regex));
-                    }
-                }
-            }
-        }
-
-        Ok(rules)
+        Err(AppError::NotImplemented(
+            "ClashRuleParser has not been implemented yet, it will be supported in future versions"
+                .to_string(),
+        ))
     }
 }
 
@@ -343,8 +306,8 @@ pub async fn load_and_merge_rules(
     static_rules: &[RouteRuleConfig],
     http_config: &HttpClientConfig,
 ) -> Result<Vec<RouteRuleConfig>, AppError> {
-    // 克隆静态规则作为基础
-    let mut merged_rules = static_rules.to_vec();
+    // 创建一个空的规则列表，先加载远程规则
+    let mut merged_rules = Vec::new();
 
     // 加载每个远程规则
     for config in remote_configs {
@@ -371,6 +334,9 @@ pub async fn load_and_merge_rules(
         }
     }
 
+    // 然后将静态规则添加到远程规则后面，使静态规则能够覆盖远程规则
+    merged_rules.extend(static_rules.to_vec());
+
     info!(
         "Merged rules: {} total ({} static, {} from remote sources)",
         merged_rules.len(),
@@ -380,13 +346,3 @@ pub async fn load_and_merge_rules(
 
     Ok(merged_rules)
 }
-
-// 无效的代理配置错误
-#[derive(Debug, thiserror::Error)]
-#[error("Proxy configuration error: {0}")]
-pub struct InvalidProxyConfig(pub String);
-
-// HTTP客户端错误
-#[derive(Debug, thiserror::Error)]
-#[error("HTTP client error: {0}")]
-pub struct HttpClientError(pub String);

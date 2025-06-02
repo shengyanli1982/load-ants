@@ -3,10 +3,9 @@ use crate::config::{
     AuthConfig, AuthType, DoHContentType, DoHMethod, HttpClientConfig, LoadBalancingStrategy,
     RetryConfig, UpstreamGroupConfig, UpstreamServerConfig,
 };
-use crate::error::AppError;
+use crate::error::{AppError, HttpClientError, InvalidProxyConfig};
 use crate::metrics::METRICS;
 use crate::r#const::{error_labels, http_headers, upstream_labels};
-use crate::remote_rule::{HttpClientError, InvalidProxyConfig};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use hickory_proto::rr::rdata as HickoryRData;
 use hickory_proto::{

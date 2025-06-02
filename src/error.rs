@@ -1,8 +1,17 @@
-use crate::upstream::{HttpClientError, InvalidProxyConfig};
 use hickory_proto::error::ProtoError;
 use std::io;
 use std::net::AddrParseError;
 use thiserror::Error;
+
+// 无效的代理配置错误
+#[derive(Debug, Error)]
+#[error("Proxy configuration error: {0}")]
+pub struct InvalidProxyConfig(pub String);
+
+// HTTP客户端错误
+#[derive(Debug, Error)]
+#[error("HTTP client error: {0}")]
+pub struct HttpClientError(pub String);
 
 // Unified error type
 #[derive(Error, Debug)]
@@ -67,6 +76,9 @@ pub enum AppError {
 
     #[error("Invalid shutdown timeout: must be between minimum and maximum values")]
     InvalidShutdownTimeout,
+
+    #[error("Feature not implemented: {0}")]
+    NotImplemented(String),
 }
 
 impl From<reqwest_middleware::Error> for AppError {
