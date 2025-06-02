@@ -177,7 +177,7 @@ impl RemoteRuleLoader {
 
     /// 加载远程规则
     pub async fn load(&self) -> Result<Vec<RouteRuleConfig>, AppError> {
-        debug!("Loading domains from URL: {}", self.config.url);
+        debug!("Loading domains from URL: {:?}", self.config.url);
 
         // 构建请求
         let mut request = self.client.get(&self.config.url);
@@ -291,7 +291,7 @@ impl RemoteRuleLoader {
         }
 
         info!(
-            "Loaded {} domains from {} ({}): {} exact, {} wildcard, {} regex",
+            "Loaded {} domains from {:?} ({}): {} exact, {} wildcard, {} regex",
             parsed_rules.len(),
             self.config.url,
             action_label,
@@ -324,7 +324,7 @@ pub async fn load_and_merge_rules(
                     }
                     Err(e) => {
                         // 记录错误但继续处理其他规则
-                        error!("Failed to load domains from {}: {}", config.url, e);
+                        error!("Failed to load domains from {:?}: {}", config.url, e);
                     }
                 }
             }
