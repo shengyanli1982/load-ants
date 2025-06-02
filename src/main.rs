@@ -7,6 +7,7 @@ mod r#const;
 mod error;
 mod handler;
 mod metrics;
+mod remote_rule;
 mod router;
 mod server;
 mod upstream;
@@ -159,20 +160,51 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
     let admin_server = AdminServer::new(admin_listen_addr).with_cache(Arc::clone(&cache));
 
     // 创建上游管理器 - 避免不必要的克隆
-    let upstream =
-        match UpstreamManager::new(config.upstream_groups.clone(), config.http_client).await {
-            Ok(manager) => {
-                info!("Upstream manager initialized successfully");
-                Arc::new(manager)
-            }
-            Err(e) => {
-                error!("Failed to initialize upstream manager: {}", e);
-                return Err(e);
-            }
-        };
+    let upstream = match UpstreamManager::new(
+        config.upstream_groups.clone(),
+        config.http_client.clone(),
+    )
+    .await
+    {
+        Ok(manager) => {
+            info!("Upstream manager initialized successfully");
+            Arc::new(manager)
+        }
+        Err(e) => {
+            error!("Failed to initialize upstream manager: {}", e);
+            return Err(e);
+        }
+    };
 
-    // 创建路由引擎 - 避免不必要的克隆
-    let router = match Router::new(config.static_rules.clone()) {
+    // 加载远程规则并与静态规则合并
+    let rules = if !config.remote_rules.is_empty() {
+        info!(
+            "Loading {} remote rule sources...",
+            config.remote_rules.len()
+        );
+        match crate::remote_rule::load_and_merge_rules(
+            &config.remote_rules,
+            &config.static_rules,
+            &config.http_client,
+        )
+        .await
+        {
+            Ok(merged_rules) => merged_rules,
+            Err(e) => {
+                error!(
+                    "Failed to load remote rules: {}, falling back to static rules only",
+                    e
+                );
+                config.static_rules.clone()
+            }
+        }
+    } else {
+        // 没有远程规则，直接使用静态规则
+        config.static_rules.clone()
+    };
+
+    // 创建路由引擎 - 使用合并后的规则
+    let router = match Router::new(rules.clone()) {
         Ok(router) => {
             info!("Routing engine initialized successfully");
 
@@ -181,7 +213,7 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
             let mut wildcard_count = 0;
             let mut regex_count = 0;
 
-            for rule in &config.static_rules {
+            for rule in &rules {
                 match rule.match_type {
                     Exact => exact_count += rule.patterns.len(),
                     Wildcard => wildcard_count += rule.patterns.len(),
@@ -205,8 +237,9 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
                 .set(regex_count as i64);
 
             info!(
-                "Routing engine initialized successfully with {} exact, {} wildcard, {} regex rules",
-                exact_count, wildcard_count, regex_count
+                "Routing engine initialized successfully with {} exact, {} wildcard, {} regex rules (including {} remote rules)",
+                exact_count, wildcard_count, regex_count,
+                rules.len() - config.static_rules.len()
             );
 
             Arc::new(router)

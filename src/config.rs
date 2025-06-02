@@ -5,7 +5,7 @@ use crate::r#const::{
 };
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashSet, fs, net::SocketAddr, path::Path, str::FromStr, time::Duration};
+use std::{collections::HashSet, fs, net::SocketAddr, path::Path, str::FromStr};
 use tracing::debug;
 use url::Url;
 
@@ -51,6 +51,51 @@ pub struct RetryConfig {
     pub attempts: u32,
     // 重试初始延迟（秒）
     pub delay: u32,
+}
+
+// 规则格式枚举
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum RuleFormat {
+    // V2Ray 规则格式
+    V2ray,
+    // Clash 规则格式
+    Clash,
+}
+
+// 默认规则格式为 V2Ray
+fn default_rule_format() -> RuleFormat {
+    RuleFormat::V2ray
+}
+
+// 远程规则类型枚举
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum RemoteRuleType {
+    // URL类型规则
+    Url,
+}
+
+// 远程规则配置
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+pub struct RemoteRuleConfig {
+    // 规则类型
+    pub r#type: RemoteRuleType,
+    // 规则URL
+    pub url: String,
+    // 认证配置（可选）
+    pub auth: Option<AuthConfig>,
+    // 规则格式（默认为v2ray）
+    #[serde(default = "default_rule_format")]
+    pub format: RuleFormat,
+    // 路由动作
+    pub action: RouteAction,
+    // 目标上游组（当action为Forward时必须提供）
+    pub target: Option<String>,
+    // 重试配置（可选）
+    pub retry: Option<RetryConfig>,
+    // 代理（可选）
+    pub proxy: Option<String>,
 }
 
 // DoH请求方法枚举
@@ -262,6 +307,9 @@ pub struct Config {
     pub upstream_groups: Vec<UpstreamGroupConfig>,
     // 路由规则配置
     pub static_rules: Vec<RouteRuleConfig>,
+    // 远程规则配置（可选）
+    #[serde(default)]
+    pub remote_rules: Vec<RemoteRuleConfig>,
 }
 
 impl Config {
@@ -299,6 +347,9 @@ impl Config {
 
         // 验证路由规则配置
         self.validate_static_rules()?;
+
+        // 验证远程规则配置
+        self.validate_remote_rules()?;
 
         Ok(())
     }
@@ -782,12 +833,148 @@ impl Config {
         Ok(())
     }
 
-    // 解析 keepalive 配置
-    #[allow(dead_code)]
-    pub fn parse_keepalive(&self) -> Option<Duration> {
-        self.http_client
-            .keepalive
-            .map(|seconds| Duration::from_secs(seconds as u64))
+    // 验证远程规则配置
+    fn validate_remote_rules(&self) -> Result<(), ConfigError> {
+        // 获取所有上游组名称
+        let group_names: HashSet<_> = self.upstream_groups.iter().map(|g| &g.name).collect();
+
+        for (i, rule) in self.remote_rules.iter().enumerate() {
+            // 验证URL格式
+            Self::validate_url(&rule.url, &format!("Remote rule #{}", i + 1))?;
+
+            // 验证动作和目标
+            match rule.action {
+                RouteAction::Forward => {
+                    // 转发动作必须提供目标上游组
+                    match &rule.target {
+                        Some(target) => {
+                            // 验证目标上游组是否存在
+                            if !group_names.contains(target) {
+                                return Err(ConfigError::NonExistentGroupReference(format!(
+                                    "Remote rule #{} references non-existent upstream group '{}'",
+                                    i + 1,
+                                    target
+                                )));
+                            }
+                        }
+                        None => {
+                            return Err(ConfigError::InvalidRouteRule(format!(
+                                "Remote rule #{} with Forward action must provide a target field",
+                                i + 1
+                            )));
+                        }
+                    }
+                }
+                RouteAction::Block => {
+                    // Block动作不需要目标上游组，但如果提供了，应检查其值是否有效
+                    if let Some(target) = &rule.target {
+                        if !target.trim().is_empty() && !group_names.contains(target) {
+                            return Err(ConfigError::InvalidRouteRule(
+                                format!("Remote rule #{} with Block action references non-existent upstream group '{}'. Block action does not need a target.", 
+                                        i + 1, target)
+                            ));
+                        }
+                    }
+                }
+            }
+
+            // 验证代理URL格式（如果提供）
+            if let Some(proxy) = &rule.proxy {
+                if !proxy.starts_with("http://")
+                    && !proxy.starts_with("https://")
+                    && !proxy.starts_with("socks5://")
+                {
+                    return Err(ConfigError::InvalidRouteRule(format!(
+                        "Invalid proxy URL format for remote rule #{}, should start with http://, https:// or socks5://",
+                        i + 1
+                    )));
+                }
+            }
+
+            // 验证认证配置（如果提供）
+            if let Some(auth) = &rule.auth {
+                match auth.r#type {
+                    AuthType::Basic => {
+                        // Basic认证必须提供用户名和密码
+                        if auth.username.is_none() || auth.password.is_none() {
+                            return Err(ConfigError::InvalidAuthConfig(
+                                "Basic authentication requires username and password".into(),
+                            ));
+                        }
+
+                        // 验证用户名非空
+                        if let Some(username) = &auth.username {
+                            if username.trim().is_empty() {
+                                return Err(ConfigError::InvalidAuthConfig(
+                                    "Username for Basic authentication cannot be empty".into(),
+                                ));
+                            }
+                        }
+
+                        // 验证密码非空
+                        if let Some(password) = &auth.password {
+                            if password.trim().is_empty() {
+                                return Err(ConfigError::InvalidAuthConfig(
+                                    "Password for Basic authentication cannot be empty".into(),
+                                ));
+                            }
+                        }
+                    }
+                    AuthType::Bearer => {
+                        // Bearer认证必须提供令牌
+                        if auth.token.is_none() {
+                            return Err(ConfigError::InvalidAuthConfig(
+                                "Bearer authentication requires token".into(),
+                            ));
+                        }
+
+                        // 验证令牌非空
+                        if let Some(token) = &auth.token {
+                            if token.trim().is_empty() {
+                                return Err(ConfigError::InvalidAuthConfig(
+                                    "Token for Bearer authentication cannot be empty".into(),
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 验证重试配置（如果提供）
+            if let Some(retry) = &rule.retry {
+                // 验证重试次数
+                if retry.attempts == 0 {
+                    return Err(ConfigError::ValidationError(format!(
+                        "Retry attempts for remote rule #{} must be greater than 0",
+                        i + 1
+                    )));
+                }
+
+                // 验证重试次数是否在合理范围内
+                if retry.attempts < retry_limits::MIN_ATTEMPTS
+                    || retry.attempts > retry_limits::MAX_ATTEMPTS
+                {
+                    return Err(ConfigError::ValidationError(format!(
+                        "Retry attempts for remote rule #{} must be between {} and {}",
+                        i + 1,
+                        retry_limits::MIN_ATTEMPTS,
+                        retry_limits::MAX_ATTEMPTS
+                    )));
+                }
+
+                // 验证重试延迟是否在合理范围内
+                if retry.delay < retry_limits::MIN_DELAY || retry.delay > retry_limits::MAX_DELAY {
+                    return Err(ConfigError::ValidationError(format!(
+                        "Retry delay for remote rule #{} must be between {} and {} seconds",
+                        i + 1,
+                        retry_limits::MIN_DELAY,
+                        retry_limits::MAX_DELAY
+                    )));
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -821,6 +1008,7 @@ impl Default for Config {
                 action: RouteAction::Forward,
                 target: Some(upstream_defaults::DEFAULT_GROUP_NAME.to_string()),
             }],
+            remote_rules: Vec::new(),
         }
     }
 }
