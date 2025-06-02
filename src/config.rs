@@ -1,7 +1,7 @@
 use crate::error::ConfigError;
 use crate::r#const::{
-    cache_limits, http_client_limits, retry_limits, server_defaults, upstream_defaults,
-    weight_limits,
+    cache_limits, http_client_limits, remote_rule_limits, retry_limits, server_defaults,
+    upstream_defaults, weight_limits,
 };
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -76,6 +76,11 @@ pub enum RemoteRuleType {
     Url,
 }
 
+// 默认最大规则文件大小
+fn default_max_rule_size() -> usize {
+    remote_rule_limits::DEFAULT_MAX_SIZE
+}
+
 // 远程规则配置
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub struct RemoteRuleConfig {
@@ -96,6 +101,9 @@ pub struct RemoteRuleConfig {
     pub retry: Option<RetryConfig>,
     // 代理（可选）
     pub proxy: Option<String>,
+    // 最大规则文件大小（字节，默认10MB）
+    #[serde(default = "default_max_rule_size")]
+    pub max_size: usize,
 }
 
 // DoH请求方法枚举
@@ -971,6 +979,18 @@ impl Config {
                         retry_limits::MAX_DELAY
                     )));
                 }
+            }
+
+            // 验证最大规则文件大小
+            if rule.max_size < remote_rule_limits::MIN_SIZE
+                || rule.max_size > remote_rule_limits::MAX_SIZE
+            {
+                return Err(ConfigError::ValidationError(format!(
+                    "Max rule file size for remote rule #{} must be between {} and {} bytes",
+                    i + 1,
+                    remote_rule_limits::MIN_SIZE,
+                    remote_rule_limits::MAX_SIZE
+                )));
             }
         }
 

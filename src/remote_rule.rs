@@ -2,6 +2,7 @@ use crate::config::{
     HttpClientConfig, MatchType, RemoteRuleConfig, RetryConfig, RouteRuleConfig, RuleFormat,
 };
 use crate::error::AppError;
+use crate::r#const::{rule_action_labels, rule_source_labels};
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use retry_policies::Jitter;
@@ -243,6 +244,15 @@ impl RemoteRuleLoader {
         // 获取响应内容
         let content = response.text().await?;
 
+        // 检查规则文件大小
+        let content_size = content.len();
+        if content_size > self.config.max_size {
+            return Err(AppError::Upstream(format!(
+                "Remote rule file size ({} bytes) exceeds configured limit ({} bytes)",
+                content_size, self.config.max_size
+            )));
+        }
+
         // 解析规则
         let parsed_rules = self.parser.parse(&content)?;
 
@@ -277,6 +287,12 @@ impl RemoteRuleLoader {
             }
         }
 
+        // 获取规则动作标签
+        let action_label = match self.config.action {
+            crate::config::RouteAction::Forward => rule_action_labels::FORWARD,
+            crate::config::RouteAction::Block => rule_action_labels::BLOCK,
+        };
+
         // 创建精确匹配规则（如果有）
         if !exact_patterns.is_empty() {
             route_rules.push(RouteRuleConfig {
@@ -308,9 +324,10 @@ impl RemoteRuleLoader {
         }
 
         info!(
-            "Loaded {} remote rules from {}: {} exact, {} wildcard, {} regex",
+            "Loaded {} remote rules from {} ({}): {} exact, {} wildcard, {} regex",
             parsed_rules.len(),
             self.config.url,
+            action_label,
             exact_count,
             wildcard_count,
             regex_count
@@ -363,3 +380,13 @@ pub async fn load_and_merge_rules(
 
     Ok(merged_rules)
 }
+
+// 无效的代理配置错误
+#[derive(Debug, thiserror::Error)]
+#[error("Proxy configuration error: {0}")]
+pub struct InvalidProxyConfig(pub String);
+
+// HTTP客户端错误
+#[derive(Debug, thiserror::Error)]
+#[error("HTTP client error: {0}")]
+pub struct HttpClientError(pub String);

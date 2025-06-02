@@ -78,6 +78,16 @@ pub mod weight_limits {
     pub const MAX_WEIGHT: u32 = 65535;
 }
 
+// 远程规则文件大小限制
+pub mod remote_rule_limits {
+    // 默认最大文件大小（字节）- 10MB
+    pub const DEFAULT_MAX_SIZE: usize = 10 * 1024 * 1024;
+    // 最小文件大小（字节）- 1KB
+    pub const MIN_SIZE: usize = 1024;
+    // 最大文件大小（字节）- 50MB
+    pub const MAX_SIZE: usize = 50 * 1024 * 1024;
+}
+
 //
 // 指标标签常量
 //
@@ -175,6 +185,22 @@ pub mod rule_type_labels {
     pub const REGEX: &str = "regex";
     // 未指定目标
     pub const NO_TARGET: &str = "none";
+}
+
+// 规则来源标签
+pub mod rule_source_labels {
+    // 静态规则
+    pub const STATIC: &str = "static";
+    // 远程规则
+    pub const REMOTE: &str = "remote";
+}
+
+// 规则动作标签
+pub mod rule_action_labels {
+    // 转发动作
+    pub const FORWARD: &str = "forward";
+    // 拦截动作
+    pub const BLOCK: &str = "block";
 }
 
 // 子系统名称常量
