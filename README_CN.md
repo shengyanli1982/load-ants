@@ -42,7 +42,7 @@
 -   **使用 Docker**:
     -   Docker 已安装并正在运行。
 -   **(可选) 从源码构建 (进阶)**:
-    -   Rust 工具链 ( Rust 1.84.1、 GCC 14.2.0)。
+    -   Rust 工具链 (Rust 1.84.1、 GCC 14.2.0)。
 
 ### 方法一：直接运行应用程序
 
@@ -514,7 +514,7 @@ load-ants [OPTIONS]
 
 1.  **环境准备**:
 
-    -   安装 [Rust 工具链](https://www.rust-lang.org/tools/install) (最新稳定版)。
+    -   安装 [Rust 工具链](https://www.rust-lang.org/tools/install) (Rust 1.84.1, GCC 14.2.0)。
     -   确保你的系统已安装 `git`。
 
 2.  **克隆代码仓库**:

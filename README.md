@@ -514,7 +514,7 @@ If you want to build or modify the code yourself:
 
 1.  **Environment Preparation**:
 
-    -   Install the [Rust toolchain](https://www.rust-lang.org/tools/install) (latest stable version).
+    -   Install the [Rust toolchain](https://www.rust-lang.org/tools/install) (Rust 1.84.1, GCC 14.2.0).
     -   Ensure your system has `git` installed.
 
 2.  **Clone the Repository**:
