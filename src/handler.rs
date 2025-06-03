@@ -38,24 +38,8 @@ impl RequestHandler {
         // 记录请求开始时间
         let start_time = Instant::now();
 
-        // 检查是否为查询请求
-        if request.message_type() != MessageType::Query {
-            return Err(AppError::Internal("Not a query request".to_string()));
-        }
-
-        // 获取查询
-        let query = match request.queries().first() {
-            Some(q) => q,
-            None => {
-                // 记录错误指标
-                METRICS
-                    .dns_request_errors_total()
-                    .with_label_values(&[error_labels::EMPTY_QUERY])
-                    .inc();
-                return Err(AppError::Internal("Empty query".to_string()));
-            }
-        };
-
+        // 检查是否为查询请求并获取查询内容
+        let query = self.validate_request(request)?;
         let query_name = query.name();
         let query_type = query.query_type();
         let query_class = query.query_class();
@@ -73,53 +57,134 @@ impl RequestHandler {
             query_class
         );
 
-        // 从缓存中获取响应
-        if self.cache.is_enabled() {
-            let cache_check_time = Instant::now();
-            if let Some(cached_response) = self.cache.get(request).await {
-                debug!(
-                    "Cache hit: {} ({} {})",
-                    query_name.to_utf8(),
-                    query_type,
-                    query_class
-                );
-
-                // 设置响应ID与请求ID相匹配
-                let mut response = cached_response.clone();
-                response.set_id(request.id());
-
-                // 记录请求处理时间
-                let duration = start_time.elapsed();
-                METRICS
-                    .dns_request_duration_seconds()
-                    .with_label_values(&[
-                        processing_labels::CACHED,
-                        query_type.to_string().as_str(),
-                    ])
-                    .observe(duration.as_secs_f64());
-
-                info!(
-                    "Cache hit: {} processed in {:?}",
-                    query_name.to_utf8(),
-                    duration
-                );
-
-                return Ok(response);
-            } else {
-                // 记录缓存未命中指标
-                METRICS
-                    .cache_operations_total()
-                    .with_label_values(&[cache_labels::MISS])
-                    .inc();
-                info!(
-                    "Cache check for {} took {:?}",
-                    query_name.to_utf8(),
-                    cache_check_time.elapsed()
-                );
-            }
+        // 尝试从缓存获取响应
+        if let Some(response) = self
+            .check_cache(request, query_name, query_type, &start_time)
+            .await
+        {
+            return Ok(response);
         }
 
         // 查找路由规则
+        let route_match = self.find_route_match(query_name).await?;
+
+        // 根据路由动作处理请求
+        let response = match route_match.action {
+            RouteAction::Forward => {
+                self.handle_forward(request, &route_match, query_name)
+                    .await?
+            }
+            RouteAction::Block => {
+                debug!("Blocking domain: {}", query_name.to_utf8());
+                self.create_error_response(request, ResponseCode::NXDomain)?
+            }
+        };
+
+        // 记录响应代码指标
+        METRICS
+            .dns_response_codes_total()
+            .with_label_values(&[response.response_code().to_string().as_str()])
+            .inc();
+
+        // 缓存响应
+        self.cache_response(request, response.clone(), query_name)
+            .await;
+
+        // 记录请求处理时间
+        let duration = start_time.elapsed();
+        METRICS
+            .dns_request_duration_seconds()
+            .with_label_values(&[processing_labels::RESOLVED, query_type.to_string().as_str()])
+            .observe(duration.as_secs_f64());
+
+        info!(
+            "DNS request processed in {:?} - {}",
+            duration,
+            query_name.to_utf8()
+        );
+
+        Ok(response)
+    }
+
+    // 验证请求有效性并获取查询
+    fn validate_request<'a>(
+        &self,
+        request: &'a Message,
+    ) -> Result<&'a hickory_proto::op::Query, AppError> {
+        // 检查是否为查询请求
+        if request.message_type() != MessageType::Query {
+            return Err(AppError::Internal("Not a query request".to_string()));
+        }
+
+        // 获取查询
+        match request.queries().first() {
+            Some(q) => Ok(q),
+            None => {
+                // 记录错误指标
+                METRICS
+                    .dns_request_errors_total()
+                    .with_label_values(&[error_labels::EMPTY_QUERY])
+                    .inc();
+                Err(AppError::Internal("Empty query".to_string()))
+            }
+        }
+    }
+
+    // 检查缓存中是否有响应
+    async fn check_cache(
+        &self,
+        request: &Message,
+        query_name: &hickory_proto::rr::Name,
+        query_type: hickory_proto::rr::RecordType,
+        start_time: &Instant,
+    ) -> Option<Message> {
+        if !self.cache.is_enabled() {
+            return None;
+        }
+
+        let cache_check_time = Instant::now();
+        if let Some(cached_response) = self.cache.get(request).await {
+            debug!("Cache hit: {} ({})", query_name.to_utf8(), query_type);
+
+            // 设置响应ID与请求ID相匹配
+            let mut response = cached_response.clone();
+            response.set_id(request.id());
+
+            // 记录请求处理时间
+            let duration = start_time.elapsed();
+            METRICS
+                .dns_request_duration_seconds()
+                .with_label_values(&[processing_labels::CACHED, query_type.to_string().as_str()])
+                .observe(duration.as_secs_f64());
+
+            info!(
+                "Cache hit: {} processed in {:?}",
+                query_name.to_utf8(),
+                duration
+            );
+
+            return Some(response);
+        } else {
+            // 记录缓存未命中指标
+            METRICS
+                .cache_operations_total()
+                .with_label_values(&[cache_labels::MISS])
+                .inc();
+            info!(
+                "Cache check for {} took {:?}",
+                query_name.to_utf8(),
+                cache_check_time.elapsed()
+            );
+        }
+
+        None
+    }
+
+    // 查找路由规则
+    async fn find_route_match(
+        &self,
+        query_name: &hickory_proto::rr::Name,
+    ) -> Result<crate::router::RouteMatch, AppError> {
         let route_match_time = Instant::now();
         let route_match = match self.router.find_match(query_name) {
             Ok(m) => m,
@@ -132,7 +197,7 @@ impl RequestHandler {
                     .with_label_values(&[error_labels::ROUTE_ERROR])
                     .inc();
 
-                return self.create_error_response(request, ResponseCode::ServFail);
+                return Err(AppError::Internal(format!("Route matching failed: {}", e)));
             }
         };
         info!(
@@ -167,102 +232,91 @@ impl RequestHandler {
             route_match.target.as_deref().unwrap_or("None")
         );
 
-        // 根据路由动作处理请求
-        let response = match route_match.action {
-            RouteAction::Forward => {
-                // 获取目标上游组
-                let target_group = match route_match.target {
-                    Some(ref group) => group, // 使用引用代替克隆
-                    None => {
-                        error!(
-                            "Route rule configuration error: Forward action missing target group - {}",
-                            query_name.to_utf8()
-                        );
+        Ok(route_match)
+    }
 
-                        // 记录错误指标
-                        METRICS
-                            .dns_request_errors_total()
-                            .with_label_values(&[error_labels::MISSING_TARGET])
-                            .inc();
-
-                        return self.create_error_response(request, ResponseCode::ServFail);
-                    }
-                };
-
-                // 转发到上游
-                let upstream_time = Instant::now();
-                let result = self.upstream.forward(request, target_group).await;
-                info!(
-                    "Upstream forwarding to {} for {} took {:?}",
-                    target_group,
-                    query_name.to_utf8(),
-                    upstream_time.elapsed()
+    // 处理转发请求
+    async fn handle_forward(
+        &self,
+        request: &Message,
+        route_match: &crate::router::RouteMatch,
+        query_name: &hickory_proto::rr::Name,
+    ) -> Result<Message, AppError> {
+        // 获取目标上游组
+        let target_group = match &route_match.target {
+            Some(group) => group,
+            None => {
+                error!(
+                    "Route rule configuration error: Forward action missing target group - {}",
+                    query_name.to_utf8()
                 );
-
-                match result {
-                    Ok(response) => response,
-                    Err(e) => {
-                        error!("Upstream request failed: {} - {}", target_group, e);
-
-                        // 记录错误指标
-                        METRICS
-                            .dns_request_errors_total()
-                            .with_label_values(&[error_labels::UPSTREAM_ERROR])
-                            .inc();
-
-                        return self.create_error_response(request, ResponseCode::ServFail);
-                    }
-                }
-            }
-            RouteAction::Block => {
-                debug!("Blocking domain: {}", query_name.to_utf8());
-                self.create_error_response(request, ResponseCode::NXDomain)?
-            }
-        };
-
-        // 记录响应代码指标
-        METRICS
-            .dns_response_codes_total()
-            .with_label_values(&[response.response_code().to_string().as_str()])
-            .inc();
-
-        // 缓存响应（缓存已启用的情况下，同时缓存成功和错误响应）
-        if self.cache.is_enabled() {
-            let cache_insert_time = Instant::now();
-            if let Err(e) = self.cache.insert(request, response.clone()).await {
-                warn!("Cache insertion failed: {}", e);
 
                 // 记录错误指标
                 METRICS
-                    .cache_operations_total()
-                    .with_label_values(&[cache_labels::INSERT_ERROR])
+                    .dns_request_errors_total()
+                    .with_label_values(&[error_labels::MISSING_TARGET])
                     .inc();
-            } else {
-                info!(
-                    "Cache insertion for {} took {:?}",
-                    query_name.to_utf8(),
-                    cache_insert_time.elapsed()
-                );
+
+                return self.create_error_response(request, ResponseCode::ServFail);
             }
+        };
 
-            // 更新缓存条目计数
-            METRICS.cache_entries().set(self.cache.len().await as i64);
-        }
-
-        // 记录请求处理时间
-        let duration = start_time.elapsed();
-        METRICS
-            .dns_request_duration_seconds()
-            .with_label_values(&[processing_labels::RESOLVED, query_type.to_string().as_str()])
-            .observe(duration.as_secs_f64());
-
+        // 转发到上游
+        let upstream_time = Instant::now();
+        let result = self.upstream.forward(request, target_group).await;
         info!(
-            "DNS request processed in {:?} - {}",
-            duration,
-            query_name.to_utf8()
+            "Upstream forwarding to {} for {} took {:?}",
+            target_group,
+            query_name.to_utf8(),
+            upstream_time.elapsed()
         );
 
-        Ok(response)
+        match result {
+            Ok(response) => Ok(response),
+            Err(e) => {
+                error!("Upstream request failed: {} - {}", target_group, e);
+
+                // 记录错误指标
+                METRICS
+                    .dns_request_errors_total()
+                    .with_label_values(&[error_labels::UPSTREAM_ERROR])
+                    .inc();
+
+                self.create_error_response(request, ResponseCode::ServFail)
+            }
+        }
+    }
+
+    // 缓存响应
+    async fn cache_response(
+        &self,
+        request: &Message,
+        response: Message,
+        query_name: &hickory_proto::rr::Name,
+    ) {
+        if !self.cache.is_enabled() {
+            return;
+        }
+
+        let cache_insert_time = Instant::now();
+        if let Err(e) = self.cache.insert(request, response).await {
+            warn!("Cache insertion failed: {}", e);
+
+            // 记录错误指标
+            METRICS
+                .cache_operations_total()
+                .with_label_values(&[cache_labels::INSERT_ERROR])
+                .inc();
+        } else {
+            info!(
+                "Cache insertion for {} took {:?}",
+                query_name.to_utf8(),
+                cache_insert_time.elapsed()
+            );
+        }
+
+        // 更新缓存条目计数
+        METRICS.cache_entries().set(self.cache.len().await as i64);
     }
 
     // 创建错误响应
