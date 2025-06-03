@@ -21,7 +21,7 @@
 
 ### 为什么选择 DNS-over-HTTPS？
 
-传统 DNS 查询采用明文传输，这使您的浏览历史容易遭受监控、劫持或篡改。DoH 通过以下方式解决这些问题：
+传统 DNS 查询采用明文传输，这使你的浏览历史容易遭受监控、劫持或篡改。DoH 通过以下方式解决这些问题：
 
 -   **DNS 流量加密** - 防止网络中间人窥探
 -   **隐私增强** - 隐藏 DNS 查询内容，避免被运营商和其他网络观察者捕获
@@ -30,7 +30,7 @@
 
 ## 快速开始
 
-本节将指导您快速部署并运行 Load Ants。我们推荐首先尝试直接运行预编译的应用程序，如果方便，也可以使用 Docker。
+本节将指导你快速部署并运行 Load Ants。我们推荐首先尝试直接运行预编译的应用程序，如果方便，也可以使用 Docker。
 
 ### 环境要求
 
@@ -38,7 +38,7 @@
     -   一个文本编辑器，用于创建和修改配置文件 (`config.yaml`)。
     -   管理员/root 权限 (如果 Load Ants 需要绑定标准 DNS 端口 53)。
 -   **直接运行预编译程序**:
-    -   从项目 [发布页面](https://github.com/shengyanli1982/load-ants/releases) 下载的对应您操作系统的二进制文件。
+    -   从项目 [发布页面](https://github.com/shengyanli1982/load-ants/releases) 下载的对应你操作系统的二进制文件。
 -   **使用 Docker**:
     -   Docker 已安装并正在运行。
 -   **(可选) 从源码构建 (进阶)**:
@@ -46,10 +46,10 @@
 
 ### 方法一：直接运行应用程序
 
-这是体验 Load Ants 最快捷的方式，特别是如果您希望在本机直接运行。
+这是体验 Load Ants 最快捷的方式，特别是如果你希望在本机直接运行。
 
 1.  **下载预编译版本**:
-    访问项目的 [发布页面](https://github.com/shengyanli1982/load-ants/releases)，找到并下载适用于您操作系统的最新 `load-ants` 二进制文件。
+    访问项目的 [发布页面](https://github.com/shengyanli1982/load-ants/releases)，找到并下载适用于你操作系统的最新 `load-ants` 二进制文件。
 
 2.  **准备配置文件**:
     下载或复制项目中的示例配置文件 `config.default.yaml` (通常与源代码一同提供，或附在发布版本中)。将其与下载的 `load-ants` 二进制文件放在同一个目录下，并重命名为 `config.yaml`。
@@ -59,13 +59,13 @@
     cp config.default.yaml ./config.yaml
     ```
 
-    然后，使用您喜欢的文本编辑器打开 `config.yaml` 并进行修改。至少，您需要配置一个上游 DoH 服务器组 (`upstream_groups`)。可以参考文档后续的 [配置详解](#配置详解) 部分。
+    然后，使用你喜欢的文本编辑器打开 `config.yaml` 并进行修改。至少，你需要配置一个上游 DoH 服务器组 (`upstream_groups`)。可以参考文档后续的 [配置详解](#配置详解) 部分。
 
 3.  **赋予执行权限 (Linux/macOS)**:
-    假如您使用的是 Linux （x86_64）系统，您可能需要给下载的二进制文件添加执行权限：
+    假如你使用的是 Linux （x86_64）系统，你可能需要给下载的二进制文件添加执行权限：
 
     > ![NOTE]
-    > 假如您使用的是其他系统，请根据实际情况调整。
+    > 假如你使用的是其他系统，请根据实际情况调整。
 
     ```bash
     chmod +x ./loadants-linux-amd64
@@ -78,43 +78,43 @@
     ./loadants-linux-amd64 -c ./config.yaml
     ```
 
-    如果 Load Ants 配置为监听标准 DNS 端口 (如 53)，您可能需要使用管理员权限来启动它 (例如，在 Linux/macOS 上使用 `sudo ./loadants -c ./config.yaml`，在 Windows 上以管理员身份运行命令提示符或 PowerShell)。
+    如果 Load Ants 配置为监听标准 DNS 端口 (如 53)，你可能需要使用管理员权限来启动它 (例如，在 Linux/macOS 上使用 `sudo ./loadants -c ./config.yaml`，在 Windows 上以管理员身份运行命令提示符或 PowerShell)。
     程序启动后，它会根据配置文件开始处理 DNS 请求。日志信息会直接输出到终端。
 
 5.  **基本测试**:
-    程序运行后，您可以使用 `dig` (Linux/macOS) 或 `nslookup` (Windows) 等工具测试 DNS 解析：
+    程序运行后，你可以使用 `dig` (Linux/macOS) 或 `nslookup` (Windows) 等工具测试 DNS 解析：
 
     ```bash
     # 假设 Load Ants 监听在 127.0.0.1:53
     dig @127.0.0.1 example.com
     ```
 
-    如果一切配置正确，您应该能收到来自上游 DoH 服务器的 DNS 响应。
+    如果一切配置正确，你应该能收到来自上游 DoH 服务器的 DNS 响应。
 
 6.  **停止程序**:
     在运行 Load Ants 的终端中，按下 `Ctrl+C` 来停止程序。
 
 ### 方法二：使用 Docker 部署 (推荐)
 
-Docker 提供了一种隔离环境来运行 Load Ants，无需在您的系统上直接安装任何依赖 (除了 Docker 本身)。
+Docker 提供了一种隔离环境来运行 Load Ants，无需在你的系统上直接安装任何依赖 (除了 Docker 本身)。
 
 1.  **创建配置目录**:
-    在您的宿主机上创建一个目录来存放配置文件。
+    在你的宿主机上创建一个目录来存放配置文件。
 
     ```bash
     mkdir -p ./load-ants-config
     ```
 
 2.  **准备配置文件**:
-    复制项目中的默认配置文件 (`config.default.yaml`) 到您刚创建的目录，并根据您的需求进行编辑，将其命名为 `config.yaml`。
+    复制项目中的默认配置文件 (`config.default.yaml`) 到你刚创建的目录，并根据你的需求进行编辑，将其命名为 `config.yaml`。
 
     ```bash
-    # 假设您已克隆项目或下载了 config.default.yaml
+    # 假设你已克隆项目或下载了 config.default.yaml
     cp config.default.yaml ./load-ants-config/config.yaml
-    # 使用您喜欢的编辑器修改 ./load-ants-config/config.yaml
+    # 使用你喜欢的编辑器修改 ./load-ants-config/config.yaml
     ```
 
-    您至少需要配置上游 DoH 服务器 (`upstream_groups`)。
+    你至少需要配置上游 DoH 服务器 (`upstream_groups`)。
 
 3.  **运行 Load Ants 容器**:
 
@@ -128,7 +128,7 @@ Docker 提供了一种隔离环境来运行 Load Ants，无需在您的系统上
       ghcr.io/shengyanli1982/load-ants-x64:latest -c /etc/load-ants/config.yaml
     ```
 
-    请将 `ghcr.io/shengyanli1982/load-ants-x64:latest` 替换为您自己构建的镜像名称或官方提供的最新镜像。
+    请将 `ghcr.io/shengyanli1982/load-ants-x64:latest` 替换为你自己构建的镜像名称或官方提供的最新镜像。
     命令解释:
 
     -   `-d`: 后台运行容器。
@@ -140,14 +140,14 @@ Docker 提供了一种隔离环境来运行 Load Ants，无需在您的系统上
     -   `-c /etc/load-ants/config.yaml`: 指定容器内配置文件的路径。
 
 4.  **基本测试**:
-    容器启动后，您可以通过以下方式测试服务：
+    容器启动后，你可以通过以下方式测试服务：
 
     -   **测试 DNS 解析**:
-        使用 `dig` 或其他 DNS 查询工具向 `127.0.0.1` (或您的服务器 IP) 发送查询请求。
+        使用 `dig` 或其他 DNS 查询工具向 `127.0.0.1` (或你的服务器 IP) 发送查询请求。
         ```bash
         dig @127.0.0.1 example.com
         ```
-        如果配置正确，您应该能收到来自上游 DoH 服务器的响应。
+        如果配置正确，你应该能收到来自上游 DoH 服务器的响应。
     -   **查看日志**:
         检查 Load Ants 的运行日志，了解其工作状态或排查问题。
         ```bash
@@ -250,7 +250,7 @@ Load Ants 使用 YAML 格式的配置文件。以下是完整的配置选项参�
 
 ### 上游 DoH 服务器组配置 (upstream_groups)
 
-您可以定义一个或多个上游 DoH 服务器组，每个组可以包含多个服务器，并具有独立的负载均衡策略、重试机制和代理设置。
+你可以定义一个或多个上游 DoH 服务器组，每个组可以包含多个服务器，并具有独立的负载均衡策略、重试机制和代理设置。
 
 | 参数     | 类型   | 默认值 | 描述                                     | 有效范围                           |
 | -------- | ------ | ------ | ---------------------------------------- | ---------------------------------- |
@@ -510,12 +510,12 @@ load-ants [OPTIONS]
 
 ### 从源代码构建
 
-如果您希望自行构建或修改代码：
+如果你希望自行构建或修改代码：
 
 1.  **环境准备**:
 
     -   安装 [Rust 工具链](https://www.rust-lang.org/tools/install) (最新稳定版)。
-    -   确保您的系统已安装 `git`。
+    -   确保你的系统已安装 `git`。
 
 2.  **克隆代码仓库**:
 
@@ -535,7 +535,7 @@ load-ants [OPTIONS]
     编译后的二进制文件位于 `target/release/load-ants`。
 
 4.  **运行**:
-    您需要一个配置文件 (例如，从 `config.default.yaml` 复制并修改)。
+    你需要一个配置文件 (例如，从 `config.default.yaml` 复制并修改)。
     ```bash
     # 假设配置文件在 ./config.yaml
     sudo ./target/release/load-ants -c ./config.yaml
@@ -546,12 +546,12 @@ load-ants [OPTIONS]
 
 ### 作为系统服务使用 (Linux systemd)
 
-如果您希望将 Load Ants 作为后台服务运行在 Linux 系统上：
+如果你希望将 Load Ants 作为后台服务运行在 Linux 系统上：
 
 1.  **准备二进制文件和配置文件**:
 
     -   将编译好的 `load-ants` 二进制文件放置到一个合适的系统路径，例如 `/usr/local/bin/load-ants`。
-    -   将您的配置文件放置到例如 `/etc/load-ants/config.yaml`。
+    -   将你的配置文件放置到例如 `/etc/load-ants/config.yaml`。
         ```bash
         sudo mkdir -p /etc/load-ants
         sudo cp /path/to/your/config.yaml /etc/load-ants/config.yaml
@@ -606,7 +606,7 @@ load-ants [OPTIONS]
 对于生产环境，Kubernetes 提供了更好的扩展性、高可用性和管理便捷性。
 
 1.  **创建 Docker 镜像 (如果尚未发布)**:
-    如果您的项目包含 `Dockerfile`，您需要先构建并推送 Docker 镜像到镜像仓库 (如 Docker Hub, GCR, ECR)。
+    如果你的项目包含 `Dockerfile`，你需要先构建并推送 Docker 镜像到镜像仓库 (如 Docker Hub, GCR, ECR)。
 
     ```bash
     # 假设 Dockerfile 在项目根目录
@@ -614,10 +614,10 @@ load-ants [OPTIONS]
     docker push yourusername/load-ants:latest
     ```
 
-    (请将 `yourusername/load-ants:latest` 替换为您的实际镜像名称和标签)
+    (请将 `yourusername/load-ants:latest` 替换为你的实际镜像名称和标签)
 
 2.  **创建 ConfigMap**:
-    将您的 `config.yaml` 内容存储在 Kubernetes ConfigMap 中。
+    将你的 `config.yaml` 内容存储在 Kubernetes ConfigMap 中。
 
     ```yaml
     # load-ants-configmap.yaml
@@ -628,7 +628,7 @@ load-ants [OPTIONS]
         namespace: dns # 建议为DNS相关服务使用独立的命名空间
     data:
         config.yaml: |
-            # 在这里粘贴您的完整 config.yaml 内容
+            # 在这里粘贴你的完整 config.yaml 内容
             server:
               listen_udp: "0.0.0.0:53"
               listen_tcp: "0.0.0.0:53"
@@ -671,7 +671,7 @@ load-ants [OPTIONS]
             spec:
                 containers:
                     - name: load-ants
-                      image: ghcr.io/shengyanli1982/load-ants-x64:latest # 使用官方或您自己构建的镜像
+                      image: ghcr.io/shengyanli1982/load-ants-x64:latest # 使用官方或你自己构建的镜像
                       args: ["-c", "/etc/load-ants/config.yaml"]
                       ports:
                           - containerPort: 53
