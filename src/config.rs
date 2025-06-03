@@ -182,7 +182,7 @@ pub enum MatchType {
 }
 
 // 路由动作枚举
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Copy)]
 #[serde(rename_all = "lowercase")]
 pub enum RouteAction {
     // 转发请求
