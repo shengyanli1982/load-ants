@@ -87,7 +87,7 @@ remote_rules:
     retry: # 获取规则的重试策略
       attempts: 3
       delay: 1
-    proxy: "http://127.0.0.1:7890"
+    # proxy: "http://127.0.0.1:7890"
 
   # 从URL获取代理列表
   - type: "url"
@@ -98,4 +98,4 @@ remote_rules:
     retry:
       attempts: 3
       delay: 1
-    proxy: "http://127.0.0.1:7890"
+    # proxy: "http://127.0.0.1:7890"
