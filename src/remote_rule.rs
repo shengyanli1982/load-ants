@@ -265,7 +265,7 @@ impl RemoteRuleLoader {
             route_rules.push(RouteRuleConfig {
                 match_type: MatchType::Exact,
                 patterns: exact_patterns,
-                action: self.config.action.clone(),
+                action: self.config.action,
                 target: self.config.target.clone(),
             });
         }
@@ -275,7 +275,7 @@ impl RemoteRuleLoader {
             route_rules.push(RouteRuleConfig {
                 match_type: MatchType::Wildcard,
                 patterns: wildcard_patterns,
-                action: self.config.action.clone(),
+                action: self.config.action,
                 target: self.config.target.clone(),
             });
         }
@@ -285,7 +285,7 @@ impl RemoteRuleLoader {
             route_rules.push(RouteRuleConfig {
                 match_type: MatchType::Regex,
                 patterns: regex_patterns,
-                action: self.config.action.clone(),
+                action: self.config.action,
                 target: self.config.target.clone(),
             });
         }
