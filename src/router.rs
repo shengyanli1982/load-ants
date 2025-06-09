@@ -81,48 +81,30 @@ impl Router {
     // 这个函数在 `find_match` 方法中被多次调用，因此使用 `#[inline(always)]` 优化
     #[inline(always)]
     fn reverse_domain_labels(domain_suffix: &str) -> String {
-        if domain_suffix.is_empty() {
-            return String::new();
-        }
-
-        // 计算点号的数量，用于预分配空间
-        let dot_count = domain_suffix.bytes().filter(|&b| b == b'.').count();
-
-        // 如果没有点号，直接返回原字符串
-        if dot_count == 0 {
+        // 优化思路：
+        // 1. 如果没有点，直接返回克隆，这是最快路径，避免不必要的操作。
+        // 2. 使用 `rsplit` 从后往前遍历各部分，这天然地符合反转的需求。
+        // 3. 预先为新字符串分配足够的容量。
+        // 4. 手动遍历迭代器并拼接字符串，以避免使用 `.join()` 时可能产生的额外开销。
+        if !domain_suffix.contains(wildcards::DOT) {
             return domain_suffix.to_string();
         }
 
-        // 预先分配足够空间 (最坏情况需要额外的点号)
-        let mut result = String::with_capacity(domain_suffix.len() + 1);
+        let mut reversed = String::with_capacity(domain_suffix.len());
+        let mut parts = domain_suffix.rsplit(wildcards::DOT);
 
-        // 收集所有段的起始和结束位置
-        let mut segments = Vec::with_capacity(dot_count + 1);
-        let mut start = 0;
-
-        for (i, c) in domain_suffix.char_indices() {
-            if c == wildcards::DOT {
-                segments.push((start, i));
-                start = i + 1;
-            }
+        // `rsplit`返回的迭代器会先给出原始字符串的最后一部分，我们首先添加它。
+        if let Some(part) = parts.next() {
+            reversed.push_str(part);
         }
 
-        // 添加最后一段
-        segments.push((start, domain_suffix.len()));
-
-        // 逆序添加段
-        let last_idx = segments.len() - 1;
-        let (start, end) = segments[last_idx];
-        result.push_str(&domain_suffix[start..end]);
-
-        // 添加其余段
-        for i in (0..last_idx).rev() {
-            let (start, end) = segments[i];
-            result.push(wildcards::DOT);
-            result.push_str(&domain_suffix[start..end]);
+        // 遍历剩余的部分，在每个部分前加上点号。
+        for part in parts {
+            reversed.push(wildcards::DOT);
+            reversed.push_str(part);
         }
 
-        result
+        reversed
     }
 
     // 构建正则表达式预筛选映射

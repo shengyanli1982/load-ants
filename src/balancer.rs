@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 #[async_trait]
 pub trait LoadBalancer: Send + Sync {
     // 选择一个上游服务器
-    async fn select_server(&self) -> Result<UpstreamServerConfig, AppError>;
+    async fn select_server(&self) -> Result<&UpstreamServerConfig, AppError>;
 
     // 报告服务器失败
     async fn report_failure(&self, server: &UpstreamServerConfig);
@@ -34,13 +34,13 @@ impl RoundRobinBalancer {
 
 #[async_trait]
 impl LoadBalancer for RoundRobinBalancer {
-    async fn select_server(&self) -> Result<UpstreamServerConfig, AppError> {
+    async fn select_server(&self) -> Result<&UpstreamServerConfig, AppError> {
         if self.servers.is_empty() {
             return Err(AppError::NoUpstreamAvailable);
         }
 
         let current = self.current.fetch_add(1, Ordering::SeqCst) % self.servers.len();
-        Ok(self.servers[current].clone())
+        Ok(&self.servers[current])
     }
 
     async fn report_failure(&self, _server: &UpstreamServerConfig) {
@@ -77,7 +77,7 @@ impl WeightedBalancer {
 
 #[async_trait]
 impl LoadBalancer for WeightedBalancer {
-    async fn select_server(&self) -> Result<UpstreamServerConfig, AppError> {
+    async fn select_server(&self) -> Result<&UpstreamServerConfig, AppError> {
         if self.servers.is_empty() {
             return Err(AppError::NoUpstreamAvailable);
         }
@@ -103,7 +103,7 @@ impl LoadBalancer for WeightedBalancer {
         self.current_weights[max_index].fetch_sub(self.total_weight, Ordering::SeqCst);
 
         // 返回选中的服务器
-        Ok(self.servers[max_index].clone())
+        Ok(&self.servers[max_index])
     }
 
     async fn report_failure(&self, _server: &UpstreamServerConfig) {
@@ -126,7 +126,7 @@ impl RandomBalancer {
 
 #[async_trait]
 impl LoadBalancer for RandomBalancer {
-    async fn select_server(&self) -> Result<UpstreamServerConfig, AppError> {
+    async fn select_server(&self) -> Result<&UpstreamServerConfig, AppError> {
         if self.servers.is_empty() {
             return Err(AppError::NoUpstreamAvailable);
         }
@@ -135,7 +135,7 @@ impl LoadBalancer for RandomBalancer {
             .servers
             .choose(&mut thread_rng())
             .ok_or(AppError::NoUpstreamAvailable)?;
-        Ok(server.clone())
+        Ok(server)
     }
 
     async fn report_failure(&self, _server: &UpstreamServerConfig) {

@@ -43,28 +43,25 @@ impl UpstreamManager {
         let mut group_clients = HashMap::new();
 
         // 为每个组创建负载均衡器和HTTP客户端
-        for group in groups {
-            let lb: Arc<dyn LoadBalancer> = match group.strategy {
-                LoadBalancingStrategy::RoundRobin => {
-                    Arc::new(RoundRobinBalancer::new(group.servers.clone()))
-                }
-                LoadBalancingStrategy::Weighted => {
-                    Arc::new(WeightedBalancer::new(group.servers.clone()))
-                }
-                LoadBalancingStrategy::Random => {
-                    Arc::new(RandomBalancer::new(group.servers.clone()))
-                }
+        for UpstreamGroupConfig {
+            name,
+            strategy,
+            servers,
+            retry,
+            proxy,
+        } in groups
+        {
+            let lb: Arc<dyn LoadBalancer> = match strategy {
+                LoadBalancingStrategy::RoundRobin => Arc::new(RoundRobinBalancer::new(servers)),
+                LoadBalancingStrategy::Weighted => Arc::new(WeightedBalancer::new(servers)),
+                LoadBalancingStrategy::Random => Arc::new(RandomBalancer::new(servers)),
             };
 
             // 创建该组的HTTP客户端
-            let client = Self::create_http_client(
-                &http_config,
-                group.proxy.as_deref(),
-                group.retry.as_ref(),
-            )?;
-            group_clients.insert(group.name.clone(), client);
+            let client = Self::create_http_client(&http_config, proxy.as_deref(), retry.as_ref())?;
+            group_clients.insert(name.clone(), client);
 
-            group_map.insert(group.name, lb);
+            group_map.insert(name, lb);
         }
 
         info!("Initialized {} upstream groups", group_map.len());
@@ -197,7 +194,7 @@ impl UpstreamManager {
         let start_time = std::time::Instant::now();
 
         // 发送请求（通过reqwest-retry中间件处理重试）
-        match self.send_doh_request(query, &server, group_name).await {
+        match self.send_doh_request(query, server, group_name).await {
             Ok(response) => {
                 // 记录上游请求耗时
                 let duration = start_time.elapsed();
@@ -212,7 +209,7 @@ impl UpstreamManager {
                 error!("Upstream request failed: {} - {}", server.url, e);
 
                 // 报告上游失败
-                load_balancer.report_failure(&server).await;
+                load_balancer.report_failure(server).await;
 
                 // 记录上游错误指标
                 METRICS
@@ -233,7 +230,7 @@ impl UpstreamManager {
         group_name: &str,
     ) -> Result<Message, AppError> {
         // 根据配置的方法选择GET或POST
-        match server.method.clone() {
+        match &server.method {
             DoHMethod::Get => self.send_doh_request_get(query, server, group_name).await,
             DoHMethod::Post => self.send_doh_request_post(query, server, group_name).await,
         }
