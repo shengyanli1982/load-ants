@@ -272,6 +272,14 @@ Load Ants 使用 YAML 格式的配置文件。以下是完整的配置选项参�
 | content_type | 字符串 | "message" | DoH 内容类型 (`application/dns-message` 或 `application/dns-json`) | "message", "json"            |
 | auth         | 对象   | -         | 访问此服务器的认证配置（可选）                                     | 参照下方认证配置             |
 
+**DoH 内容类型的技术考量：**
+
+-   `message` (`application/dns-message`)：实现 RFC 8484 标准协议，同时支持 GET 和 POST 两种 HTTP 方法。该格式直接封装二进制 DNS 消息，是跨 DoH 提供商实现最佳兼容性和性能的推荐选项。
+
+-   `json` (`application/dns-json`)：实现 Google 的 DNS 查询 JSON API 规范，该规范**仅支持 GET 方法**。此格式主要用于兼容需要 JSON 格式响应的特定客户端实现。
+
+配置 `content_type: "json"` 时，你**必须**同时指定 `method: "get"`。系统的配置验证器强制执行此协议要求，并将拒绝任何尝试将 `content_type: "json"` 与 `method: "post"` 组合的配置，因为这种组合违反了 Google Public DNS 规范，会导致查询失败。
+
 #### 认证配置 (auth)
 
 用于 `upstream_groups.servers.auth`。
@@ -423,9 +431,10 @@ upstream_groups:
     - name: "cloudflare_secure"
       strategy: "random"
       servers:
-          - url: "https://cloudflare-dns.com/dns-query"
-          - url: "https://1.0.0.1/dns-query"
+          - url: "https://cloudflare-dns.com/resolve"
+          - url: "https://1.0.0.1/resolve"
             content_type: "json"
+            method: "get"
 
     - name: "nextdns_authenticated"
       strategy: "weighted"

@@ -23,8 +23,10 @@ pub enum LoadBalancingStrategy {
 #[serde(rename_all = "lowercase")]
 pub enum DoHMethod {
     // GET请求方法
+    // 支持Message和Json内容类型
     Get,
     // POST请求方法
+    // 只支持Message内容类型，不支持Json内容类型
     Post,
 }
 
@@ -35,6 +37,8 @@ pub enum DoHContentType {
     // application/dns-message格式
     Message,
     // application/dns-json格式
+    // 注意：根据Google Public DNS规范，JSON格式只支持GET方法
+    // 参考：https://developers.google.com/speed/public-dns/docs/doh/json
     Json,
 }
 

@@ -272,6 +272,14 @@ Each element in the `servers` array of `upstream_groups` represents a DoH server
 | content_type | String  | "message" | DoH content type (`application/dns-message` or `application/dns-json`) | "message", "json"            |
 | auth         | Object  | -         | Authentication configuration for accessing this server (optional)      | See auth configuration below |
 
+**Technical Considerations for DoH Content Types:**
+
+-   `message` (`application/dns-message`): Implements the RFC 8484 standard protocol, supporting both GET and POST HTTP methods. This format encapsulates binary DNS messages directly and is the recommended option for optimal compatibility and performance across DoH providers.
+
+-   `json` (`application/dns-json`): Implements Google's JSON API specification for DNS queries, which **exclusively supports the GET method**. This format is provided primarily for compatibility with specific client implementations that require JSON-formatted responses.
+
+When configuring with `content_type: "json"`, you **must** specify `method: "get"`. The system's configuration validator enforces this protocol requirement and will reject any configuration that attempts to combine `content_type: "json"` with `method: "post"`, as this combination violates the Google Public DNS specification and would result in failed queries.
+
 #### Authentication Configuration (auth)
 
 Used for `upstream_groups.servers.auth`.
@@ -423,9 +431,10 @@ upstream_groups:
     - name: "cloudflare_secure"
       strategy: "random"
       servers:
-          - url: "https://cloudflare-dns.com/dns-query"
-          - url: "https://1.0.0.1/dns-query"
+          - url: "https://cloudflare-dns.com/resolve"
+          - url: "https://1.0.0.1/resolve"
             content_type: "json"
+            method: "get"
 
     - name: "nextdns_authenticated"
       strategy: "weighted"
@@ -749,130 +758,3 @@ For production environments, Kubernetes provides better scalability, high availa
     kubectl apply -f load-ants-deployment.yaml
     kubectl apply -f load-ants-service.yaml
     ```
-
-6.  **Check Deployment Status**:
-    ```bash
-    kubectl -n dns get pods -l app=load-ants
-    kubectl -n dns get svc load-ants-svc
-    kubectl -n dns logs -l app=load-ants -f # View Pod real-time logs
-    ```
-
-## In-Depth Understanding
-
-### Architecture Design
-
-Load Ants adopts a modular architecture design, including the following core components:
-
--   **Server Module (`server`)**: Listens on UDP/53 and TCP/53 ports, receiving traditional DNS queries.
--   **DNS Parser (`parser` & `composer`)**: Parses incoming DNS requests and constructs DNS responses.
--   **Processor Module (`processor`)**: Coordinates the query processing flow, including cache checking, routing decisions, and upstream forwarding.
--   **Cache Module (`cache`)**: Implements efficient DNS caching (both positive and negative), reducing latency and upstream load.
--   **Router Module (`router`)**: Matches domains based on configured rules (static and remote) and determines query actions (forward or block) and targets.
--   **Upstream Management Module (`upstream`)**: Manages DoH upstream server groups, handles HTTP(S) communication with DoH servers, and implements load balancing, authentication, and retry logic.
--   **HTTP Client (`http_client`)**: Globally shared HTTP client for communication with upstream DoH servers and remote rule URLs.
--   **Remote Rule Loader (`remote_rule`)**: Responsible for fetching, parsing, and converting remote rule lists from URLs, with support for retries, proxies, and authentication.
--   **Administration and Monitoring Module (`admin`/`health`/`metrics`)**: Provides HTTP endpoints for health checks (`/health`), Prometheus metrics (`/metrics`), and cache refreshing (`/api/cache/refresh`).
-
-![architecture](./images/architecture.png)
-_Figure: Load Ants Architecture Diagram_
-
-### Prometheus Monitoring Metrics
-
-Load Ants provides comprehensive Prometheus monitoring metrics for real-time monitoring of service performance, health status, and operational conditions. These metrics are exposed through the `/metrics` endpoint (default listening on `0.0.0.0:8080/metrics`, configurable via `health.listen`), and can be collected by Prometheus or other compatible monitoring systems.
-
-![metrics](./images/metrics.png)
-_Figure: Load Ants Prometheus Metrics Example (Grafana Dashboard)_
-
-#### Main Metric Categories:
-
--   **DNS Request Metrics**:
-    -   `loadants_dns_requests_total`: Total number of DNS requests processed (labels: `protocol` (UDP/TCP)).
-    -   `loadants_dns_request_duration_seconds`: DNS request processing time histogram (labels: `protocol`, `query_type`).
-    -   `loadants_dns_request_errors_total`: Total number of DNS request processing errors (labels: `error_type`).
--   **Cache Metrics**:
-    -   `loadants_cache_entries`: Current number of DNS cache entries.
-    -   `loadants_cache_capacity`: Maximum capacity of the DNS cache.
-    -   `loadants_cache_operations_total`: Total number of cache operations (labels: `operation` (hit, miss, insert, evict, expire)).
-    -   `loadants_cache_ttl_seconds`: TTL distribution histogram of DNS cache entries (labels: `source`).
--   **DNS Query Details**:
-    -   `loadants_dns_query_type_total`: Total number of DNS queries by record type (A, AAAA, MX, etc.) (labels: `type`).
-    -   `loadants_dns_response_codes_total`: Total number of DNS responses by response code (RCODE) (labels: `rcode`).
--   **Upstream Resolver Metrics**:
-    -   `loadants_upstream_requests_total`: Total number of requests sent to upstream DoH resolvers (labels: `group`, `server`).
-    -   `loadants_upstream_errors_total`: Total number of upstream DoH resolver errors (labels: `error_type`, `group`, `server`).
-    -   `loadants_upstream_duration_seconds`: Upstream DoH query time histogram (labels: `group`, `server`).
--   **Routing Metrics**:
-    -   `loadants_route_matches_total`: Total number of routing rule matches (labels: `rule_type` (exact, wildcard, regex), `target_group`, `rule_source` (static, remote), `action` (block, forward)).
-    -   `loadants_route_rules_count`: Current number of active routing rules (labels: `rule_type`, `rule_source`).
-
-These rich metrics support detailed monitoring and analysis of Load Ants performance and behavior, helping to quickly identify issues, optimize configurations, and ensure the service meets performance requirements.
-
-### API Endpoints
-
-Load Ants provides the following HTTP API endpoints:
-
-#### DNS Service Endpoints
-
--   **UDP and TCP port 53** (or other ports configured via `server.listen_udp` and `server.listen_tcp`)
-    -   _Description_: Standard DNS ports for receiving traditional DNS queries.
-    -   _Protocol_: DNS over UDP/TCP (RFC 1035).
-    -   _Usage_: Standard DNS clients, applications, and systems send queries through these ports.
-
-#### Management Endpoints
-
-Default listening on `0.0.0.0:8080` (configurable via `health.listen`).
-
--   **GET /health**
-
-    -   _Description_: Health check endpoint for service monitoring and Kubernetes liveness/readiness probes.
-    -   _Returns_: `200 OK` with a simple JSON response `{"status":"healthy"}` when the service is healthy.
-    -   _Usage_: `curl http://localhost:8080/health`
-
--   **GET /metrics**
-
-    -   _Description_: Prometheus metrics endpoint exposing performance and operational statistics.
-    -   _Content Type_: `text/plain; version=0.0.4; charset=utf-8`
-    -   _Usage_: `curl http://localhost:8080/metrics`
-
--   **POST /api/cache/refresh**
-    -   _Description_: Administrative endpoint for clearing the DNS cache.
-    -   _Returns_: JSON response indicating success or error.
-        -   Success: `200 OK` with `{"status":"success", "message":"DNS cache has been cleared"}`
-        -   Cache not enabled: `400 Bad Request` with `{"status":"error", "message":"Cache is not enabled"}`
-        -   Other errors: `500 Internal Server Error` with `{"status":"error", "message":"Failed to clear cache"}`
-    -   _Usage_: `curl -X POST http://localhost:8080/api/cache/refresh`
-
-API endpoints follow standard HTTP status codes.
-
-### Use Cases
-
-Load Ants is particularly well-suited for the following use cases:
-
--   **Individual Users/Home Networks**:
-    -   Enhanced Privacy: Encrypt all DNS queries through DoH, preventing ISP or network man-in-the-middle snooping.
-    -   Circumvent Blocking and Censorship: Bypass DNS-based network access restrictions by selecting appropriate DoH servers.
-    -   Ad and Tracker Blocking: Effectively block advertisement domains and trackers by combining static rules and remote block lists (e.g., from `oisd.nl` or other sources).
-    -   Custom Resolution: Specify specific upstream resolvers for specific domains (e.g., use specific DNS for specific services).
--   **Developers/Testing Environments**:
-    -   Local DoH Resolution: Conveniently test applications that require DoH support locally.
-    -   DNS Behavior Analysis: Observe application DNS query behavior through logs and metrics.
-    -   Flexible Routing Testing: Quickly set up and test complex DNS routing policies, including dynamic updates based on remote lists.
--   **Enterprise/Organizational Internal Networks**:
-    -   Centralized DNS Resolution: Unify management of internal network DNS queries, enforce encryption, and improve network security baseline.
-    -   Security Policy Implementation: Block malicious domains, phishing sites, C&C servers, etc., with the ability to integrate threat intelligence sources.
-    -   Internal Domain Resolution: Route internal domain resolution requests to internal DNS servers (if internal DNS supports DoH, or through another non-DoH proxy layer).
-    -   Compliance: Log and audit DNS queries (requires self-configuration of log collection and analysis systems; Load Ants provides structured log output).
--   **Cloud-Native Environments (Kubernetes, Docker Swarm)**:
-    -   Sidecar Proxy: Serve as a sidecar container providing DoH resolution capabilities for other applications in the cluster without modifying the applications themselves.
-    -   Cluster DNS Service: Act as a cluster-wide DNS resolver (typically combined with or as an upstream for CoreDNS, etc., to enhance specific functionality).
-    -   High-Performance DNS Gateway: Provide high-concurrency, low-latency DNS-to-DoH conversion and intelligent routing for large-scale applications.
-
-## License
-
-[MIT License](./LICENSE)
-
-## Acknowledgements
-
--   Thanks to all developers who have contributed to the Load Ants project.
--   The design and implementation of this project were inspired by many excellent open-source DNS tools and DoH practices.
--   Special thanks to the Rust community for providing powerful tools and ecosystem.
