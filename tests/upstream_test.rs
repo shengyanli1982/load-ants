@@ -331,7 +331,7 @@ async fn test_upstream_doh_get_json() {
         name: "test_group".to_string(),
         strategy: LoadBalancingStrategy::RoundRobin,
         servers: vec![UpstreamServerConfig {
-            url: Url::parse(&format!("{}/dns-query", mock_server.uri())).unwrap(),
+            url: Url::parse(&format!("{}/resolve", mock_server.uri())).unwrap(),
             weight: 1,
             method: DoHMethod::Get,
             content_type: DoHContentType::Json,
@@ -343,7 +343,7 @@ async fn test_upstream_doh_get_json() {
 
     // 设置mock响应 - 匹配任何GET请求到/dns-query
     Mock::given(method("GET"))
-        .and(path("/dns-query"))
+        .and(path("/resolve"))
         .respond_with(
             ResponseTemplate::new(200)
                 .append_header("Content-Type", "application/dns-json")
@@ -376,19 +376,19 @@ async fn test_upstream_doh_get_json() {
 }
 
 #[tokio::test]
-async fn test_upstream_doh_post_json() {
+async fn test_upstream_doh_post_json_fails() {
     // 启动mock服务器
     let mock_server = MockServer::start().await;
 
     // 创建HTTP客户端配置
     let http_config = HttpClientConfig::default();
 
-    // 创建上游组配置 - POST请求，JSON内容类型
+    // 创建上游组配置 - POST请求，JSON内容类型（这是不合规的组合）
     let groups = vec![UpstreamGroupConfig {
         name: "test_group".to_string(),
         strategy: LoadBalancingStrategy::RoundRobin,
         servers: vec![UpstreamServerConfig {
-            url: Url::parse(&format!("{}/dns-query", mock_server.uri())).unwrap(),
+            url: Url::parse(&format!("{}/resolve", mock_server.uri())).unwrap(),
             weight: 1,
             method: DoHMethod::Post,
             content_type: DoHContentType::Json,
@@ -398,51 +398,28 @@ async fn test_upstream_doh_post_json() {
         proxy: None,
     }];
 
-    // 设置mock响应
-    Mock::given(method("POST"))
-        .and(path("/dns-query"))
-        // 验证Content-Type头部 (这是合理的，因为POST需要正确的Content-Type)
-        .and(header("Content-Type", "application/dns-json"))
-        // 删除请求体匹配器
-        .respond_with(
-            ResponseTemplate::new(200)
-                .append_header("Content-Type", "application/dns-json")
-                .set_body_string(create_test_json_response()),
-        )
-        .mount(&mock_server)
-        .await;
-
-    // 创建上游管理器
+    // 创建上游管理器 - 不应该验证配置，因为这里我们直接创建了不合规的配置
     let manager = UpstreamManager::new(groups, http_config).await.unwrap();
 
     // 创建DNS查询
     let query = create_test_dns_query("example.com", RecordType::A);
 
-    // 转发查询
+    // 转发查询 - 应该失败，因为JSON内容类型不支持POST方法
     let response = manager.forward(&query, "test_group").await;
 
-    // 验证响应
-    if let Err(ref e) = response {
-        println!("Error: {:?}", e);
-    } else if let Ok(ref dns_response) = response {
-        println!("Got response: {:?}", dns_response);
-        println!("Answer count: {}", dns_response.answers().len());
+    // 验证响应是错误
+    assert!(response.is_err());
+
+    // 验证错误类型和消息
+    if let Err(e) = response {
+        match e {
+            AppError::Upstream(msg) => {
+                assert!(msg.contains("JSON content type is not supported with POST method"));
+                println!("Got expected error: {}", msg);
+            }
+            _ => panic!("Expected Upstream error, got: {:?}", e),
+        }
     }
-    assert!(response.is_ok());
-    let dns_response = response.unwrap();
-    assert_eq!(dns_response.id(), 1234);
-    assert_eq!(dns_response.response_code(), ResponseCode::NoError);
-
-    // 验证响应中包含一个记录
-    assert_eq!(dns_response.answers().len(), 1);
-
-    // 验证DNS标志位
-    assert!(dns_response.recursion_desired());
-    assert!(dns_response.recursion_available());
-    assert!(!dns_response.authentic_data());
-
-    // 验证edns_client_subnet信息是否被解析
-    // 由于我们的设计，这里不能直接验证EDNS0信息，但可以确保记录已正确解析
 }
 
 #[tokio::test]
