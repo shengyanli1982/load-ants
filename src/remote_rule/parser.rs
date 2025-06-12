@@ -1,7 +1,4 @@
-use crate::{
-    config::MatchType,
-    error::{AppError, NotImplementedError},
-};
+use crate::{config::MatchType, error::AppError};
 
 /// 规则解析器特征，定义解析不同格式规则文件的接口
 pub trait RuleParser {
@@ -59,9 +56,9 @@ pub struct ClashRuleParser;
 
 impl RuleParser for ClashRuleParser {
     fn parse(&self, _content: &str) -> Result<Vec<(String, MatchType)>, AppError> {
-        Err(AppError::NotImplemented(NotImplementedError(
+        Err(AppError::NotImplemented(
             "ClashRuleParser has not been implemented yet, it will be supported in future versions"
                 .to_string(),
-        )))
+        ))
     }
 }
