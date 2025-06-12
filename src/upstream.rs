@@ -686,7 +686,7 @@ impl UpstreamManager {
                                 escaped = true;
                             }
                             _ => {
-                                if in_quotes || (!in_quotes && c != ' ') {
+                                if !(!in_quotes && c == ' ') {
                                     txt_data.push(c);
                                 }
                                 escaped = false;

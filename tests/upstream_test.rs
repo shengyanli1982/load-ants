@@ -910,7 +910,7 @@ async fn test_json_error_response() {
     assert_eq!(dns_response.response_code(), ResponseCode::ServFail);
 
     // 验证Question部分已被设置
-    assert!(dns_response.queries().len() >= 1);
+    assert!(!dns_response.queries().is_empty());
 
     // 验证没有Answer记录
     assert_eq!(dns_response.answers().len(), 0);
