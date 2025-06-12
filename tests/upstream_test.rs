@@ -7,6 +7,7 @@ use loadants::config::{
 };
 use loadants::error::AppError;
 use loadants::upstream::UpstreamManager;
+use reqwest::Url;
 use std::net::Ipv4Addr;
 use std::str::FromStr;
 use wiremock::{
@@ -151,14 +152,14 @@ async fn test_upstream_manager_creation() {
             strategy: LoadBalancingStrategy::RoundRobin,
             servers: vec![
                 UpstreamServerConfig {
-                    url: "https://example.com/dns-query".to_string(),
+                    url: Url::parse("https://example.com/dns-query").unwrap(),
                     weight: 1,
                     method: DoHMethod::Get,
                     content_type: DoHContentType::Message,
                     auth: None,
                 },
                 UpstreamServerConfig {
-                    url: "https://example.org/dns-query".to_string(),
+                    url: Url::parse("https://example.org/dns-query").unwrap(),
                     weight: 1,
                     method: DoHMethod::Get,
                     content_type: DoHContentType::Message,
@@ -173,14 +174,14 @@ async fn test_upstream_manager_creation() {
             strategy: LoadBalancingStrategy::Weighted,
             servers: vec![
                 UpstreamServerConfig {
-                    url: "https://example.com/dns-query".to_string(),
+                    url: Url::parse("https://example.com/dns-query").unwrap(),
                     weight: 2,
                     method: DoHMethod::Post,
                     content_type: DoHContentType::Message,
                     auth: None,
                 },
                 UpstreamServerConfig {
-                    url: "https://example.org/dns-query".to_string(),
+                    url: Url::parse("https://example.org/dns-query").unwrap(),
                     weight: 1,
                     method: DoHMethod::Post,
                     content_type: DoHContentType::Message,
@@ -210,7 +211,7 @@ async fn test_upstream_doh_get_message() {
         name: "test_group".to_string(),
         strategy: LoadBalancingStrategy::RoundRobin,
         servers: vec![UpstreamServerConfig {
-            url: format!("{}/dns-query", mock_server.uri()),
+            url: Url::parse(&format!("{}/dns-query", mock_server.uri())).unwrap(),
             weight: 1,
             method: DoHMethod::Get,
             content_type: DoHContentType::Message,
@@ -276,7 +277,7 @@ async fn test_upstream_doh_post_message() {
         name: "test_group".to_string(),
         strategy: LoadBalancingStrategy::RoundRobin,
         servers: vec![UpstreamServerConfig {
-            url: format!("{}/dns-query", mock_server.uri()),
+            url: Url::parse(&format!("{}/dns-query", mock_server.uri())).unwrap(),
             weight: 1,
             method: DoHMethod::Post,
             content_type: DoHContentType::Message,
@@ -330,7 +331,7 @@ async fn test_upstream_doh_get_json() {
         name: "test_group".to_string(),
         strategy: LoadBalancingStrategy::RoundRobin,
         servers: vec![UpstreamServerConfig {
-            url: format!("{}/dns-query", mock_server.uri()),
+            url: Url::parse(&format!("{}/dns-query", mock_server.uri())).unwrap(),
             weight: 1,
             method: DoHMethod::Get,
             content_type: DoHContentType::Json,
@@ -387,7 +388,7 @@ async fn test_upstream_doh_post_json() {
         name: "test_group".to_string(),
         strategy: LoadBalancingStrategy::RoundRobin,
         servers: vec![UpstreamServerConfig {
-            url: format!("{}/dns-query", mock_server.uri()),
+            url: Url::parse(&format!("{}/dns-query", mock_server.uri())).unwrap(),
             weight: 1,
             method: DoHMethod::Post,
             content_type: DoHContentType::Json,
@@ -457,7 +458,7 @@ async fn test_upstream_with_auth() {
         name: "auth_group".to_string(),
         strategy: LoadBalancingStrategy::RoundRobin,
         servers: vec![UpstreamServerConfig {
-            url: format!("{}/dns-query", mock_server.uri()),
+            url: Url::parse(&format!("{}/dns-query", mock_server.uri())).unwrap(),
             weight: 1,
             method: DoHMethod::Get,
             content_type: DoHContentType::Message,
@@ -513,7 +514,7 @@ async fn test_basic_auth() {
         name: "basic_auth_group".to_string(),
         strategy: LoadBalancingStrategy::RoundRobin,
         servers: vec![UpstreamServerConfig {
-            url: format!("{}/dns-query", mock_server.uri()),
+            url: Url::parse(&format!("{}/dns-query", mock_server.uri())).unwrap(),
             weight: 1,
             method: DoHMethod::Get,
             content_type: DoHContentType::Message,
@@ -570,14 +571,14 @@ async fn test_load_balancing_round_robin() {
         strategy: LoadBalancingStrategy::RoundRobin,
         servers: vec![
             UpstreamServerConfig {
-                url: format!("{}/dns-query1", mock_server.uri()),
+                url: Url::parse(&format!("{}/dns-query1", mock_server.uri())).unwrap(),
                 weight: 1,
                 method: DoHMethod::Get,
                 content_type: DoHContentType::Message,
                 auth: None,
             },
             UpstreamServerConfig {
-                url: format!("{}/dns-query2", mock_server.uri()),
+                url: Url::parse(&format!("{}/dns-query2", mock_server.uri())).unwrap(),
                 weight: 1,
                 method: DoHMethod::Get,
                 content_type: DoHContentType::Message,
@@ -644,7 +645,7 @@ async fn test_error_handling() {
         name: "test_group".to_string(),
         strategy: LoadBalancingStrategy::RoundRobin,
         servers: vec![UpstreamServerConfig {
-            url: format!("{}/dns-query", mock_server.uri()),
+            url: Url::parse(&format!("{}/dns-query", mock_server.uri())).unwrap(),
             weight: 1,
             method: DoHMethod::Get,
             content_type: DoHContentType::Message,
@@ -689,7 +690,7 @@ async fn test_retry_config() {
         name: "retry_group".to_string(),
         strategy: LoadBalancingStrategy::RoundRobin,
         servers: vec![UpstreamServerConfig {
-            url: format!("{}/dns-query", mock_server.uri()),
+            url: Url::parse(&format!("{}/dns-query", mock_server.uri())).unwrap(),
             weight: 1,
             method: DoHMethod::Get,
             content_type: DoHContentType::Message,
@@ -728,7 +729,7 @@ async fn test_json_response_parsing() {
         name: "json_group".to_string(),
         strategy: LoadBalancingStrategy::RoundRobin,
         servers: vec![UpstreamServerConfig {
-            url: format!("{}/dns-query", mock_server.uri()),
+            url: Url::parse(&format!("{}/dns-query", mock_server.uri())).unwrap(),
             weight: 1,
             method: DoHMethod::Get,
             content_type: DoHContentType::Json,
@@ -865,7 +866,7 @@ async fn test_json_error_response() {
         name: "error_group".to_string(),
         strategy: LoadBalancingStrategy::RoundRobin,
         servers: vec![UpstreamServerConfig {
-            url: format!("{}/dns-query", mock_server.uri()),
+            url: Url::parse(&format!("{}/dns-query", mock_server.uri())).unwrap(),
             weight: 1,
             method: DoHMethod::Get,
             content_type: DoHContentType::Json,
@@ -929,7 +930,7 @@ async fn test_json_txt_response() {
         name: "txt_group".to_string(),
         strategy: LoadBalancingStrategy::RoundRobin,
         servers: vec![UpstreamServerConfig {
-            url: format!("{}/dns-query", mock_server.uri()),
+            url: Url::parse(&format!("{}/dns-query", mock_server.uri())).unwrap(),
             weight: 1,
             method: DoHMethod::Get,
             content_type: DoHContentType::Json,
@@ -996,7 +997,7 @@ async fn test_json_edns_client_subnet() {
         name: "edns_group".to_string(),
         strategy: LoadBalancingStrategy::RoundRobin,
         servers: vec![UpstreamServerConfig {
-            url: format!("{}/dns-query", mock_server.uri()),
+            url: Url::parse(&format!("{}/dns-query", mock_server.uri())).unwrap(),
             weight: 1,
             method: DoHMethod::Get,
             content_type: DoHContentType::Json,

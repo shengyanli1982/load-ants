@@ -5,7 +5,6 @@ use crate::upstream::http_client::HttpClient;
 use crate::upstream::json::JsonConverter;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use hickory_proto::op::Message;
-use reqwest::Url;
 use reqwest_middleware::ClientWithMiddleware;
 
 pub struct DoHClient<'a> {
@@ -41,9 +40,7 @@ impl<'a> DoHClient<'a> {
         server: &UpstreamServerConfig,
     ) -> Result<Message, AppError> {
         // 创建请求URL
-        let url = Url::parse(&server.url).map_err(|e| {
-            AppError::Upstream(format!("Invalid upstream URL: {} - {}", server.url, e))
-        })?;
+        let url = server.url.clone();
 
         // 根据内容类型处理
         match server.content_type {
@@ -114,9 +111,7 @@ impl<'a> DoHClient<'a> {
         server: &UpstreamServerConfig,
     ) -> Result<Message, AppError> {
         // 创建请求URL
-        let mut url = Url::parse(&server.url).map_err(|e| {
-            AppError::Upstream(format!("Invalid upstream URL: {} - {}", server.url, e))
-        })?;
+        let mut url = server.url.clone();
 
         // 根据内容类型处理
         match server.content_type {

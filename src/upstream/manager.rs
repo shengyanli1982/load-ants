@@ -1,7 +1,5 @@
 use crate::balancer::{LoadBalancer, RandomBalancer, RoundRobinBalancer, WeightedBalancer};
-use crate::config::{
-    HttpClientConfig, LoadBalancingStrategy, UpstreamGroupConfig,
-};
+use crate::config::{HttpClientConfig, LoadBalancingStrategy, UpstreamGroupConfig};
 use crate::error::AppError;
 use crate::metrics::METRICS;
 use crate::r#const::{error_labels, upstream_labels};
@@ -92,12 +90,12 @@ impl UpstreamManager {
             }
         };
 
-        debug!("Selected upstream server: {}", server.url);
+        debug!("Selected upstream server: {}", server.url.as_str());
 
         // 记录上游请求指标
         METRICS
             .upstream_requests_total()
-            .with_label_values(&[group_name, &server.url])
+            .with_label_values(&[group_name, server.url.as_str()])
             .inc();
 
         // 记录开始时间
@@ -120,13 +118,13 @@ impl UpstreamManager {
                 let duration = start_time.elapsed();
                 METRICS
                     .upstream_duration_seconds()
-                    .with_label_values(&[group_name, &server.url])
+                    .with_label_values(&[group_name, server.url.as_str()])
                     .observe(duration.as_secs_f64());
 
                 Ok(response)
             }
             Err(e) => {
-                error!("Upstream request failed: {} - {}", server.url, e);
+                error!("Upstream request failed: {} - {}", server.url.as_str(), e);
 
                 // 报告上游失败
                 load_balancer.report_failure(server).await;
@@ -134,7 +132,11 @@ impl UpstreamManager {
                 // 记录上游错误指标
                 METRICS
                     .upstream_errors_total()
-                    .with_label_values(&[error_labels::REQUEST_ERROR, group_name, &server.url])
+                    .with_label_values(&[
+                        error_labels::REQUEST_ERROR,
+                        group_name,
+                        server.url.as_str(),
+                    ])
                     .inc();
 
                 Err(e)

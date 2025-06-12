@@ -4,6 +4,7 @@ use crate::r#const::{
     weight_limits,
 };
 use regex::Regex;
+use reqwest;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, fs, net::SocketAddr, path::Path, str::FromStr};
 use tracing::debug;
@@ -350,7 +351,7 @@ impl Config {
             for (i, server) in group.servers.iter().enumerate() {
                 // 严格验证URL格式
                 Self::validate_url(
-                    &server.url,
+                    server.url.as_str(),
                     &format!("Server #{} in group '{}'", i + 1, group.name),
                 )?;
 
@@ -729,7 +730,7 @@ impl Default for Config {
                 name: upstream_defaults::DEFAULT_GROUP_NAME.to_string(),
                 strategy: LoadBalancingStrategy::RoundRobin,
                 servers: vec![UpstreamServerConfig {
-                    url: upstream_defaults::DEFAULT_DOH_SERVER.to_string(),
+                    url: reqwest::Url::parse(upstream_defaults::DEFAULT_DOH_SERVER).unwrap(),
                     weight: upstream_defaults::DEFAULT_WEIGHT,
                     method: DoHMethod::Post,
                     content_type: DoHContentType::Message,

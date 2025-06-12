@@ -1,4 +1,8 @@
-use serde::{Deserialize, Serialize};
+use reqwest::Url;
+use serde::{
+    de::{self, Deserializer},
+    Deserialize, Serialize,
+};
 
 use super::common::{AuthConfig, RetryConfig};
 
@@ -34,11 +38,21 @@ pub enum DoHContentType {
     Json,
 }
 
+// 自定义反序列化函数，用于将字符串解析为 reqwest::Url
+fn deserialize_url<'de, D>(deserializer: D) -> Result<Url, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    Url::parse(&s).map_err(de::Error::custom)
+}
+
 // 上游服务器配置
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct UpstreamServerConfig {
     // DoH服务器URL
-    pub url: String,
+    #[serde(deserialize_with = "deserialize_url")]
+    pub url: Url,
     // 权重（仅用于加权负载均衡）
     #[serde(default)]
     pub weight: u32,
@@ -51,6 +65,30 @@ pub struct UpstreamServerConfig {
     // 认证配置（可选）
     pub auth: Option<AuthConfig>,
 }
+
+impl Clone for UpstreamServerConfig {
+    fn clone(&self) -> Self {
+        Self {
+            url: self.url.clone(),
+            weight: self.weight,
+            method: self.method.clone(),
+            content_type: self.content_type.clone(),
+            auth: self.auth.clone(),
+        }
+    }
+}
+
+impl PartialEq for UpstreamServerConfig {
+    fn eq(&self, other: &Self) -> bool {
+        self.url.as_str() == other.url.as_str()
+            && self.weight == other.weight
+            && self.method == other.method
+            && self.content_type == other.content_type
+            && self.auth == other.auth
+    }
+}
+
+impl Eq for UpstreamServerConfig {}
 
 // 默认的DoH方法为POST
 fn default_doh_method() -> DoHMethod {
