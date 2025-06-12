@@ -615,6 +615,45 @@ impl UpstreamManager {
                             let rdata = HickoryRData::TXT::new(txt_strings);
                             Record::from_rdata(name.clone(), ttl as u32, RData::TXT(rdata))
                         }
+                        RecordType::SRV => {
+                            // SRV记录格式为"优先级 权重 端口 目标主机名"
+                            let parts: Vec<&str> = data.split_whitespace().collect();
+                            if parts.len() >= 4 {
+                                match (
+                                    parts[0].parse::<u16>(),     // 优先级
+                                    parts[1].parse::<u16>(),     // 权重
+                                    parts[2].parse::<u16>(),     // 端口
+                                    Name::parse(parts[3], None), // 目标主机名
+                                ) {
+                                    (Ok(priority), Ok(weight), Ok(port), Ok(target)) => {
+                                        let rdata =
+                                            HickoryRData::SRV::new(priority, weight, port, target);
+                                        Record::from_rdata(
+                                            name.clone(),
+                                            ttl as u32,
+                                            RData::SRV(rdata),
+                                        )
+                                    }
+                                    _ => {
+                                        warn!("Failed to parse SRV record data {}", data);
+                                        continue;
+                                    }
+                                }
+                            } else {
+                                warn!("Invalid SRV record format {}", data);
+                                continue;
+                            }
+                        }
+                        RecordType::PTR => match Name::parse(data, None) {
+                            Ok(ptrdname) => {
+                                let rdata = HickoryRData::PTR(ptrdname);
+                                Record::from_rdata(name.clone(), ttl as u32, RData::PTR(rdata))
+                            }
+                            Err(e) => {
+                                warn!("Failed to parse PTR record data {}: {}", data, e);
+                                continue;
+                            }
+                        },
                         _ => {
                             // 对于其他记录类型，我们可能需要更复杂的解析
                             warn!("Unsupported record type: {:?}", record_type);
