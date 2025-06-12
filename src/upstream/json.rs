@@ -1,8 +1,10 @@
-use crate::error::AppError;
-use hickory_proto::rr::rdata as HickoryRData;
+use crate::{error::AppError, r#const::http_headers};
 use hickory_proto::{
-    op::{Message, MessageType, ResponseCode},
-    rr::{Name, RData, Record, RecordType},
+    op::{Message, MessageType, Query, ResponseCode},
+    rr::{
+        rdata::{self as HickoryRData, MX, SRV, TXT},
+        Name, RData, Record, RecordType,
+    },
 };
 use serde_json::{json, Value as JsonValue};
 use std::net::{Ipv4Addr, Ipv6Addr};
@@ -15,6 +17,7 @@ pub mod json_fields {
     pub const TYPE: &str = "type";
     pub const DO: &str = "do";
     pub const CD: &str = "cd";
+    pub const CT: &str = "ct";
 
     // 响应字段
     pub const TC: &str = "TC";
@@ -79,8 +82,10 @@ impl JsonConverter {
         // cd参数: Checking Disabled 标志，默认为false (启用DNSSEC验证)
         json_data[json_fields::CD] = json!(false);
 
+        // ct参数: 期望的响应内容类型，指定为JSON格式
+        json_data[json_fields::CT] = json!(http_headers::content_types::DNS_JSON);
+
         // 不添加edns_client_subnet参数，使用默认值
-        // 可选: 添加 random_padding 参数以使所有请求大小相同
         // 此处不添加content-type参数，由调用方在HTTP头中设置
 
         Ok(json_data)
@@ -168,7 +173,7 @@ impl JsonConverter {
                         if let Ok(domain) = Name::parse(name, None) {
                             let record_type = RecordType::from(q_type as u16);
                             // 重新创建查询
-                            let query_record = hickory_proto::op::Query::query(domain, record_type);
+                            let query_record = Query::query(domain, record_type);
                             response.add_query(query_record);
                         }
                     }
@@ -248,77 +253,51 @@ impl JsonConverter {
                     }
                 },
                 RecordType::MX => {
-                    // MX记录格式通常为"优先级 主机名"
                     let parts: Vec<&str> = data.split_whitespace().collect();
-                    if parts.len() >= 2 {
-                        match (parts[0].parse::<u16>(), Name::parse(parts[1], None)) {
-                            (Ok(preference), Ok(exchange)) => {
-                                let rdata = HickoryRData::MX::new(preference, exchange);
-                                Some(Record::from_rdata(name, ttl as u32, RData::MX(rdata)))
-                            }
-                            _ => {
-                                warn!("Failed to parse MX record data {}", data);
-                                None
-                            }
+                    if parts.len() == 2 {
+                        if let (Ok(preference), Ok(exchange)) =
+                            (parts[0].parse::<u16>(), Name::parse(parts[1], None))
+                        {
+                            Some(Record::from_rdata(
+                                name,
+                                ttl as u32,
+                                RData::MX(MX::new(preference, exchange)),
+                            ))
+                        } else {
+                            warn!("Failed to parse MX record data '{}'", data);
+                            None
                         }
                     } else {
-                        warn!("Invalid MX record format {}", data);
+                        warn!("Invalid MX record data format '{}'", data);
                         None
                     }
                 }
                 RecordType::TXT => {
-                    // TXT记录可能包含多个引号部分
-                    // 处理诸如 "v=spf1 -all" 或 "k=rsa; p=MIGfMA0..." "更多数据"
-
-                    // 去除首尾引号，处理多部分TXT记录
-                    let mut txt_data = String::new();
-                    let mut in_quotes = false;
-                    let mut escaped = false;
-
-                    for c in data.chars() {
-                        match c {
-                            '"' if !escaped => {
-                                in_quotes = !in_quotes;
-                                // 不将引号添加到实际数据中
-                            }
-                            '\\' if !escaped => {
-                                escaped = true;
-                            }
-                            _ => {
-                                if in_quotes || c != ' ' {
-                                    txt_data.push(c);
-                                }
-                                escaped = false;
-                            }
-                        }
-                    }
-
-                    // 创建TXT记录
-                    let txt_strings = vec![txt_data];
-                    let rdata = HickoryRData::TXT::new(txt_strings);
-                    Some(Record::from_rdata(name, ttl as u32, RData::TXT(rdata)))
+                    // Google's JSON format for TXT provides a single string. We'll treat it as a single entry.
+                    // For multiple strings, the format would be more complex.
+                    let txt_data = TXT::new(vec![data.to_string()]);
+                    Some(Record::from_rdata(name, ttl as u32, RData::TXT(txt_data)))
                 }
                 RecordType::SRV => {
-                    // SRV记录格式为"优先级 权重 端口 目标主机名"
                     let parts: Vec<&str> = data.split_whitespace().collect();
-                    if parts.len() >= 4 {
-                        match (
-                            parts[0].parse::<u16>(),     // 优先级
-                            parts[1].parse::<u16>(),     // 权重
-                            parts[2].parse::<u16>(),     // 端口
-                            Name::parse(parts[3], None), // 目标主机名
+                    if parts.len() == 4 {
+                        if let (Ok(priority), Ok(weight), Ok(port), Ok(target)) = (
+                            parts[0].parse::<u16>(),
+                            parts[1].parse::<u16>(),
+                            parts[2].parse::<u16>(),
+                            Name::parse(parts[3], None),
                         ) {
-                            (Ok(priority), Ok(weight), Ok(port), Ok(target)) => {
-                                let rdata = HickoryRData::SRV::new(priority, weight, port, target);
-                                Some(Record::from_rdata(name, ttl as u32, RData::SRV(rdata)))
-                            }
-                            _ => {
-                                warn!("Failed to parse SRV record data {}", data);
-                                None
-                            }
+                            Some(Record::from_rdata(
+                                name,
+                                ttl as u32,
+                                RData::SRV(SRV::new(priority, weight, port, target)),
+                            ))
+                        } else {
+                            warn!("Failed to parse SRV record data '{}'", data);
+                            None
                         }
                     } else {
-                        warn!("Invalid SRV record format {}", data);
+                        warn!("Invalid SRV record data format '{}'", data);
                         None
                     }
                 }

@@ -1,8 +1,9 @@
-use crate::config::{DoHContentType, DoHMethod, UpstreamServerConfig};
-use crate::error::AppError;
-use crate::r#const::http_headers;
-use crate::upstream::http_client::HttpClient;
-use crate::upstream::json::JsonConverter;
+use crate::{
+    config::{DoHContentType, DoHMethod, UpstreamServerConfig},
+    error::AppError,
+    r#const::http_headers,
+    upstream::{http_client::HttpClient, json::JsonConverter},
+};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use hickory_proto::op::Message;
 use reqwest_middleware::ClientWithMiddleware;

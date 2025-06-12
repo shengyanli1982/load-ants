@@ -1,6 +1,8 @@
-use crate::config::{AuthConfig, AuthType, HttpClientConfig, RetryConfig};
-use crate::error::{AppError, HttpClientError, InvalidProxyConfig};
-use crate::r#const::{http_headers, retry_limits};
+use crate::{
+    config::{AuthConfig, AuthType, HttpClientConfig, RetryConfig},
+    error::{AppError, HttpClientError, InvalidProxyConfig},
+    r#const::{http_headers, retry_limits},
+};
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware, RequestBuilder};
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use retry_policies::Jitter;

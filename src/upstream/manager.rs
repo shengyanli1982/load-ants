@@ -1,13 +1,14 @@
-use crate::balancer::{LoadBalancer, RandomBalancer, RoundRobinBalancer, WeightedBalancer};
-use crate::config::{HttpClientConfig, LoadBalancingStrategy, UpstreamGroupConfig};
-use crate::error::AppError;
-use crate::metrics::METRICS;
-use crate::r#const::{error_labels, upstream_labels};
-use crate::upstream::doh::DoHClient;
-use crate::upstream::http_client::HttpClient;
+use crate::{
+    balancer::{LoadBalancer, RandomBalancer, RoundRobinBalancer, WeightedBalancer},
+    config::{HttpClientConfig, LoadBalancingStrategy, UpstreamGroupConfig},
+    error::AppError,
+    metrics::METRICS,
+    r#const::{error_labels, upstream_labels},
+    upstream::{doh::DoHClient, http_client::HttpClient},
+};
 use hickory_proto::op::Message;
 use reqwest_middleware::ClientWithMiddleware;
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, time::Instant};
 use tracing::{debug, error, info};
 
 // 上游管理器
@@ -99,7 +100,7 @@ impl UpstreamManager {
             .inc();
 
         // 记录开始时间
-        let start_time = std::time::Instant::now();
+        let start_time = Instant::now();
 
         // 获取组的HTTP客户端
         let client = match self.group_clients.get(group_name) {
