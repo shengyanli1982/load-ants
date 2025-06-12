@@ -7,70 +7,9 @@ use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use retry_policies::Jitter;
 use std::time::Duration;
-use tracing::{debug, error, info};
+use tracing::{debug, info};
 
-/// 规则解析器特征，定义解析不同格式规则文件的接口
-pub trait RuleParser {
-    /// 解析规则内容，返回(域名模式, 匹配类型)的列表
-    fn parse(&self, content: &str) -> Result<Vec<(String, MatchType)>, AppError>;
-}
-
-/// V2Ray规则解析器
-pub struct V2RayRuleParser;
-
-impl RuleParser for V2RayRuleParser {
-    fn parse(&self, content: &str) -> Result<Vec<(String, MatchType)>, AppError> {
-        let mut rules = Vec::new();
-
-        for line in content.lines() {
-            // 跳过空行和注释
-            let line = line.trim();
-            if line.is_empty() || line.starts_with('#') {
-                continue;
-            }
-
-            // 处理不同类型的规则
-            if let Some(stripped) = line.strip_prefix("full:") {
-                // 精确匹配规则: full:example.com
-                let domain = stripped.trim().to_string();
-                if !domain.is_empty() {
-                    rules.push((domain, MatchType::Exact));
-                }
-            } else if let Some(stripped) = line.strip_prefix("regexp:") {
-                // 正则表达式匹配规则: regexp:.*\.example\.com$
-                let pattern = stripped.trim().to_string();
-                if !pattern.is_empty() {
-                    rules.push((pattern, MatchType::Regex));
-                }
-            } else {
-                // 通配符匹配规则（默认）: example.com -> *.example.com
-                let domain = line.trim().to_string();
-                if !domain.is_empty() {
-                    // 如果域名不是以*开头，转换为*.domain.com格式
-                    if domain == "*" {
-                        rules.push((domain, MatchType::Wildcard));
-                    } else {
-                        rules.push((format!("*.{}", domain), MatchType::Wildcard));
-                    }
-                }
-            }
-        }
-
-        Ok(rules)
-    }
-}
-
-/// Clash规则解析器（为未来扩展预留）
-pub struct ClashRuleParser;
-
-impl RuleParser for ClashRuleParser {
-    fn parse(&self, _content: &str) -> Result<Vec<(String, MatchType)>, AppError> {
-        Err(AppError::NotImplemented(
-            "ClashRuleParser has not been implemented yet, it will be supported in future versions"
-                .to_string(),
-        ))
-    }
-}
+use super::parser::{RuleParser, V2RayRuleParser};
 
 /// 远程规则加载器
 pub struct RemoteRuleLoader {
@@ -302,44 +241,4 @@ impl RemoteRuleLoader {
 
         Ok(route_rules)
     }
-}
-
-/// 加载所有远程规则并与本地规则合并
-pub async fn load_and_merge_rules(
-    remote_configs: &[RemoteRuleConfig],
-    static_rules: &[RouteRuleConfig],
-    http_config: &HttpClientConfig,
-) -> Result<Vec<RouteRuleConfig>, AppError> {
-    // 创建一个规则列表，预先分配足够的空间
-    let mut merged_rules = Vec::with_capacity(static_rules.len() + remote_configs.len() * 3);
-
-    // 首先添加静态规则（通过克隆）
-    merged_rules.extend_from_slice(static_rules);
-
-    // 加载每个远程规则
-    for config in remote_configs {
-        match RemoteRuleLoader::new(config.clone(), http_config.clone()) {
-            Ok(loader) => {
-                match loader.load().await {
-                    Ok(remote_rules) => {
-                        // 将远程规则添加到合并规则列表，避免不必要的克隆
-                        merged_rules.extend(remote_rules);
-                    }
-                    Err(e) => {
-                        // 记录错误但继续处理其他规则
-                        error!("Failed to load domains from {:?}: {}", config.url, e);
-                    }
-                }
-            }
-            Err(e) => {
-                // 记录错误但继续处理其他规则
-                error!(
-                    "Failed to create remote rule loader for {}: {}",
-                    config.url, e
-                );
-            }
-        }
-    }
-
-    Ok(merged_rules)
 }
