@@ -126,6 +126,9 @@ pub enum ConfigError {
     #[error("Invalid authentication configuration: {0}")]
     InvalidAuthConfig(String),
 
+    #[error("Invalid upstream server configuration: {0}")]
+    InvalidUpstreamConfig(String),
+
     #[error("Invalid route rule: {0}")]
     InvalidRouteRule(String),
 

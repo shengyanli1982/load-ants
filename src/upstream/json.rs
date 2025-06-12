@@ -15,8 +15,10 @@ pub mod json_fields {
     // 请求字段
     pub const NAME: &str = "name";
     pub const TYPE: &str = "type";
+    #[allow(dead_code)]
     pub const DO: &str = "do";
     pub const CD: &str = "cd";
+    #[allow(dead_code)]
     pub const CT: &str = "ct";
 
     // 响应字段
@@ -36,6 +38,7 @@ pub mod json_fields {
 }
 
 // DNS常量
+#[allow(dead_code)]
 pub const DNS_CLASS_IN: u16 = 1;
 
 // DNS状态码常量
@@ -60,6 +63,7 @@ pub struct JsonConverter;
 impl JsonConverter {
     // 将DNS消息转换为DNS JSON格式
     // https://developers.google.com/speed/public-dns/docs/doh/json
+    #[allow(dead_code)]
     pub fn message_to_json(&self, query: &Message) -> Result<JsonValue, AppError> {
         // 创建一个JSON对象以发送给DoH服务器
         let query_param = match query.queries().first() {

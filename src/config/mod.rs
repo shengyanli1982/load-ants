@@ -367,6 +367,14 @@ impl Config {
                     )));
                 }
 
+                // 验证DoH方法和内容类型组合
+                if server.content_type == DoHContentType::Json && server.method == DoHMethod::Post {
+                    return Err(ConfigError::InvalidUpstreamConfig(format!(
+                        "Server #{} in group '{}': JSON content type only supports GET method, not POST. See: https://developers.google.com/speed/public-dns/docs/doh/json",
+                        i + 1, group.name
+                    )));
+                }
+
                 // 验证认证配置（如果提供）
                 if let Some(auth) = &server.auth {
                     match auth.r#type {

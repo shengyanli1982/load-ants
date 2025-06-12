@@ -78,29 +78,11 @@ impl<'a> DoHClient<'a> {
                 Ok(message)
             }
             DoHContentType::Json => {
-                // 将DNS查询转换为JSON
-                let json_data = self.json_converter.message_to_json(query)?;
-                let json_string = serde_json::to_string(&json_data)?;
-
-                // 创建POST请求
-                let request = self
-                    .client
-                    .post(url)
-                    .header(http_headers::ACCEPT, http_headers::content_types::DNS_JSON)
-                    .header(
-                        http_headers::CONTENT_TYPE,
-                        http_headers::content_types::DNS_JSON,
-                    )
-                    .body(json_string);
-
-                // 添加认证信息
-                let request = HttpClient::add_auth_to_request(request, &server.auth)?;
-
-                // 发送请求并返回响应体
-                let response_data = HttpClient::send_request(request).await?;
-
-                // 解析JSON响应为DNS消息
-                self.json_converter.json_to_message(&response_data, query)
+                // JSON格式不支持POST方法，返回错误
+                Err(AppError::Upstream(
+                    "JSON content type is not supported with POST method. Use GET method instead."
+                        .to_string(),
+                ))
             }
         }
     }
