@@ -3,7 +3,6 @@ use crate::handler::RequestHandler as DnsRequestHandler;
 use crate::metrics::METRICS;
 use crate::r#const::{error_labels, protocol_labels};
 use hickory_proto::op::{Header, Message, MessageType, OpCode, Query, ResponseCode};
-use hickory_proto::rr::Record;
 use hickory_server::authority::MessageResponseBuilder;
 use hickory_server::server::{Request, RequestHandler, ResponseHandler, ResponseInfo};
 use std::net::SocketAddr;
@@ -143,22 +142,12 @@ impl RequestHandler for HandlerAdapter {
                     .with_label_values(&[header.response_code().to_string().as_str()])
                     .inc();
 
-                // 将Record引用转换为独立引用而不是双重引用
-                let answers: Vec<Record> = result.answers().to_vec();
-                let name_servers: Vec<Record> = result.name_servers().to_vec();
-                let additionals: Vec<Record> = result.additionals().to_vec();
-
-                // 创建独立的迭代器
-                let answers_iter = answers.iter();
-                let name_servers_iter = name_servers.iter();
-                let additionals_iter = additionals.iter();
-
                 let builder = MessageResponseBuilder::from_message_request(request);
                 let response = builder.build(
                     header,
-                    answers_iter,
-                    name_servers_iter,
-                    additionals_iter,
+                    result.answers().iter(),
+                    result.name_servers().iter(),
+                    result.additionals().iter(),
                     None, // 不传递扩展信息
                 );
 

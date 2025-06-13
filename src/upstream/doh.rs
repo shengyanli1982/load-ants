@@ -5,7 +5,10 @@ use crate::{
     upstream::{http_client::HttpClient, json::JsonConverter},
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
-use hickory_proto::op::Message;
+use hickory_proto::{
+    op::Message,
+    serialize::binary::{BinEncodable, BinEncoder},
+};
 use reqwest_middleware::ClientWithMiddleware;
 
 pub struct DoHClient<'a> {
@@ -46,8 +49,11 @@ impl<'a> DoHClient<'a> {
         // 根据内容类型处理
         match server.content_type {
             DoHContentType::Message => {
-                // 将DNS查询编码为二进制数据
-                let query_data = query.to_vec()?;
+                // 创建一个可复用的缓冲区
+                let mut buffer = Vec::with_capacity(512); // 512字节对于DNS查询是一个合理的初始容量
+                                                          // 使用二进制编码器将查询消息写入缓冲区
+                let mut encoder = BinEncoder::new(&mut buffer);
+                query.emit(&mut encoder)?;
 
                 // 创建POST请求
                 let mut request = self
@@ -61,7 +67,7 @@ impl<'a> DoHClient<'a> {
                         http_headers::CONTENT_TYPE,
                         http_headers::content_types::DNS_MESSAGE,
                     )
-                    .body(query_data);
+                    .body(buffer);
 
                 // 添加认证信息
                 request = HttpClient::add_auth_to_request(request, &server.auth)?;
@@ -99,11 +105,14 @@ impl<'a> DoHClient<'a> {
         // 根据内容类型处理
         match server.content_type {
             DoHContentType::Message => {
-                // 将DNS查询编码为二进制数据
-                let query_data = query.to_vec()?;
+                // 创建一个可复用的缓冲区
+                let mut buffer = Vec::with_capacity(2048);
+                // 使用二进制编码器将查询消息写入缓冲区
+                let mut encoder = BinEncoder::new(&mut buffer);
+                query.emit(&mut encoder)?;
 
                 // Base64Url编码
-                let b64_data = URL_SAFE_NO_PAD.encode(&query_data);
+                let b64_data = URL_SAFE_NO_PAD.encode(&buffer);
 
                 // 添加查询参数
                 url.query_pairs_mut().append_pair("dns", &b64_data);
