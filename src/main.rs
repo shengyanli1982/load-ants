@@ -1,16 +1,8 @@
-use loadants::admin::AdminServer;
-use loadants::args::Args;
-use loadants::cache::DnsCache;
-use loadants::config::Config;
-use loadants::config::MatchType::{Exact, Regex, Wildcard};
-use loadants::error::AppError;
-use loadants::handler::RequestHandler;
-use loadants::metrics::METRICS;
-use loadants::r#const::{rule_source_labels, rule_type_labels, subsystem_names};
-use loadants::router::Router;
-use loadants::server;
-use loadants::server::DnsServer;
-use loadants::upstream::UpstreamManager;
+use loadants::{
+    metrics::METRICS, rule_source_labels, rule_type_labels, server::DnsServerConfig,
+    subsystem_names, AdminServer, AppError, Args, Config, DnsCache, DnsServer, MatchType,
+    RequestHandler, Router, UpstreamManager,
+};
 use mimalloc::MiMalloc;
 use std::process;
 use std::sync::Arc;
@@ -203,10 +195,10 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
 
             // 静态规则数量
             for rule in &config.static_rules {
-                match rule.match_type {
-                    Exact => exact_count_static += rule.patterns.len(),
-                    Wildcard => wildcard_count_static += rule.patterns.len(),
-                    Regex => regex_count_static += rule.patterns.len(),
+                match &rule.match_type {
+                    MatchType::Exact => exact_count_static += rule.patterns.len(),
+                    MatchType::Wildcard => wildcard_count_static += rule.patterns.len(),
+                    MatchType::Regex => regex_count_static += rule.patterns.len(),
                 }
             }
 
@@ -215,10 +207,10 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
             if static_rules_len < rules.len() {
                 // 计算远程规则中各类型的数量
                 for rule in rules.iter().skip(static_rules_len) {
-                    match rule.match_type {
-                        Exact => exact_count_remote += rule.patterns.len(),
-                        Wildcard => wildcard_count_remote += rule.patterns.len(),
-                        Regex => regex_count_remote += rule.patterns.len(),
+                    match &rule.match_type {
+                        MatchType::Exact => exact_count_remote += rule.patterns.len(),
+                        MatchType::Wildcard => wildcard_count_remote += rule.patterns.len(),
+                        MatchType::Regex => regex_count_remote += rule.patterns.len(),
                     }
                 }
             }
@@ -280,7 +272,7 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
     let handler = Arc::new(RequestHandler::new(cache, router, upstream));
 
     // 创建DNS服务器配置
-    let server_config = server::DnsServerConfig {
+    let server_config = DnsServerConfig {
         udp_bind_addr: config.server.listen_udp.parse()?,
         tcp_bind_addr: config.server.listen_tcp.parse()?,
         tcp_timeout: config.server.tcp_timeout,

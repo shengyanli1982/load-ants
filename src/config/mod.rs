@@ -20,6 +20,9 @@ pub use core::*;
 pub use rule::*;
 pub use upstream::*;
 
+// 配置结果类型别名
+pub type ConfigResult<T> = Result<T, ConfigError>;
+
 // 应用配置
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub struct Config {
@@ -42,7 +45,7 @@ pub struct Config {
 
 impl Config {
     // 从文件加载配置
-    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self, ConfigError> {
+    pub fn from_file<P: AsRef<Path>>(path: P) -> ConfigResult<Self> {
         debug!("Loading configuration file: {:?}", path.as_ref());
         let content = fs::read_to_string(path).map_err(ConfigError::LoadError)?;
         let config: Config = serde_yaml::from_str(&content).map_err(ConfigError::ParseError)?;
@@ -57,7 +60,7 @@ impl Config {
     }
 
     // 验证配置有效性
-    pub fn validate(&self) -> Result<(), ConfigError> {
+    pub fn validate(&self) -> ConfigResult<()> {
         // 验证服务器配置
         self.validate_server_config()?;
 
@@ -83,7 +86,7 @@ impl Config {
     }
 
     // 验证服务器配置
-    fn validate_server_config(&self) -> Result<(), ConfigError> {
+    fn validate_server_config(&self) -> ConfigResult<()> {
         // 验证UDP监听地址
         SocketAddr::from_str(&self.server.listen_udp)
             .map_err(|_| ConfigError::InvalidListenAddress(self.server.listen_udp.clone()))?;
@@ -96,7 +99,7 @@ impl Config {
     }
 
     // 验证管理服务器配置
-    fn validate_admin_config(&self) -> Result<(), ConfigError> {
+    fn validate_admin_config(&self) -> ConfigResult<()> {
         // 验证管理服务器监听地址
         SocketAddr::from_str(&self.admin.listen)
             .map_err(|_| ConfigError::InvalidListenAddress(self.admin.listen.clone()))?;
@@ -105,7 +108,7 @@ impl Config {
     }
 
     // 验证缓存配置
-    fn validate_cache_config(&self) -> Result<(), ConfigError> {
+    fn validate_cache_config(&self) -> ConfigResult<()> {
         if self.cache.enabled {
             // 验证最大缓存条目数
             if self.cache.max_size == 0 {
@@ -170,7 +173,7 @@ impl Config {
     }
 
     // 验证HTTP客户端配置
-    fn validate_http_client_config(&self) -> Result<(), ConfigError> {
+    fn validate_http_client_config(&self) -> ConfigResult<()> {
         // 验证连接超时
         if self.http_client.connect_timeout == 0 {
             return Err(ConfigError::InvalidHttpClientConfig(
@@ -246,7 +249,7 @@ impl Config {
     }
 
     // 验证URL格式
-    fn validate_url(url_str: &str, context: &str) -> Result<(), ConfigError> {
+    fn validate_url(url_str: &str, context: &str) -> ConfigResult<()> {
         match Url::parse(url_str) {
             Ok(url) => {
                 // 验证URL方案
@@ -284,7 +287,7 @@ impl Config {
     }
 
     // 验证上游组配置
-    fn validate_upstream_groups(&self) -> Result<(), ConfigError> {
+    fn validate_upstream_groups(&self) -> ConfigResult<()> {
         let mut group_names = HashSet::with_capacity(self.upstream_groups.len());
 
         for group in &self.upstream_groups {
@@ -463,7 +466,7 @@ impl Config {
     }
 
     // 验证路由规则配置
-    fn validate_static_rules(&self) -> Result<(), ConfigError> {
+    fn validate_static_rules(&self) -> ConfigResult<()> {
         // 获取所有上游组名称 - 预分配容量
         let group_names: HashSet<_> = self.upstream_groups.iter().map(|g| &g.name).collect();
 
@@ -570,7 +573,7 @@ impl Config {
     }
 
     // 验证远程规则配置
-    fn validate_remote_rules(&self) -> Result<(), ConfigError> {
+    fn validate_remote_rules(&self) -> ConfigResult<()> {
         // 获取所有上游组名称
         let group_names: HashSet<_> = self.upstream_groups.iter().map(|g| &g.name).collect();
 

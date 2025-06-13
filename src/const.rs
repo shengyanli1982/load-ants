@@ -199,21 +199,21 @@ pub mod rule_source_labels {
 pub mod rule_action_labels {
     // 转发动作
     pub const FORWARD: &str = "forward";
-    // 拦截动作
+    // 阻止动作
     pub const BLOCK: &str = "block";
 }
 
-// 子系统名称常量
+// 子系统名称
 pub mod subsystem_names {
-    // DNS服务器子系统名称
+    // DNS服务器子系统
     pub const DNS_SERVER: &str = "dns_server";
-    // 管理服务器子系统名称
+    // 管理服务器子系统
     pub const ADMIN_SERVER: &str = "admin_server";
 }
 
-// 服务器默认值常量
+// 服务器默认值
 pub mod server_defaults {
-    // 默认TCP超时时间（秒）
+    // 默认TCP超时（秒）
     pub const DEFAULT_TCP_TIMEOUT: u64 = 10;
     // 默认DNS监听地址
     pub const DEFAULT_DNS_LISTEN: &str = "127.0.0.1:53";
@@ -221,50 +221,49 @@ pub mod server_defaults {
     pub const DEFAULT_ADMIN_LISTEN: &str = "127.0.0.1:8080";
 }
 
-// 上游服务器默认值常量
+// 上游默认值
 pub mod upstream_defaults {
     // 默认上游组名称
     pub const DEFAULT_GROUP_NAME: &str = "default";
-    // 默认DoH服务器URL
+    // 默认DoH服务器
     pub const DEFAULT_DOH_SERVER: &str = "https://dns.google/dns-query";
-    // 默认服务器权重
+    // 默认权重
     pub const DEFAULT_WEIGHT: u32 = 1;
 }
 
-// 路由引擎常量
+// 路由器常量
 pub mod router {
     // 通配符常量
     pub mod wildcards {
         // 全局通配符
         pub const GLOBAL: &str = "*";
-        // 通配符前缀
-        #[allow(dead_code)]
+        // 前缀通配符
         pub const PREFIX: &str = "*.";
-        // 点号分隔符
+        // 点分隔符
         pub const DOT: char = '.';
     }
 }
 
-// HTTP 头常量
+// HTTP头常量
 pub mod http_headers {
-    // 内容类型头
+    // Content-Type 头
     pub const CONTENT_TYPE: &str = "Content-Type";
-    // 接受类型头
+    // Accept 头
     pub const ACCEPT: &str = "Accept";
-    // 授权头
+    // Authorization 头
     pub const AUTHORIZATION: &str = "Authorization";
 
-    // 内容类型值
+    // 内容类型常量
     pub mod content_types {
-        // DNS 消息格式
+        // DNS消息内容类型
         pub const DNS_MESSAGE: &str = "application/dns-message";
-        // DNS JSON 格式
+        // DNS JSON内容类型
         pub const DNS_JSON: &str = "application/dns-json";
     }
 
-    // 授权类型
+    // 认证常量
     pub mod auth {
-        // Bearer 授权前缀
+        // Bearer前缀
         pub const BEARER_PREFIX: &str = "Bearer ";
     }
 }

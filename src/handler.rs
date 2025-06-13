@@ -1,13 +1,8 @@
-use crate::cache::DnsCache;
-use crate::config::RouteAction;
-use crate::error::AppError;
-use crate::metrics::METRICS;
-use crate::r#const::{
-    cache_labels, error_labels, processing_labels, protocol_labels, rule_action_labels,
-    rule_source_labels, rule_type_labels,
+use crate::{
+    cache_labels, error_labels, metrics::METRICS, processing_labels, protocol_labels,
+    rule_action_labels, rule_source_labels, rule_type_labels, AppError, DnsCache, RouteAction,
+    Router, UpstreamManager,
 };
-use crate::router::Router;
-use crate::upstream::UpstreamManager;
 use hickory_proto::op::{Message, MessageType, ResponseCode};
 use std::sync::Arc;
 use std::time::Instant;
@@ -139,6 +134,11 @@ impl RequestHandler {
         start_time: &Instant,
     ) -> Option<Message> {
         if !self.cache.is_enabled() {
+            return None;
+        }
+
+        // 检查是否有查询
+        if request.queries().is_empty() {
             return None;
         }
 

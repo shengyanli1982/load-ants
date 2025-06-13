@@ -1,7 +1,7 @@
-use crate::config::{MatchType, RouteAction, RouteRuleConfig};
-use crate::error::{AppError, ConfigError};
-use crate::metrics::METRICS;
-use crate::r#const::{router::wildcards, rule_action_labels, rule_source_labels, rule_type_labels};
+use crate::{
+    error::ConfigError, metrics::METRICS, r#const::router::wildcards, rule_action_labels,
+    rule_source_labels, rule_type_labels, AppError, MatchType, RouteAction, RouteRuleConfig,
+};
 use hickory_proto::rr::Name;
 use lazy_static::lazy_static;
 use regex::Regex;
