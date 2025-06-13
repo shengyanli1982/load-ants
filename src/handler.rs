@@ -75,12 +75,6 @@ impl RequestHandler {
             }
         };
 
-        // 记录响应代码指标
-        METRICS
-            .dns_response_codes_total()
-            .with_label_values(&[response.response_code().to_string().as_str()])
-            .inc();
-
         // 缓存响应
         self.cache_response(request, response.clone(), query_name)
             .await;
