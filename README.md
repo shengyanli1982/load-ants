@@ -272,6 +272,14 @@ Each element in the `servers` array of `upstream_groups` represents a DoH server
 | content_type | String  | "message" | DoH content type (`application/dns-message` or `application/dns-json`) | "message", "json"            |
 | auth         | Object  | -         | Authentication configuration for accessing this server (optional)      | See auth configuration below |
 
+**Technical Considerations for DoH Content Types:**
+
+-   `message` (`application/dns-message`): Implements the RFC 8484 standard protocol, supporting both GET and POST HTTP methods. This format encapsulates binary DNS messages directly and is the recommended option for optimal compatibility and performance across DoH providers.
+
+-   `json` (`application/dns-json`): Implements Google's JSON API specification for DNS queries, which **exclusively supports the GET method**. This format is provided primarily for compatibility with specific client implementations that require JSON-formatted responses.
+
+When configuring with `content_type: "json"`, you **must** specify `method: "get"`. The system's configuration validator enforces this protocol requirement and will reject any configuration that attempts to combine `content_type: "json"` with `method: "post"`, as this combination violates the Google Public DNS specification and would result in failed queries.
+
 #### Authentication Configuration (auth)
 
 Used for `upstream_groups.servers.auth`.
