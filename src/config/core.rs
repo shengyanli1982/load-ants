@@ -1,12 +1,25 @@
+use crate::config::validate_socket_addr;
 use crate::r#const::{cache_limits, http_client_limits, server_defaults};
 use serde::{Deserialize, Serialize};
+use validator::{Validate, ValidationError};
 
 // HTTP客户端配置
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Validate)]
+#[serde(rename_all = "lowercase")]
 pub struct HttpClientConfig {
     // 连接超时（秒）
+    #[validate(range(
+        min = 1,
+        max = 120,
+        message = "Connection timeout must be between 1-120 seconds"
+    ))]
     pub connect_timeout: u64,
     // 请求超时（秒）
+    #[validate(range(
+        min = 1,
+        max = 1200,
+        message = "Request timeout must be between 1-1200 seconds"
+    ))]
     pub request_timeout: u64,
     // 空闲连接超时（秒）（可选）
     pub idle_timeout: Option<u64>,
@@ -28,15 +41,55 @@ impl Default for HttpClientConfig {
     }
 }
 
+// 为 HttpClientConfig 实现自定义验证逻辑
+impl HttpClientConfig {
+    // 验证可选字段
+    pub fn validate_optional_fields(&self) -> Result<(), ValidationError> {
+        // 验证空闲超时
+        if let Some(idle_timeout) = self.idle_timeout {
+            if idle_timeout < http_client_limits::MIN_IDLE_TIMEOUT
+                || idle_timeout > http_client_limits::MAX_IDLE_TIMEOUT
+            {
+                return Err(ValidationError::new("idle_timeout_out_of_range"));
+            }
+        }
+
+        // 验证keepalive
+        if let Some(keepalive) = self.keepalive {
+            if keepalive < http_client_limits::MIN_KEEPALIVE
+                || keepalive > http_client_limits::MAX_KEEPALIVE
+            {
+                return Err(ValidationError::new("keepalive_out_of_range"));
+            }
+        }
+
+        Ok(())
+    }
+}
+
 // 服务器配置
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Validate)]
+#[serde(rename_all = "lowercase")]
 pub struct ServerConfig {
     // UDP监听地址
+    #[validate(custom(
+        function = "validate_socket_addr",
+        message = "Invalid UDP listen address format"
+    ))]
     pub listen_udp: String,
     // TCP监听地址
+    #[validate(custom(
+        function = "validate_socket_addr",
+        message = "Invalid TCP listen address format"
+    ))]
     pub listen_tcp: String,
     // TCP连接空闲超时（秒）
     #[serde(default = "default_tcp_timeout")]
+    #[validate(range(
+        min = 1,
+        max = 3600,
+        message = "TCP timeout must be between 1-3600 seconds"
+    ))]
     pub tcp_timeout: u64,
 }
 
@@ -54,18 +107,51 @@ impl Default for ServerConfig {
     }
 }
 
+// 自定义验证函数 - 验证缓存TTL关系
+pub fn validate_cache_ttl(cache: &CacheConfig) -> Result<(), ValidationError> {
+    if cache.enabled && cache.min_ttl > cache.max_ttl {
+        return Err(ValidationError::new("min_ttl_greater_than_max_ttl"));
+    }
+    Ok(())
+}
+
 // 缓存配置
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Validate)]
+#[validate(schema(
+    function = "validate_cache_ttl",
+    message = "Minimum TTL cannot be greater than maximum TTL"
+))]
+#[serde(rename_all = "lowercase")]
 pub struct CacheConfig {
     // 是否启用缓存
     pub enabled: bool,
     // 最大缓存条目数
+    #[validate(range(
+        min = 10,
+        max = 1000000,
+        message = "Cache size must be between 10-1000000"
+    ))]
     pub max_size: usize,
     // 最小TTL（秒）
+    #[validate(range(
+        min = 1,
+        max = 86400,
+        message = "Minimum TTL must be between 1-86400 seconds"
+    ))]
     pub min_ttl: u32,
     // 最大TTL（秒）
+    #[validate(range(
+        min = 1,
+        max = 86400,
+        message = "Maximum TTL must be between 1-86400 seconds"
+    ))]
     pub max_ttl: u32,
     // 负面缓存TTL（秒）
+    #[validate(range(
+        min = 1,
+        max = 86400,
+        message = "Negative cache TTL must be between 1-86400 seconds"
+    ))]
     pub negative_ttl: u32,
 }
 
@@ -82,9 +168,14 @@ impl Default for CacheConfig {
 }
 
 // 管理服务器配置
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Validate)]
+#[serde(rename_all = "lowercase")]
 pub struct AdminConfig {
     // 管理服务器监听地址
+    #[validate(custom(
+        function = "validate_socket_addr",
+        message = "Invalid admin server listen address format"
+    ))]
     pub listen: String,
 }
 
