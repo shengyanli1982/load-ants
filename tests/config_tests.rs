@@ -34,13 +34,21 @@ admin:
     // 验证基本配置值
     assert_eq!(config.server.listen_udp, "127.0.0.1:53");
     assert_eq!(config.server.listen_tcp, "127.0.0.1:53");
-    assert_eq!(config.admin.listen, "127.0.0.1:8080");
+    assert_eq!(config.admin.as_ref().unwrap().listen, "127.0.0.1:8080");
 
     // 验证默认值
     assert_eq!(config.server.tcp_timeout, 10); // 默认值
-    assert!(config.cache.enabled); // 默认启用
-    assert!(config.upstream_groups.is_empty()); // 默认为空
-    assert!(config.static_rules.is_empty()); // 默认为空
+    assert!(config.cache.as_ref().unwrap().enabled); // 默认启用
+    assert!(config
+        .upstream_groups
+        .as_ref()
+        .unwrap_or(&Vec::new())
+        .is_empty()); // 默认为空
+    assert!(config
+        .static_rules
+        .as_ref()
+        .unwrap_or(&Vec::new())
+        .is_empty()); // 默认为空
     assert!(config.remote_rules.is_empty()); // 默认为空
 }
 
@@ -94,18 +102,18 @@ admin:
     assert_eq!(config.server.tcp_timeout, 10); // 默认 TCP 超时
 
     // 验证缓存默认值
-    assert!(config.cache.enabled); // 默认启用
-    assert_eq!(config.cache.max_size, 10000); // 默认大小
-    assert_eq!(config.cache.min_ttl, 1); // 默认最小 TTL
-    assert_eq!(config.cache.max_ttl, 86400); // 默认最大 TTL
-    assert_eq!(config.cache.negative_ttl, 300); // 默认负面缓存 TTL
+    assert!(config.cache.as_ref().unwrap().enabled); // 默认启用
+    assert_eq!(config.cache.as_ref().unwrap().max_size, 10000); // 默认大小
+    assert_eq!(config.cache.as_ref().unwrap().min_ttl, 1); // 默认最小 TTL
+    assert_eq!(config.cache.as_ref().unwrap().max_ttl, 86400); // 默认最大 TTL
+    assert_eq!(config.cache.as_ref().unwrap().negative_ttl, 300); // 默认负面缓存 TTL
 
     // 验证 HTTP 客户端默认值
-    assert_eq!(config.http_client.connect_timeout, 3); // 默认连接超时
-    assert_eq!(config.http_client.request_timeout, 5); // 默认请求超时
-    assert_eq!(config.http_client.idle_timeout, Some(10)); // 默认空闲超时
-    assert_eq!(config.http_client.keepalive, Some(30)); // 默认 keepalive
-    assert!(config.http_client.agent.is_none()); // 默认无代理
+    assert_eq!(config.http_client.as_ref().unwrap().connect_timeout, 3); // 默认连接超时
+    assert_eq!(config.http_client.as_ref().unwrap().request_timeout, 5); // 默认请求超时
+    assert_eq!(config.http_client.as_ref().unwrap().idle_timeout, Some(10)); // 默认空闲超时
+    assert_eq!(config.http_client.as_ref().unwrap().keepalive, Some(30)); // 默认 keepalive
+    assert!(config.http_client.as_ref().unwrap().agent.is_none()); // 默认无代理
 }
 
 #[test]
@@ -328,29 +336,35 @@ remote_rules:
     assert_eq!(config.server.tcp_timeout, 15);
 
     // 验证管理服务器配置
-    assert_eq!(config.admin.listen, "0.0.0.0:8080");
+    assert_eq!(config.admin.as_ref().unwrap().listen, "0.0.0.0:8080");
 
     // 验证缓存配置
-    assert!(config.cache.enabled);
-    assert_eq!(config.cache.max_size, 20000);
-    assert_eq!(config.cache.min_ttl, 120);
-    assert_eq!(config.cache.max_ttl, 7200);
-    assert_eq!(config.cache.negative_ttl, 600);
+    assert!(config.cache.as_ref().unwrap().enabled);
+    assert_eq!(config.cache.as_ref().unwrap().max_size, 20000);
+    assert_eq!(config.cache.as_ref().unwrap().min_ttl, 120);
+    assert_eq!(config.cache.as_ref().unwrap().max_ttl, 7200);
+    assert_eq!(config.cache.as_ref().unwrap().negative_ttl, 600);
 
     // 验证 HTTP 客户端配置
-    assert_eq!(config.http_client.connect_timeout, 5);
-    assert_eq!(config.http_client.request_timeout, 10);
-    assert_eq!(config.http_client.idle_timeout, Some(60));
-    assert_eq!(config.http_client.keepalive, Some(60));
-    assert_eq!(config.http_client.agent, Some("LoadAnts/1.0".to_string()));
+    assert_eq!(config.http_client.as_ref().unwrap().connect_timeout, 5);
+    assert_eq!(config.http_client.as_ref().unwrap().request_timeout, 10);
+    assert_eq!(config.http_client.as_ref().unwrap().idle_timeout, Some(60));
+    assert_eq!(config.http_client.as_ref().unwrap().keepalive, Some(60));
+    assert_eq!(
+        config.http_client.as_ref().unwrap().agent,
+        Some("LoadAnts/1.0".to_string())
+    );
 
     // 验证上游组配置
-    assert_eq!(config.upstream_groups.len(), 2);
-    assert_eq!(config.upstream_groups[0].name, "google");
-    assert_eq!(config.upstream_groups[1].name, "cloudflare");
+    assert_eq!(config.upstream_groups.as_ref().unwrap().len(), 2);
+    assert_eq!(config.upstream_groups.as_ref().unwrap()[0].name, "google");
+    assert_eq!(
+        config.upstream_groups.as_ref().unwrap()[1].name,
+        "cloudflare"
+    );
 
     // 验证规则配置
-    assert_eq!(config.static_rules.len(), 3);
+    assert_eq!(config.static_rules.as_ref().unwrap().len(), 3);
     assert_eq!(config.remote_rules.len(), 1);
 }
 
@@ -398,7 +412,7 @@ upstream_groups:
     // 但我们可以检查配置是否正确加载
     if result.is_ok() {
         let config = result.unwrap();
-        let auth = &config.upstream_groups[0].servers[0].auth;
+        let auth = &config.upstream_groups.as_ref().unwrap()[0].servers[0].auth;
         assert!(auth.is_some());
         let auth = auth.as_ref().unwrap();
         assert!(auth.username.is_none() || auth.username.as_ref().unwrap().is_empty());
@@ -427,7 +441,7 @@ upstream_groups:
     // 同样，根据代码，这可能不会导致错误
     if result.is_ok() {
         let config = result.unwrap();
-        let auth = &config.upstream_groups[0].servers[0].auth;
+        let auth = &config.upstream_groups.as_ref().unwrap()[0].servers[0].auth;
         assert!(auth.is_some());
         let auth = auth.as_ref().unwrap();
         assert!(auth.token.is_none() || auth.token.as_ref().unwrap().is_empty());

@@ -45,10 +45,12 @@ pub fn validate_forward_target(rule: &RouteRuleConfig) -> Result<(), ValidationE
 
 // 自定义验证函数 - 验证上游组名称唯一性
 pub fn validate_unique_group_names(config: &Config) -> Result<(), ValidationError> {
-    let mut names = HashSet::new();
-    for group in &config.upstream_groups {
-        if !names.insert(group.name.clone()) {
-            return Err(ValidationError::new("duplicate_group_name"));
+    if let Some(groups) = &config.upstream_groups {
+        let mut names = HashSet::new();
+        for group in groups {
+            if !names.insert(group.name.clone()) {
+                return Err(ValidationError::new("duplicate_group_name"));
+            }
         }
     }
     Ok(())
@@ -56,19 +58,23 @@ pub fn validate_unique_group_names(config: &Config) -> Result<(), ValidationErro
 
 // 自定义验证函数 - 验证规则引用的上游组存在
 pub fn validate_group_references(config: &Config) -> Result<(), ValidationError> {
+    // 如果没有上游组配置，则跳过验证
+    let upstream_groups = match &config.upstream_groups {
+        Some(groups) => groups,
+        None => return Ok(()),
+    };
+
     // 收集所有上游组名称
-    let group_names: HashSet<_> = config
-        .upstream_groups
-        .iter()
-        .map(|g| g.name.clone())
-        .collect();
+    let group_names: HashSet<_> = upstream_groups.iter().map(|g| g.name.clone()).collect();
 
     // 检查静态规则
-    for rule in &config.static_rules {
-        if let RouteAction::Forward = rule.action {
-            if let Some(target) = &rule.target {
-                if !group_names.contains(target) {
-                    return Err(ValidationError::new("non_existent_group_reference"));
+    if let Some(static_rules) = &config.static_rules {
+        for rule in static_rules {
+            if let RouteAction::Forward = rule.action {
+                if let Some(target) = &rule.target {
+                    if !group_names.contains(target) {
+                        return Err(ValidationError::new("non_existent_group_reference"));
+                    }
                 }
             }
         }
@@ -139,21 +145,26 @@ pub struct Config {
     // 服务器配置
     #[validate(nested)]
     pub server: ServerConfig,
-    // 管理服务器配置
+    // 管理服务器配置（可选）
+    #[serde(default)]
     #[validate(nested)]
-    pub admin: AdminConfig,
-    // 缓存配置
+    pub admin: Option<AdminConfig>,
+    // 缓存配置（可选）
+    #[serde(default)]
     #[validate(nested)]
-    pub cache: CacheConfig,
-    // HTTP客户端配置
+    pub cache: Option<CacheConfig>,
+    // HTTP客户端配置（可选）
+    #[serde(default)]
     #[validate(nested)]
-    pub http_client: HttpClientConfig,
-    // 上游组配置
+    pub http_client: Option<HttpClientConfig>,
+    // 上游组配置（可选）
+    #[serde(default)]
     #[validate(nested)]
-    pub upstream_groups: Vec<UpstreamGroupConfig>,
-    // 路由规则配置
+    pub upstream_groups: Option<Vec<UpstreamGroupConfig>>,
+    // 路由规则配置（可选）
+    #[serde(default)]
     #[validate(nested)]
-    pub static_rules: Vec<RouteRuleConfig>,
+    pub static_rules: Option<Vec<RouteRuleConfig>>,
     // 远程规则配置（可选）
     #[serde(default)]
     #[validate(nested)]
@@ -237,10 +248,10 @@ impl Default for Config {
     fn default() -> Self {
         Config {
             server: ServerConfig::default(),
-            admin: AdminConfig::default(),
-            cache: CacheConfig::default(),
-            http_client: HttpClientConfig::default(),
-            upstream_groups: vec![UpstreamGroupConfig {
+            admin: Some(AdminConfig::default()),
+            cache: Some(CacheConfig::default()),
+            http_client: Some(HttpClientConfig::default()),
+            upstream_groups: Some(vec![UpstreamGroupConfig {
                 name: upstream_defaults::DEFAULT_GROUP_NAME.to_string(),
                 strategy: LoadBalancingStrategy::RoundRobin,
                 servers: vec![UpstreamServerConfig {
@@ -255,13 +266,13 @@ impl Default for Config {
                     delay: 1,
                 }),
                 proxy: None,
-            }],
-            static_rules: vec![RouteRuleConfig {
+            }]),
+            static_rules: Some(vec![RouteRuleConfig {
                 match_type: MatchType::Wildcard,
                 patterns: vec!["*".to_string()],
                 action: RouteAction::Forward,
                 target: Some(upstream_defaults::DEFAULT_GROUP_NAME.to_string()),
-            }],
+            }]),
             remote_rules: Vec::new(),
         }
     }

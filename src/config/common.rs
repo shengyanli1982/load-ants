@@ -1,3 +1,4 @@
+use crate::r#const::retry_limits;
 use serde::{Deserialize, Serialize};
 use validator::{Validate, ValidationError};
 
@@ -61,13 +62,17 @@ pub struct AuthConfig {
 #[serde(rename_all = "lowercase")]
 pub struct RetryConfig {
     // 重试次数
-    #[validate(range(min = 1, max = 100, message = "Retry attempts must be between 1-100"))]
+    #[validate(range(
+        min = retry_limits::MIN_ATTEMPTS,
+        max = retry_limits::MAX_ATTEMPTS,
+        message = "Retry attempts must be between {} and {}"
+    ))]
     pub attempts: u32,
     // 重试初始延迟（秒）
     #[validate(range(
-        min = 1,
-        max = 120,
-        message = "Retry delay must be between 1-120 seconds"
+        min = retry_limits::MIN_DELAY,
+        max = retry_limits::MAX_DELAY,
+        message = "Retry delay must be between {} and {} seconds"
     ))]
     pub delay: u32,
 }

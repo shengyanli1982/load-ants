@@ -9,16 +9,16 @@ use validator::{Validate, ValidationError};
 pub struct HttpClientConfig {
     // 连接超时（秒）
     #[validate(range(
-        min = 1,
-        max = 120,
-        message = "Connection timeout must be between 1-120 seconds"
+        min = http_client_limits::MIN_CONNECT_TIMEOUT,
+        max = http_client_limits::MAX_CONNECT_TIMEOUT,
+        message = "Connection timeout must be between {} and {} seconds"
     ))]
     pub connect_timeout: u64,
     // 请求超时（秒）
     #[validate(range(
-        min = 1,
-        max = 1200,
-        message = "Request timeout must be between 1-1200 seconds"
+        min = http_client_limits::MIN_REQUEST_TIMEOUT,
+        max = http_client_limits::MAX_REQUEST_TIMEOUT,
+        message = "Request timeout must be between {} and {} seconds"
     ))]
     pub request_timeout: u64,
     // 空闲连接超时（秒）（可选）
@@ -88,7 +88,7 @@ pub struct ServerConfig {
     #[validate(range(
         min = 1,
         max = 3600,
-        message = "TCP timeout must be between 1-3600 seconds"
+        message = "TCP timeout must be between {} and {} seconds"
     ))]
     pub tcp_timeout: u64,
 }
@@ -127,30 +127,30 @@ pub struct CacheConfig {
     pub enabled: bool,
     // 最大缓存条目数
     #[validate(range(
-        min = 10,
-        max = 1000000,
-        message = "Cache size must be between 10-1000000"
+        min = cache_limits::MIN_SIZE,
+        max = cache_limits::MAX_SIZE,
+        message = "Cache size must be between {} and {}"
     ))]
     pub max_size: usize,
     // 最小TTL（秒）
     #[validate(range(
-        min = 1,
-        max = 86400,
-        message = "Minimum TTL must be between 1-86400 seconds"
+        min = cache_limits::MIN_TTL,
+        max = cache_limits::MAX_TTL,
+        message = "Minimum TTL must be between {} and {} seconds"
     ))]
     pub min_ttl: u32,
     // 最大TTL（秒）
     #[validate(range(
-        min = 1,
-        max = 86400,
-        message = "Maximum TTL must be between 1-86400 seconds"
+        min = cache_limits::MIN_TTL,
+        max = cache_limits::MAX_TTL,
+        message = "Maximum TTL must be between {} and {} seconds"
     ))]
     pub max_ttl: u32,
     // 负面缓存TTL（秒）
     #[validate(range(
-        min = 1,
-        max = 86400,
-        message = "Negative cache TTL must be between 1-86400 seconds"
+        min = cache_limits::MIN_TTL,
+        max = cache_limits::MAX_TTL,
+        message = "Negative cache TTL must be between {} and {} seconds"
     ))]
     pub negative_ttl: u32,
 }

@@ -102,7 +102,7 @@ pub struct UpstreamServerConfig {
     pub url: Url,
 
     // 权重（仅用于加权负载均衡）
-    #[serde(default)]
+    #[serde(default = "default_us_weight")]
     #[validate(custom(
         function = "validate_weight",
         message = "Weight must be between 1-65535"
@@ -154,6 +154,11 @@ fn default_doh_method() -> DoHMethod {
 // 默认的内容类型为DNS消息格式
 fn default_content_type() -> DoHContentType {
     DoHContentType::Message
+}
+
+// 默认的权重为1
+fn default_us_weight() -> u32 {
+    1
 }
 
 // 自定义验证函数 - 验证上游组服务器非空
