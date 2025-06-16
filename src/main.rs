@@ -1,21 +1,13 @@
-use loadants::admin::AdminServer;
-use loadants::args::Args;
-use loadants::cache::DnsCache;
-use loadants::config::Config;
-use loadants::config::MatchType::{Exact, Regex, Wildcard};
-use loadants::error::AppError;
-use loadants::handler::RequestHandler;
-use loadants::metrics::METRICS;
-use loadants::r#const::{rule_source_labels, rule_type_labels, subsystem_names};
-use loadants::router::Router;
-use loadants::server;
-use loadants::server::DnsServer;
-use loadants::upstream::UpstreamManager;
+use loadants::{
+    metrics::METRICS, rule_source_labels, rule_type_labels, server::DnsServerConfig,
+    subsystem_names, AdminServer, AppError, Args, Config, DnsCache, DnsServer, MatchType,
+    RequestHandler, Router, UpstreamManager,
+};
 use mimalloc::MiMalloc;
 use std::process;
 use std::sync::Arc;
 use tokio_graceful_shutdown::{IntoSubsystem, SubsystemBuilder, Toplevel};
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 // 使用 mimalloc 分配器提高内存效率
 #[global_allocator]
@@ -125,31 +117,47 @@ struct AppComponents {
 // 创建应用组件
 async fn create_components(config: Config) -> Result<AppComponents, AppError> {
     // 创建 DNS 缓存
-    let cache = Arc::new(DnsCache::new(
-        config.cache.max_size,
-        config.cache.min_ttl,
-        Some(config.cache.negative_ttl),
-    ));
-    if config.cache.enabled {
-        info!(
-            "DNS cache enabled, size: {}, min TTL: {}s, negative TTL: {}s",
-            config.cache.max_size, config.cache.min_ttl, config.cache.negative_ttl
-        );
+    let cache = if let Some(cache_config) = &config.cache {
+        let cache = Arc::new(DnsCache::new(
+            cache_config.max_size,
+            cache_config.min_ttl,
+            Some(cache_config.negative_ttl),
+        ));
+        if cache_config.enabled {
+            info!(
+                "DNS cache enabled, size: {}, min TTL: {}s, negative TTL: {}s",
+                cache_config.max_size, cache_config.min_ttl, cache_config.negative_ttl
+            );
 
-        // 设置缓存容量指标
-        METRICS.cache_capacity().set(config.cache.max_size as i64);
+            // 设置缓存容量指标
+            METRICS.cache_capacity().set(cache_config.max_size as i64);
+        } else {
+            info!("DNS cache disabled");
+        }
+        cache
     } else {
-        info!("DNS cache disabled");
-    }
+        // 如果没有提供缓存配置，创建一个默认的禁用缓存
+        info!("Cache configuration not provided, cache disabled");
+        Arc::new(DnsCache::new(0, 0, Some(0)))
+    };
 
     // 创建管理服务器
-    let admin_listen_addr = config.admin.listen.parse().unwrap();
+    let admin_listen_addr = match &config.admin {
+        Some(admin_config) => admin_config.listen.parse().unwrap(),
+        None => {
+            warn!("Admin server configuration not provided, using default address 127.0.0.1:8080");
+            "127.0.0.1:8080".parse().unwrap()
+        }
+    };
     let admin_server = AdminServer::new(admin_listen_addr).with_cache(Arc::clone(&cache));
+
+    // 准备HTTP客户端配置
+    let http_client_config = config.http_client.clone().unwrap_or_default();
 
     // 创建上游管理器 - 避免不必要的克隆
     let upstream = match UpstreamManager::new(
-        config.upstream_groups.clone(),
-        config.http_client.clone(),
+        config.upstream_groups.clone().unwrap_or_default(),
+        http_client_config.clone(),
     )
     .await
     {
@@ -163,6 +171,9 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
         }
     };
 
+    // 获取静态规则（如果有）
+    let static_rules = config.static_rules.clone().unwrap_or_default();
+
     // 加载远程规则并与静态规则合并
     let rules = if !config.remote_rules.is_empty() {
         info!(
@@ -171,8 +182,8 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
         );
         match loadants::remote_rule::load_and_merge_rules(
             &config.remote_rules,
-            &config.static_rules,
-            &config.http_client,
+            &static_rules,
+            &http_client_config,
         )
         .await
         {
@@ -182,12 +193,12 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
                     "Failed to load remote rules: {}, falling back to static rules only",
                     e
                 );
-                config.static_rules.clone()
+                static_rules.clone()
             }
         }
     } else {
         // 没有远程规则，直接使用静态规则
-        config.static_rules.clone()
+        static_rules.clone()
     };
 
     // 创建路由引擎 - 使用合并后的规则
@@ -202,23 +213,23 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
             let mut regex_count_remote = 0;
 
             // 静态规则数量
-            for rule in &config.static_rules {
-                match rule.match_type {
-                    Exact => exact_count_static += rule.patterns.len(),
-                    Wildcard => wildcard_count_static += rule.patterns.len(),
-                    Regex => regex_count_static += rule.patterns.len(),
+            for rule in &static_rules {
+                match &rule.match_type {
+                    MatchType::Exact => exact_count_static += rule.patterns.len(),
+                    MatchType::Wildcard => wildcard_count_static += rule.patterns.len(),
+                    MatchType::Regex => regex_count_static += rule.patterns.len(),
                 }
             }
 
             // 远程规则数量
-            let static_rules_len = config.static_rules.len();
+            let static_rules_len = static_rules.len();
             if static_rules_len < rules.len() {
                 // 计算远程规则中各类型的数量
                 for rule in rules.iter().skip(static_rules_len) {
-                    match rule.match_type {
-                        Exact => exact_count_remote += rule.patterns.len(),
-                        Wildcard => wildcard_count_remote += rule.patterns.len(),
-                        Regex => regex_count_remote += rule.patterns.len(),
+                    match &rule.match_type {
+                        MatchType::Exact => exact_count_remote += rule.patterns.len(),
+                        MatchType::Wildcard => wildcard_count_remote += rule.patterns.len(),
+                        MatchType::Regex => regex_count_remote += rule.patterns.len(),
                     }
                 }
             }
@@ -280,7 +291,7 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
     let handler = Arc::new(RequestHandler::new(cache, router, upstream));
 
     // 创建DNS服务器配置
-    let server_config = server::DnsServerConfig {
+    let server_config = DnsServerConfig {
         udp_bind_addr: config.server.listen_udp.parse()?,
         tcp_bind_addr: config.server.listen_tcp.parse()?,
         tcp_timeout: config.server.tcp_timeout,

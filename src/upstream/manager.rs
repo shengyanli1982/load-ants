@@ -3,7 +3,7 @@ use crate::{
     config::{HttpClientConfig, LoadBalancingStrategy, UpstreamGroupConfig},
     error::AppError,
     metrics::METRICS,
-    r#const::{error_labels, upstream_labels},
+    r#const::{error_labels, protocol_labels, upstream_labels},
     upstream::{doh::DoHClient, http_client::HttpClient},
 };
 use hickory_proto::op::Message;
@@ -91,12 +91,13 @@ impl UpstreamManager {
             }
         };
 
+        let server_host = server.url.host_str().unwrap_or(protocol_labels::UNKNOWN);
         debug!("Selected upstream server: {}", server.url.as_str());
 
         // 记录上游请求指标
         METRICS
             .upstream_requests_total()
-            .with_label_values(&[group_name, server.url.as_str()])
+            .with_label_values(&[group_name, server_host])
             .inc();
 
         // 记录开始时间
@@ -119,7 +120,7 @@ impl UpstreamManager {
                 let duration = start_time.elapsed();
                 METRICS
                     .upstream_duration_seconds()
-                    .with_label_values(&[group_name, server.url.as_str()])
+                    .with_label_values(&[group_name, server_host])
                     .observe(duration.as_secs_f64());
 
                 Ok(response)
@@ -133,11 +134,7 @@ impl UpstreamManager {
                 // 记录上游错误指标
                 METRICS
                     .upstream_errors_total()
-                    .with_label_values(&[
-                        error_labels::REQUEST_ERROR,
-                        group_name,
-                        server.url.as_str(),
-                    ])
+                    .with_label_values(&[error_labels::REQUEST_ERROR, group_name, server_host])
                     .inc();
 
                 Err(e)

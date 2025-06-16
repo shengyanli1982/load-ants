@@ -8,12 +8,15 @@ use crate::config::{HttpClientConfig, RemoteRuleConfig, RouteRuleConfig};
 use crate::error::AppError;
 use tracing::error;
 
+// 类型别名，简化远程规则加载结果类型
+pub type RemoteRuleResult = Result<Vec<RouteRuleConfig>, AppError>;
+
 /// 加载所有远程规则并与本地规则合并
 pub async fn load_and_merge_rules(
     remote_configs: &[RemoteRuleConfig],
     static_rules: &[RouteRuleConfig],
     http_config: &HttpClientConfig,
-) -> Result<Vec<RouteRuleConfig>, AppError> {
+) -> RemoteRuleResult {
     // 创建一个规则列表，预先分配足够的空间
     let mut merged_rules = Vec::with_capacity(static_rules.len() + remote_configs.len() * 3);
 

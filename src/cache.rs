@@ -1,12 +1,16 @@
 use crate::error::AppError;
 use crate::metrics::METRICS;
 use crate::r#const::{cache_labels, cache_limits, ttl_source_labels};
-use hickory_proto::op::{Message, ResponseCode};
-use hickory_proto::rr::{DNSClass, RecordType};
+use hickory_proto::{
+    op::{Message, ResponseCode},
+    rr::{DNSClass, RecordType},
+};
 use moka::future::Cache;
-use rand::seq::SliceRandom;
-use rand::thread_rng;
-use std::time::Duration;
+use rand::{seq::SliceRandom, thread_rng};
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 use tracing::{debug, info};
 
 // DNS缓存键
@@ -36,10 +40,10 @@ impl CacheKey {
 // DNS缓存条目
 #[derive(Debug, Clone)]
 struct CacheEntry {
-    // 缓存的响应消息
-    message: Message,
+    // 缓存的响应消息 - 使用Arc减少内存复制
+    message: Arc<Message>,
     // 缓存时间戳
-    timestamp: std::time::Instant,
+    timestamp: Instant,
     // 缓存时长 (秒)
     _ttl: u32,
 }
@@ -103,8 +107,8 @@ impl DnsCache {
         // 从缓存中查找
         let entry = self.cache.get(&key).await?;
 
-        // 克隆响应
-        let mut response = entry.message.clone();
+        // 创建响应的可变副本
+        let mut response = entry.message.as_ref().clone();
 
         // 调整TTL
         self.adjust_message_ttl(&mut response, &entry);
@@ -125,41 +129,30 @@ impl DnsCache {
 
     // 对 DNS 中指定类型的记录进行随机排序
     fn shuffle_message_records(&self, message: &mut Message, record_type: RecordType) {
-        // 获取所有答案记录
-        let answers = message.answers().to_vec();
+        // 获取答案记录的可变引用
+        let answers = message.answers_mut();
 
         // 如果记录数量小于2，无需排序
         if answers.len() < 2 {
             return;
         }
 
-        // 按记录类型分组
-        let mut target_records = Vec::new();
-        let mut other_records = Vec::new();
-
-        // 只对目标类型的记录进行分组
-        for record in answers {
-            if record.record_type() == record_type {
-                target_records.push(record);
-            } else {
-                other_records.push(record);
+        // 原地分区：将目标类型的记录移到前面
+        let mut target_end = 0;
+        for i in 0..answers.len() {
+            if answers[i].record_type() == record_type {
+                answers.swap(i, target_end);
+                target_end += 1;
             }
         }
 
         // 如果目标类型的记录少于2个，无需随机排序
-        if target_records.len() < 2 {
+        if target_end < 2 {
             return;
         }
 
         // 只对目标类型的记录进行随机排序
-        target_records.shuffle(&mut thread_rng());
-
-        // 清除原有答案并按顺序重新添加
-        message.take_answers();
-
-        // 使用 add_answers 批量添加记录，提高性能
-        message.add_answers(target_records);
-        message.add_answers(other_records);
+        answers[0..target_end].shuffle(&mut thread_rng());
     }
 
     // 向缓存添加响应
@@ -197,8 +190,8 @@ impl DnsCache {
 
         // 创建缓存条目
         let entry = CacheEntry {
-            message: response,
-            timestamp: std::time::Instant::now(),
+            message: Arc::new(response),
+            timestamp: Instant::now(),
             _ttl: ttl,
         };
 

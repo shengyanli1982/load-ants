@@ -1,8 +1,10 @@
+use crate::r#const::weight_limits;
 use reqwest::Url;
 use serde::{
     de::{self, Deserializer},
     Deserialize, Serialize,
 };
+use validator::{Validate, ValidationError};
 
 use super::common::{AuthConfig, RetryConfig};
 
@@ -47,22 +49,76 @@ where
     Url::parse(&s).map_err(de::Error::custom)
 }
 
+// 自定义验证函数 - 验证URL方案
+fn validate_url_scheme(url: &Url) -> Result<(), ValidationError> {
+    if url.scheme() != "http" && url.scheme() != "https" {
+        return Err(ValidationError::new("invalid_url_scheme"));
+    }
+    Ok(())
+}
+
+// 自定义验证函数 - 验证URL主机名
+fn validate_url_host(url: &Url) -> Result<(), ValidationError> {
+    if url.host_str().is_none() || url.host_str().unwrap().is_empty() {
+        return Err(ValidationError::new("missing_url_hostname"));
+    }
+    Ok(())
+}
+
+// 自定义验证函数 - 验证URL路径
+fn validate_url_path(url: &Url) -> Result<(), ValidationError> {
+    if url.path().is_empty() || url.path() == "/" {
+        return Err(ValidationError::new("invalid_url_path"));
+    }
+    Ok(())
+}
+
+// 自定义验证函数 - 验证权重
+fn validate_weight(weight: u32) -> Result<(), ValidationError> {
+    if weight < weight_limits::MIN_WEIGHT || weight > weight_limits::MAX_WEIGHT {
+        return Err(ValidationError::new("invalid_weight"));
+    }
+    Ok(())
+}
+
 // 上游服务器配置
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Validate)]
+#[serde(rename_all = "lowercase")]
 pub struct UpstreamServerConfig {
     // DoH服务器URL
     #[serde(deserialize_with = "deserialize_url")]
+    #[validate(custom(
+        function = "validate_url_scheme",
+        message = "URL must use http or https scheme"
+    ))]
+    #[validate(custom(
+        function = "validate_url_host",
+        message = "URL must contain a valid hostname"
+    ))]
+    #[validate(custom(
+        function = "validate_url_path",
+        message = "URL must contain a valid path"
+    ))]
     pub url: Url,
+
     // 权重（仅用于加权负载均衡）
-    #[serde(default)]
+    #[serde(default = "default_us_weight")]
+    #[validate(custom(
+        function = "validate_weight",
+        message = "Weight must be between 1-65535"
+    ))]
     pub weight: u32,
+
     // DoH请求方法（GET/POST），默认为POST
     #[serde(default = "default_doh_method")]
     pub method: DoHMethod,
+
     // DoH内容类型，默认为Message
     #[serde(default = "default_content_type")]
     pub content_type: DoHContentType,
+
     // 认证配置（可选）
+    #[validate(nested)]
     pub auth: Option<AuthConfig>,
 }
 
@@ -100,17 +156,42 @@ fn default_content_type() -> DoHContentType {
     DoHContentType::Message
 }
 
+// 默认的权重为1
+fn default_us_weight() -> u32 {
+    1
+}
+
+// 自定义验证函数 - 验证上游组服务器非空
+fn validate_servers_not_empty(servers: &[UpstreamServerConfig]) -> Result<(), ValidationError> {
+    if servers.is_empty() {
+        return Err(ValidationError::new("empty_servers"));
+    }
+    Ok(())
+}
+
 // 上游组配置
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Validate)]
+#[serde(rename_all = "lowercase")]
 pub struct UpstreamGroupConfig {
     // 组名称
+    #[validate(length(min = 1, message = "Group name cannot be empty"))]
     pub name: String,
+
     // 负载均衡策略
     pub strategy: LoadBalancingStrategy,
+
     // 服务器列表
+    #[validate(custom(
+        function = "validate_servers_not_empty",
+        message = "Server list cannot be empty"
+    ))]
+    #[validate(nested)]
     pub servers: Vec<UpstreamServerConfig>,
+
     // 重试配置（可选）
+    #[validate(nested)]
     pub retry: Option<RetryConfig>,
+
     // 代理（可选）
     pub proxy: Option<String>,
 }

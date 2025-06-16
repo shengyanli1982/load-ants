@@ -207,31 +207,31 @@ Load Ants uses YAML format configuration files. Below is a complete reference of
 
 ### Server Configuration (server)
 
-| Parameter   | Type    | Default        | Description                           | Valid Range          |
-| ----------- | ------- | -------------- | ------------------------------------- | -------------------- |
-| listen_udp  | String  | "127.0.0.1:53" | UDP DNS listen address and port       | Valid IP:port format |
-| listen_tcp  | String  | "127.0.0.1:53" | TCP DNS listen address and port       | Valid IP:port format |
-| tcp_timeout | Integer | 10             | TCP connection idle timeout (seconds) | 1-3600               |
+| Parameter   | Type    | Default        | Description                                                   | Valid Range          |
+| ----------- | ------- | -------------- | ------------------------------------------------------------- | -------------------- |
+| listen_udp  | String  | "127.0.0.1:53" | UDP DNS listen address and port (Required)                    | Valid IP:port format |
+| listen_tcp  | String  | "127.0.0.1:53" | TCP DNS listen address and port (Required)                    | Valid IP:port format |
+| tcp_timeout | Integer | 10             | TCP connection idle timeout (seconds) (Optional, default: 10) | 1-3600               |
 
 ### Health Check Configuration (health)
 
 This section configures the HTTP service that exposes health checks and monitoring metrics.
 
-| Parameter | Type   | Default          | Description                                  | Valid Range          |
-| --------- | ------ | ---------------- | -------------------------------------------- | -------------------- |
-| listen    | String | "127.0.0.1:8080" | Health check service listen address and port | Valid IP:port format |
+| Parameter | Type   | Default          | Description                                                                           | Valid Range          |
+| --------- | ------ | ---------------- | ------------------------------------------------------------------------------------- | -------------------- |
+| listen    | String | "127.0.0.1:8080" | Health check service listen address and port (Required if health section is provided) | Valid IP:port format |
 
 ### Cache Configuration (cache)
 
 Cache configuration allows fine-tuning of DNS response caching behavior.
 
-| Parameter    | Type    | Default | Description                                                                  | Valid Range |
-| ------------ | ------- | ------- | ---------------------------------------------------------------------------- | ----------- |
-| enabled      | Boolean | true    | Whether to enable caching                                                    | true/false  |
-| max_size     | Integer | 10000   | Maximum number of cache entries                                              | 10-1000000  |
-| min_ttl      | Integer | 60      | Minimum TTL (seconds), overrides smaller TTLs in original responses          | 1-86400     |
-| max_ttl      | Integer | 3600    | Maximum time-to-live upper limit for all cache entries (seconds)             | 1-86400     |
-| negative_ttl | Integer | 300     | Negative cache TTL (seconds), for caching errors, non-existent domains, etc. | 1-86400     |
+| Parameter    | Type    | Default | Description                                                                                                          | Valid Range |
+| ------------ | ------- | ------- | -------------------------------------------------------------------------------------------------------------------- | ----------- |
+| enabled      | Boolean | true    | Whether to enable caching (Required if cache section is provided)                                                    | true/false  |
+| max_size     | Integer | 10000   | Maximum number of cache entries (Required if cache section is provided)                                              | 10-1000000  |
+| min_ttl      | Integer | 60      | Minimum TTL (seconds), overrides smaller TTLs in original responses (Required if cache section is provided)          | 1-86400     |
+| max_ttl      | Integer | 3600    | Maximum time-to-live upper limit for all cache entries (seconds) (Required if cache section is provided)             | 1-86400     |
+| negative_ttl | Integer | 300     | Negative cache TTL (seconds), for caching errors, non-existent domains, etc. (Required if cache section is provided) | 1-86400     |
 
 **About Negative Caching**:
 Negative caching is an important performance optimization technique that caches DNS error responses (such as NXDOMAIN or ServFail) for a specified time. This effectively prevents repeated queries to upstream servers for non-existent or temporarily unresolvable domains, reducing latency and upstream server load.
@@ -240,13 +240,13 @@ Negative caching is an important performance optimization technique that caches 
 
 This configuration applies to all HTTP requests sent to upstream DoH servers.
 
-| Parameter       | Type    | Default | Description                                  | Valid Range      |
-| --------------- | ------- | ------- | -------------------------------------------- | ---------------- |
-| connect_timeout | Integer | 5       | Connection timeout (seconds)                 | 1-120            |
-| request_timeout | Integer | 10      | Request timeout (seconds)                    | 1-1200           |
-| idle_timeout    | Integer | 60      | Idle connection timeout (seconds) (optional) | 5-1800           |
-| keepalive       | Integer | 60      | TCP Keepalive (seconds) (optional)           | 5-600            |
-| agent           | String  | -       | HTTP User Agent (optional)                   | Non-empty string |
+| Parameter       | Type    | Default | Description                                                                | Valid Range      |
+| --------------- | ------- | ------- | -------------------------------------------------------------------------- | ---------------- |
+| connect_timeout | Integer | 5       | Connection timeout (seconds) (Required if http_client section is provided) | 1-120            |
+| request_timeout | Integer | 10      | Request timeout (seconds) (Required if http_client section is provided)    | 1-1200           |
+| idle_timeout    | Integer | 60      | Idle connection timeout (seconds) (Optional)                               | 5-1800           |
+| keepalive       | Integer | 60      | TCP Keepalive (seconds) (Optional)                                         | 5-600            |
+| agent           | String  | -       | HTTP User Agent (Optional)                                                 | Non-empty string |
 
 ### Upstream DoH Server Group Configuration (upstream_groups)
 
@@ -254,23 +254,23 @@ You can define one or more upstream DoH server groups, each containing multiple 
 
 | Parameter | Type   | Default | Description                                                  | Valid Range                        |
 | --------- | ------ | ------- | ------------------------------------------------------------ | ---------------------------------- |
-| name      | String | -       | Group name (required, must be unique)                        | Non-empty string                   |
-| strategy  | String | -       | Load balancing strategy (required)                           | "roundrobin", "weighted", "random" |
-| servers   | Array  | -       | List of DoH servers in this group (required, at least one)   | -                                  |
-| retry     | Object | -       | Request retry configuration for this group (optional)        | See retry configuration below      |
-| proxy     | String | -       | Proxy to use when accessing servers in this group (optional) | Valid HTTP/SOCKS5 proxy URL        |
+| name      | String | -       | Group name (Required, must be unique)                        | Non-empty string                   |
+| strategy  | String | -       | Load balancing strategy (Required)                           | "roundrobin", "weighted", "random" |
+| servers   | Array  | -       | List of DoH servers in this group (Required, at least one)   | -                                  |
+| retry     | Object | -       | Request retry configuration for this group (Optional)        | See retry configuration below      |
+| proxy     | String | -       | Proxy to use when accessing servers in this group (Optional) | Valid HTTP/SOCKS5 proxy URL        |
 
 #### Server Configuration (servers)
 
 Each element in the `servers` array of `upstream_groups` represents a DoH server.
 
-| Parameter    | Type    | Default   | Description                                                            | Valid Range                  |
-| ------------ | ------- | --------- | ---------------------------------------------------------------------- | ---------------------------- |
-| url          | String  | -         | DoH server URL (required)                                              | Valid HTTP(S) URL with path  |
-| weight       | Integer | 1         | Weight (only effective when group strategy is `weighted`)              | 1-65535                      |
-| method       | String  | "post"    | DoH request method (GET or POST)                                       | "get", "post"                |
-| content_type | String  | "message" | DoH content type (`application/dns-message` or `application/dns-json`) | "message", "json"            |
-| auth         | Object  | -         | Authentication configuration for accessing this server (optional)      | See auth configuration below |
+| Parameter    | Type    | Default   | Description                                                                                         | Valid Range                  |
+| ------------ | ------- | --------- | --------------------------------------------------------------------------------------------------- | ---------------------------- |
+| url          | String  | -         | DoH server URL (Required)                                                                           | Valid HTTP(S) URL with path  |
+| weight       | Integer | 1         | Weight (only effective when group strategy is `weighted`) (Optional, default: 1)                    | 1-65535                      |
+| method       | String  | "post"    | DoH request method (GET or POST) (Optional, default: post)                                          | "get", "post"                |
+| content_type | String  | "message" | DoH content type (`application/dns-message` or `application/dns-json`) (Optional, default: message) | "message", "json"            |
+| auth         | Object  | -         | Authentication configuration for accessing this server (Optional)                                   | See auth configuration below |
 
 **Technical Considerations for DoH Content Types:**
 
@@ -284,21 +284,21 @@ When configuring with `content_type: "json"`, you **must** specify `method: "get
 
 Used for `upstream_groups.servers.auth`.
 
-| Parameter | Type   | Default | Description                                | Valid Range       |
-| --------- | ------ | ------- | ------------------------------------------ | ----------------- |
-| type      | String | -       | Authentication type (required)             | "basic", "bearer" |
-| username  | String | -       | Username (only for `basic` authentication) | Non-empty string  |
-| password  | String | -       | Password (only for `basic` authentication) | Non-empty string  |
-| token     | String | -       | Token (only for `bearer` authentication)   | Non-empty string  |
+| Parameter | Type   | Default | Description                                                | Valid Range       |
+| --------- | ------ | ------- | ---------------------------------------------------------- | ----------------- |
+| type      | String | -       | Authentication type (Required if auth section is provided) | "basic", "bearer" |
+| username  | String | -       | Username (Required if type is `basic`)                     | Non-empty string  |
+| password  | String | -       | Password (Required if type is `basic`)                     | Non-empty string  |
+| token     | String | -       | Token (Required if type is `bearer`)                       | Non-empty string  |
 
 #### Retry Configuration (retry)
 
 Used for `upstream_groups.retry`.
 
-| Parameter | Type    | Default | Description              | Valid Range |
-| --------- | ------- | ------- | ------------------------ | ----------- |
-| attempts  | Integer | 3       | Number of retry attempts | 1-100       |
-| delay     | Integer | 1       | Initial delay (seconds)  | 1-120       |
+| Parameter | Type    | Default | Description                                     | Valid Range |
+| --------- | ------- | ------- | ----------------------------------------------- | ----------- |
+| attempts  | Integer | 3       | Number of retry attempts (Optional, default: 3) | 1-100       |
+| delay     | Integer | 1       | Initial delay (seconds) (Optional, default: 1)  | 1-120       |
 
 ### Routing Rules Configuration (static_rules)
 
@@ -313,46 +313,46 @@ Typically, the global wildcard (`*`) should be used as the last rule, serving as
 
 | Parameter | Type   | Default | Description                                                 | Valid Range                      |
 | --------- | ------ | ------- | ----------------------------------------------------------- | -------------------------------- |
-| match     | String | -       | Match type (required)                                       | "exact", "wildcard", "regex"     |
-| patterns  | Array  | -       | List of match patterns (required, at least one pattern)     | Non-empty string array           |
-| action    | String | -       | Routing action (required)                                   | "forward", "block"               |
-| target    | String | -       | Target upstream group (required when `action` is `forward`) | Name of a defined upstream group |
+| match     | String | -       | Match type (Required)                                       | "exact", "wildcard", "regex"     |
+| patterns  | Array  | -       | List of match patterns (Required, at least one pattern)     | Non-empty string array           |
+| action    | String | -       | Routing action (Required)                                   | "forward", "block"               |
+| target    | String | -       | Target upstream group (Required when `action` is `forward`) | Name of a defined upstream group |
 
 ### Remote Rules Configuration (remote_rules)
 
 `remote_rules` allows the system to fetch domain rule lists from external URLs (such as block lists, proxy lists, etc.) and merge them with local static rules. These rules will be integrated into the routing engine according to their `action` (block or forward) and match type (exact, wildcard, regex) parsed from the remote file, following the same priority logic as static rules.
 
-| Parameter | Type    | Default | Description                                                           | Valid Range                                         |
-| --------- | ------- | ------- | --------------------------------------------------------------------- | --------------------------------------------------- |
-| type      | String  | "url"   | Rule type, currently only "url" is supported                          | "url"                                               |
-| url       | String  | -       | URL of the remote rule file (required)                                | Valid HTTP(S) URL                                   |
-| format    | String  | "v2ray" | Rule file format                                                      | "v2ray" (may support "clash" etc. in the future)    |
-| action    | String  | -       | Action to apply to all domains in this rule list (required)           | "block", "forward"                                  |
-| target    | String  | -       | Target upstream group (required when `action` is `forward`)           | Name of a defined upstream group                    |
-| retry     | Object  | -       | Retry strategy for fetching rules (optional)                          | See retry configuration within `remote_rules` below |
-| proxy     | String  | -       | HTTP/SOCKS5 proxy to use when fetching rules (optional)               | Valid proxy URL                                     |
-| auth      | Object  | -       | Authentication configuration for accessing remote rule URL (optional) | See auth configuration within `remote_rules` below  |
-| max_size  | Integer | 1048576 | Maximum size of remote rule file (bytes), e.g., 1048576 means 1MB     | 1 - N (e.g., 10485760 for 10MB)                     |
+| Parameter | Type    | Default  | Description                                                                                   | Valid Range                                         |
+| --------- | ------- | -------- | --------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| type      | String  | "url"    | Rule type, currently only "url" is supported (Required)                                       | "url"                                               |
+| url       | String  | -        | URL of the remote rule file (Required)                                                        | Valid HTTP(S) URL                                   |
+| format    | String  | "v2ray"  | Rule file format (Required)                                                                   | "v2ray" (may support "clash" etc. in the future)    |
+| action    | String  | -        | Action to apply to all domains in this rule list (Required)                                   | "block", "forward"                                  |
+| target    | String  | -        | Target upstream group (Required when `action` is `forward`)                                   | Name of a defined upstream group                    |
+| retry     | Object  | -        | Retry strategy for fetching rules (Optional)                                                  | See retry configuration within `remote_rules` below |
+| proxy     | String  | -        | HTTP/SOCKS5 proxy to use when fetching rules (Optional)                                       | Valid proxy URL                                     |
+| auth      | Object  | -        | Authentication configuration for accessing remote rule URL (Optional)                         | See auth configuration within `remote_rules` below  |
+| max_size  | Integer | 10485760 | Maximum size of remote rule file (bytes), e.g., 10485760 means 10MB (Optional, default: 10MB) | 1 - N (e.g., 10485760 for 10MB)                     |
 
 #### Retry Configuration (retry) - within remote_rules
 
 Used for `remote_rules.retry`.
 
-| Parameter | Type    | Default | Description              | Valid Range |
-| --------- | ------- | ------- | ------------------------ | ----------- |
-| attempts  | Integer | 3       | Number of retry attempts | 1-100       |
-| delay     | Integer | 1       | Initial delay (seconds)  | 1-120       |
+| Parameter | Type    | Default | Description                                     | Valid Range |
+| --------- | ------- | ------- | ----------------------------------------------- | ----------- |
+| attempts  | Integer | 3       | Number of retry attempts (Optional, default: 3) | 1-100       |
+| delay     | Integer | 1       | Initial delay (seconds) (Optional, default: 1)  | 1-120       |
 
 #### Authentication Configuration (auth) - within remote_rules
 
 Used for `remote_rules.auth`, structure is the same as `upstream_groups.servers.auth`.
 
-| Parameter | Type   | Default | Description                                | Valid Range       |
-| --------- | ------ | ------- | ------------------------------------------ | ----------------- |
-| type      | String | -       | Authentication type (required)             | "basic", "bearer" |
-| username  | String | -       | Username (only for `basic` authentication) | Non-empty string  |
-| password  | String | -       | Password (only for `basic` authentication) | Non-empty string  |
-| token     | String | -       | Token (only for `bearer` authentication)   | Non-empty string  |
+| Parameter | Type   | Default | Description                                                | Valid Range       |
+| --------- | ------ | ------- | ---------------------------------------------------------- | ----------------- |
+| type      | String | -       | Authentication type (Required if auth section is provided) | "basic", "bearer" |
+| username  | String | -       | Username (Required if type is `basic`)                     | Non-empty string  |
+| password  | String | -       | Password (Required if type is `basic`)                     | Non-empty string  |
+| token     | String | -       | Token (Required if type is `bearer`)                       | Non-empty string  |
 
 **`remote_rules` Example:**
 
@@ -394,7 +394,7 @@ server:
     tcp_timeout: 10 # TCP connection idle timeout (seconds)
 
 # Health check and management server settings
-health:
+admin:
     listen: "0.0.0.0:8080" # Health check server listen address and port
 
 # Cache settings
@@ -640,7 +640,7 @@ For production environments, Kubernetes provides better scalability, high availa
             server:
               listen_udp: "0.0.0.0:53"
               listen_tcp: "0.0.0.0:53"
-            health:
+            admin:
               listen: "0.0.0.0:8080"
             cache:
               enabled: true
@@ -821,66 +821,6 @@ Load Ants provides the following HTTP API endpoints:
 
 #### DNS Service Endpoints
 
--   **UDP and TCP port 53** (or other ports configured via `server.listen_udp` and `server.listen_tcp`)
-    -   _Description_: Standard DNS ports for receiving traditional DNS queries.
-    -   _Protocol_: DNS over UDP/TCP (RFC 1035).
-    -   _Usage_: Standard DNS clients, applications, and systems send queries through these ports.
-
-#### Management Endpoints
-
-Default listening on `0.0.0.0:8080` (configurable via `health.listen`).
-
--   **GET /health**
-
-    -   _Description_: Health check endpoint for service monitoring and Kubernetes liveness/readiness probes.
-    -   _Returns_: `200 OK` with a simple JSON response `{"status":"healthy"}` when the service is healthy.
-    -   _Usage_: `curl http://localhost:8080/health`
-
--   **GET /metrics**
-
-    -   _Description_: Prometheus metrics endpoint exposing performance and operational statistics.
-    -   _Content Type_: `text/plain; version=0.0.4; charset=utf-8`
-    -   _Usage_: `curl http://localhost:8080/metrics`
-
--   **POST /api/cache/refresh**
-    -   _Description_: Administrative endpoint for clearing the DNS cache.
-    -   _Returns_: JSON response indicating success or error.
-        -   Success: `200 OK` with `{"status":"success", "message":"DNS cache has been cleared"}`
-        -   Cache not enabled: `400 Bad Request` with `{"status":"error", "message":"Cache is not enabled"}`
-        -   Other errors: `500 Internal Server Error` with `{"status":"error", "message":"Failed to clear cache"}`
-    -   _Usage_: `curl -X POST http://localhost:8080/api/cache/refresh`
-
-API endpoints follow standard HTTP status codes.
-
-### Use Cases
-
-Load Ants is particularly well-suited for the following use cases:
-
--   **Individual Users/Home Networks**:
-    -   Enhanced Privacy: Encrypt all DNS queries through DoH, preventing ISP or network man-in-the-middle snooping.
-    -   Circumvent Blocking and Censorship: Bypass DNS-based network access restrictions by selecting appropriate DoH servers.
-    -   Ad and Tracker Blocking: Effectively block advertisement domains and trackers by combining static rules and remote block lists (e.g., from `oisd.nl` or other sources).
-    -   Custom Resolution: Specify specific upstream resolvers for specific domains (e.g., use specific DNS for specific services).
--   **Developers/Testing Environments**:
-    -   Local DoH Resolution: Conveniently test applications that require DoH support locally.
-    -   DNS Behavior Analysis: Observe application DNS query behavior through logs and metrics.
-    -   Flexible Routing Testing: Quickly set up and test complex DNS routing policies, including dynamic updates based on remote lists.
--   **Enterprise/Organizational Internal Networks**:
-    -   Centralized DNS Resolution: Unify management of internal network DNS queries, enforce encryption, and improve network security baseline.
-    -   Security Policy Implementation: Block malicious domains, phishing sites, C&C servers, etc., with the ability to integrate threat intelligence sources.
-    -   Internal Domain Resolution: Route internal domain resolution requests to internal DNS servers (if internal DNS supports DoH, or through another non-DoH proxy layer).
-    -   Compliance: Log and audit DNS queries (requires self-configuration of log collection and analysis systems; Load Ants provides structured log output).
--   **Cloud-Native Environments (Kubernetes, Docker Swarm)**:
-    -   Sidecar Proxy: Serve as a sidecar container providing DoH resolution capabilities for other applications in the cluster without modifying the applications themselves.
-    -   Cluster DNS Service: Act as a cluster-wide DNS resolver (typically combined with or as an upstream for CoreDNS, etc., to enhance specific functionality).
-    -   High-Performance DNS Gateway: Provide high-concurrency, low-latency DNS-to-DoH conversion and intelligent routing for large-scale applications.
-
-## License
-
-[MIT License](./LICENSE)
-
-## Acknowledgements
-
--   Thanks to all developers who have contributed to the Load Ants project.
--   The design and implementation of this project were inspired by many excellent open-source DNS tools and DoH practices.
--   Special thanks to the Rust community for providing powerful tools and ecosystem.
+-   **UDP and TCP port 53** (or other ports configured via `server.listen_udp` and `server.listen_tcp`):
+    -   **GET**: Receives DNS queries and returns DNS responses.
+    -   **POST**: Receives DNS queries and returns DNS responses.
