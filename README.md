@@ -821,6 +821,66 @@ Load Ants provides the following HTTP API endpoints:
 
 #### DNS Service Endpoints
 
--   **UDP and TCP port 53** (or other ports configured via `server.listen_udp` and `server.listen_tcp`):
-    -   **GET**: Receives DNS queries and returns DNS responses.
-    -   **POST**: Receives DNS queries and returns DNS responses.
+-   **UDP and TCP port 53** (or other ports configured via `server.listen_udp` and `server.listen_tcp`)
+    -   _Description_: Standard DNS ports for receiving traditional DNS queries.
+    -   _Protocol_: DNS over UDP/TCP (RFC 1035).
+    -   _Usage_: Standard DNS clients, applications, and systems send queries through these ports.
+
+#### Management Endpoints
+
+Default listening on `0.0.0.0:8080` (configurable via `health.listen`).
+
+-   **GET /health**
+
+    -   _Description_: Health check endpoint for service monitoring and Kubernetes liveness/readiness probes.
+    -   _Returns_: `200 OK` with a simple JSON response `{"status":"healthy"}` when the service is healthy.
+    -   _Usage_: `curl http://localhost:8080/health`
+
+-   **GET /metrics**
+
+    -   _Description_: Prometheus metrics endpoint exposing performance and operational statistics.
+    -   _Content Type_: `text/plain; version=0.0.4; charset=utf-8`
+    -   _Usage_: `curl http://localhost:8080/metrics`
+
+-   **POST /api/cache/refresh**
+    -   _Description_: Administrative endpoint for clearing the DNS cache.
+    -   _Returns_: JSON response indicating success or error.
+        -   Success: `200 OK` with `{"status":"success", "message":"DNS cache has been cleared"}`
+        -   Cache not enabled: `400 Bad Request` with `{"status":"error", "message":"Cache is not enabled"}`
+        -   Other errors: `500 Internal Server Error` with `{"status":"error", "message":"Failed to clear cache"}`
+    -   _Usage_: `curl -X POST http://localhost:8080/api/cache/refresh`
+
+API endpoints follow standard HTTP status codes.
+
+### Use Cases
+
+Load Ants is particularly well-suited for the following use cases:
+
+-   **Individual Users/Home Networks**:
+    -   Enhanced Privacy: Encrypt all DNS queries through DoH, preventing ISP or network man-in-the-middle snooping.
+    -   Circumvent Blocking and Censorship: Bypass DNS-based network access restrictions by selecting appropriate DoH servers.
+    -   Ad and Tracker Blocking: Effectively block advertisement domains and trackers by combining static rules and remote block lists (e.g., from `oisd.nl` or other sources).
+    -   Custom Resolution: Specify specific upstream resolvers for specific domains (e.g., use specific DNS for specific services).
+-   **Developers/Testing Environments**:
+    -   Local DoH Resolution: Conveniently test applications that require DoH support locally.
+    -   DNS Behavior Analysis: Observe application DNS query behavior through logs and metrics.
+    -   Flexible Routing Testing: Quickly set up and test complex DNS routing policies, including dynamic updates based on remote lists.
+-   **Enterprise/Organizational Internal Networks**:
+    -   Centralized DNS Resolution: Unify management of internal network DNS queries, enforce encryption, and improve network security baseline.
+    -   Security Policy Implementation: Block malicious domains, phishing sites, C&C servers, etc., with the ability to integrate threat intelligence sources.
+    -   Internal Domain Resolution: Route internal domain resolution requests to internal DNS servers (if internal DNS supports DoH, or through another non-DoH proxy layer).
+    -   Compliance: Log and audit DNS queries (requires self-configuration of log collection and analysis systems; Load Ants provides structured log output).
+-   **Cloud-Native Environments (Kubernetes, Docker Swarm)**:
+    -   Sidecar Proxy: Serve as a sidecar container providing DoH resolution capabilities for other applications in the cluster without modifying the applications themselves.
+    -   Cluster DNS Service: Act as a cluster-wide DNS resolver (typically combined with or as an upstream for CoreDNS, etc., to enhance specific functionality).
+    -   High-Performance DNS Gateway: Provide high-concurrency, low-latency DNS-to-DoH conversion and intelligent routing for large-scale applications.
+
+## License
+
+[MIT License](./LICENSE)
+
+## Acknowledgements
+
+-   Thanks to all developers who have contributed to the Load Ants project.
+-   The design and implementation of this project were inspired by many excellent open-source DNS tools and DoH practices.
+-   Special thanks to the Rust community for providing powerful tools and ecosystem.
