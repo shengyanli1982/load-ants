@@ -8,14 +8,15 @@ use axum::{
     body::Bytes,
     extract::{ConnectInfo, Query, State},
     http::{header, HeaderMap, StatusCode},
-    response::{IntoResponse, Response},
+    response::IntoResponse,
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use hickory_proto::op::{Message, MessageType};
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::str::FromStr;
 use std::time::Instant;
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
 
 // 定义一个元组来包含错误信息
 type DohError = (StatusCode, &'static str);
@@ -211,13 +212,21 @@ pub async fn handle_json_get(
         // 提取查询类型 (默认为 1 = A 记录)
         let default_type = String::from("1");
         let type_str = params.get("type").unwrap_or(&default_type);
-        let query_type_u16 = type_str.parse::<u16>().map_err(|_| {
-            (
-                StatusCode::BAD_REQUEST,
-                processing_labels::error_types::BAD_REQUEST,
-            )
-        })?;
-        let record_type = hickory_proto::rr::RecordType::from(query_type_u16);
+
+        // 尝试从字符串（如 "A", "AAAA"）或数字解析 RecordType
+        let record_type = hickory_proto::rr::RecordType::from_str(type_str)
+            .or_else(|_| {
+                type_str
+                    .parse::<u16>()
+                    .map(hickory_proto::rr::RecordType::from)
+            })
+            .map_err(|_| {
+                (
+                    StatusCode::BAD_REQUEST,
+                    processing_labels::error_types::BAD_REQUEST,
+                )
+            })?;
+
         let query_type_str = record_type.to_string();
 
         // 创建 DNS 查询消息

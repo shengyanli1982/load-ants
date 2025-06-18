@@ -136,16 +136,18 @@ async fn test_handle_doh_get_missing_param() {
     // 创建测试处理器
     let handler = create_test_handler(Some(create_test_dns_response()));
     let app_state = AppState { handler };
+    let addr = "127.0.0.1:8080".parse().unwrap();
 
     // 调用处理器
-    let response = handle_doh_get(State(app_state), query_params).await;
+    let response = handle_doh_get(
+        State(app_state),
+        axum::extract::ConnectInfo(addr),
+        query_params,
+    )
+    .await;
 
     // 验证返回错误状态码
-    assert!(response.is_err());
-    match response {
-        Err(status) => assert_eq!(status, StatusCode::BAD_REQUEST),
-        _ => panic!("Expected error result"),
-    }
+    assert_eq!(response.into_response().status(), StatusCode::BAD_REQUEST);
 }
 
 // 测试DoH GET请求无效的base64编码
@@ -159,16 +161,18 @@ async fn test_handle_doh_get_invalid_base64() {
     // 创建测试处理器
     let handler = create_test_handler(Some(create_test_dns_response()));
     let app_state = AppState { handler };
+    let addr = "127.0.0.1:8080".parse().unwrap();
 
     // 调用处理器
-    let response = handle_doh_get(State(app_state), query_params).await;
+    let response = handle_doh_get(
+        State(app_state),
+        axum::extract::ConnectInfo(addr),
+        query_params,
+    )
+    .await;
 
     // 验证返回错误状态码
-    assert!(response.is_err());
-    match response {
-        Err(status) => assert_eq!(status, StatusCode::BAD_REQUEST),
-        _ => panic!("Expected error result"),
-    }
+    assert_eq!(response.into_response().status(), StatusCode::BAD_REQUEST);
 }
 
 // 测试DoH GET请求无效的DNS消息
@@ -185,16 +189,18 @@ async fn test_handle_doh_get_invalid_dns_message() {
     // 创建测试处理器
     let handler = create_test_handler(Some(create_test_dns_response()));
     let app_state = AppState { handler };
+    let addr = "127.0.0.1:8080".parse().unwrap();
 
     // 调用处理器
-    let response = handle_doh_get(State(app_state), query_params).await;
+    let response = handle_doh_get(
+        State(app_state),
+        axum::extract::ConnectInfo(addr),
+        query_params,
+    )
+    .await;
 
     // 验证返回错误状态码
-    assert!(response.is_err());
-    match response {
-        Err(status) => assert_eq!(status, StatusCode::BAD_REQUEST),
-        _ => panic!("Expected error result"),
-    }
+    assert_eq!(response.into_response().status(), StatusCode::BAD_REQUEST);
 }
 
 // 测试DoH GET请求处理器错误
@@ -211,16 +217,21 @@ async fn test_handle_doh_get_handler_error() {
     // 创建会返回错误的测试处理器
     let handler = create_test_handler(None);
     let app_state = AppState { handler };
+    let addr = "127.0.0.1:8080".parse().unwrap();
 
     // 调用处理器
-    let response = handle_doh_get(State(app_state), query_params).await;
+    let response = handle_doh_get(
+        State(app_state),
+        axum::extract::ConnectInfo(addr),
+        query_params,
+    )
+    .await;
 
     // 验证返回错误状态码
-    assert!(response.is_err());
-    match response {
-        Err(status) => assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR),
-        _ => panic!("Expected error result"),
-    }
+    assert_eq!(
+        response.into_response().status(),
+        StatusCode::INTERNAL_SERVER_ERROR
+    );
 }
 
 // 测试DoH POST请求处理成功
@@ -266,16 +277,19 @@ async fn test_handle_doh_post_missing_content_type() {
     // 创建测试处理器
     let handler = create_test_handler(Some(create_test_dns_response()));
     let app_state = AppState { handler };
+    let addr = "127.0.0.1:8080".parse().unwrap();
 
     // 调用处理器
-    let response = handle_doh_post(State(app_state), headers, body).await;
+    let response = handle_doh_post(
+        State(app_state),
+        axum::extract::ConnectInfo(addr),
+        headers,
+        body,
+    )
+    .await;
 
     // 验证返回错误状态码
-    assert!(response.is_err());
-    match response {
-        Err(status) => assert_eq!(status, StatusCode::BAD_REQUEST),
-        _ => panic!("Expected error result"),
-    }
+    assert_eq!(response.into_response().status(), StatusCode::BAD_REQUEST);
 }
 
 // 测试DoH POST请求无效的Content-Type
@@ -292,22 +306,28 @@ async fn test_handle_doh_post_invalid_content_type() {
     // 创建测试处理器
     let handler = create_test_handler(Some(create_test_dns_response()));
     let app_state = AppState { handler };
+    let addr = "127.0.0.1:8080".parse().unwrap();
 
     // 调用处理器
-    let response = handle_doh_post(State(app_state), headers, body).await;
+    let response = handle_doh_post(
+        State(app_state),
+        axum::extract::ConnectInfo(addr),
+        headers,
+        body,
+    )
+    .await;
 
     // 验证返回错误状态码
-    assert!(response.is_err());
-    match response {
-        Err(status) => assert_eq!(status, StatusCode::UNSUPPORTED_MEDIA_TYPE),
-        _ => panic!("Expected error result"),
-    }
+    assert_eq!(
+        response.into_response().status(),
+        StatusCode::UNSUPPORTED_MEDIA_TYPE
+    );
 }
 
 // 测试DoH POST请求无效的DNS消息
 #[tokio::test]
 async fn test_handle_doh_post_invalid_dns_message() {
-    // 创建无效的请求体
+    // 创建无效的DNS消息体
     let body = Bytes::from("not-a-dns-message");
 
     // 创建请求头
@@ -317,16 +337,19 @@ async fn test_handle_doh_post_invalid_dns_message() {
     // 创建测试处理器
     let handler = create_test_handler(Some(create_test_dns_response()));
     let app_state = AppState { handler };
+    let addr = "127.0.0.1:8080".parse().unwrap();
 
     // 调用处理器
-    let response = handle_doh_post(State(app_state), headers, body).await;
+    let response = handle_doh_post(
+        State(app_state),
+        axum::extract::ConnectInfo(addr),
+        headers,
+        body,
+    )
+    .await;
 
     // 验证返回错误状态码
-    assert!(response.is_err());
-    match response {
-        Err(status) => assert_eq!(status, StatusCode::BAD_REQUEST),
-        _ => panic!("Expected error result"),
-    }
+    assert_eq!(response.into_response().status(), StatusCode::BAD_REQUEST);
 }
 
 // 测试DoH POST请求处理器错误
@@ -343,16 +366,22 @@ async fn test_handle_doh_post_handler_error() {
     // 创建会返回错误的测试处理器
     let handler = create_test_handler(None);
     let app_state = AppState { handler };
+    let addr = "127.0.0.1:8080".parse().unwrap();
 
     // 调用处理器
-    let response = handle_doh_post(State(app_state), headers, body).await;
+    let response = handle_doh_post(
+        State(app_state),
+        axum::extract::ConnectInfo(addr),
+        headers,
+        body,
+    )
+    .await;
 
     // 验证返回错误状态码
-    assert!(response.is_err());
-    match response {
-        Err(status) => assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR),
-        _ => panic!("Expected error result"),
-    }
+    assert_eq!(
+        response.into_response().status(),
+        StatusCode::INTERNAL_SERVER_ERROR
+    );
 }
 
 // 测试JSON GET请求处理成功
@@ -408,72 +437,77 @@ async fn test_handle_json_get_success() {
 // 测试JSON GET请求缺少name参数
 #[tokio::test]
 async fn test_handle_json_get_missing_name() {
-    // 创建查询参数，缺少name
-    let mut params = HashMap::new();
-    params.insert("type".to_string(), "1".to_string());
+    // 创建不含name参数的查询
+    let params = HashMap::new();
     let query_params = AxumQuery(params);
 
     // 创建测试处理器
     let handler = create_test_handler(Some(create_test_dns_response()));
     let app_state = AppState { handler };
+    let addr = "127.0.0.1:8080".parse().unwrap();
 
     // 调用处理器
-    let response = handle_json_get(State(app_state), query_params).await;
+    let response = handle_json_get(
+        State(app_state),
+        axum::extract::ConnectInfo(addr),
+        query_params,
+    )
+    .await;
 
     // 验证返回错误状态码
-    assert!(response.is_err());
-    match response {
-        Err(status) => assert_eq!(status, StatusCode::BAD_REQUEST),
-        _ => panic!("Expected error result"),
-    }
+    assert_eq!(response.into_response().status(), StatusCode::BAD_REQUEST);
 }
 
-// 测试JSON GET请求无效的type参数
+// 测试JSON GET请求无效type
 #[tokio::test]
 async fn test_handle_json_get_invalid_type() {
-    // 创建查询参数，使用无效的type
+    // 创建含无效type的查询
     let mut params = HashMap::new();
     params.insert("name".to_string(), "example.com".to_string());
-    params.insert("type".to_string(), "invalid".to_string());
+    params.insert("type".to_string(), "INVALID".to_string());
     let query_params = AxumQuery(params);
 
     // 创建测试处理器
     let handler = create_test_handler(Some(create_test_dns_response()));
     let app_state = AppState { handler };
+    let addr = "127.0.0.1:8080".parse().unwrap();
 
     // 调用处理器
-    let response = handle_json_get(State(app_state), query_params).await;
+    let response = handle_json_get(
+        State(app_state),
+        axum::extract::ConnectInfo(addr),
+        query_params,
+    )
+    .await;
 
     // 验证返回错误状态码
-    assert!(response.is_err());
-    match response {
-        Err(status) => assert_eq!(status, StatusCode::BAD_REQUEST),
-        _ => panic!("Expected error result"),
-    }
+    assert_eq!(response.into_response().status(), StatusCode::BAD_REQUEST);
 }
 
-// 测试JSON GET请求无效的域名
+// 测试JSON GET请求无效域名
 #[tokio::test]
 async fn test_handle_json_get_invalid_domain() {
-    // 创建查询参数，使用无效的域名
+    // 创建含无效域名的查询
     let mut params = HashMap::new();
     params.insert("name".to_string(), "invalid..domain".to_string());
-    params.insert("type".to_string(), "1".to_string());
+    params.insert("type".to_string(), "A".to_string());
     let query_params = AxumQuery(params);
 
     // 创建测试处理器
     let handler = create_test_handler(Some(create_test_dns_response()));
     let app_state = AppState { handler };
+    let addr = "127.0.0.1:8080".parse().unwrap();
 
     // 调用处理器
-    let response = handle_json_get(State(app_state), query_params).await;
+    let response = handle_json_get(
+        State(app_state),
+        axum::extract::ConnectInfo(addr),
+        query_params,
+    )
+    .await;
 
     // 验证返回错误状态码
-    assert!(response.is_err());
-    match response {
-        Err(status) => assert_eq!(status, StatusCode::BAD_REQUEST),
-        _ => panic!("Expected error result"),
-    }
+    assert_eq!(response.into_response().status(), StatusCode::BAD_REQUEST);
 }
 
 // 测试JSON GET请求处理器错误
@@ -482,20 +516,25 @@ async fn test_handle_json_get_handler_error() {
     // 创建查询参数
     let mut params = HashMap::new();
     params.insert("name".to_string(), "example.com".to_string());
-    params.insert("type".to_string(), "1".to_string()); // 1 = A 记录
+    params.insert("type".to_string(), "A".to_string());
     let query_params = AxumQuery(params);
 
     // 创建会返回错误的测试处理器
     let handler = create_test_handler(None);
     let app_state = AppState { handler };
+    let addr = "127.0.0.1:8080".parse().unwrap();
 
     // 调用处理器
-    let response = handle_json_get(State(app_state), query_params).await;
+    let response = handle_json_get(
+        State(app_state),
+        axum::extract::ConnectInfo(addr),
+        query_params,
+    )
+    .await;
 
     // 验证返回错误状态码
-    assert!(response.is_err());
-    match response {
-        Err(status) => assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR),
-        _ => panic!("Expected error result"),
-    }
+    assert_eq!(
+        response.into_response().status(),
+        StatusCode::INTERNAL_SERVER_ERROR
+    );
 }
