@@ -861,12 +861,14 @@ Default listening on port configured via `server.listen_http` (default: `0.0.0.0
 
 -   **GET/POST /dns-query**
 
+    You can find the `dns-message.bin` file in `examples/python`.
+
     -   _Description_: RFC 8484 standard DNS-over-HTTPS endpoint for resolving DNS queries using encrypted HTTPS protocol.
     -   _Content Type_:
         -   Request: `application/dns-message` for binary DNS messages
         -   Response: `application/dns-message` with binary DNS response
     -   _Usage_:
-        -   GET: `curl -H "accept: application/dns-message" "http://localhost:80/dns-query?dns=..."` (Base64url encoded DNS message)
+        -   GET: `curl -H "accept: application/dns-message" "http://localhost:80/dns-query?dns=AAABAAABAAAAAAAAA3d3dwdleGFtcGxlA2NvbQAAAQAB"` (Base64url encoded DNS message)
         -   POST: `curl -X POST -H "content-type: application/dns-message" --data-binary "@dns-message.bin" "http://localhost:80/dns-query"`
 
 -   **GET /resolve**

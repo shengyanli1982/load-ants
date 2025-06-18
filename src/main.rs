@@ -303,16 +303,20 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
         udp_bind_addr: config.server.listen_udp.parse()?,
         tcp_bind_addr: config.server.listen_tcp.parse()?,
         tcp_timeout: config.server.tcp_timeout,
-        http_bind_addr: config.server.listen_http.as_ref().map_or_else(
-            || "127.0.0.1:8080".parse().unwrap(),
-            |addr| addr.parse().unwrap(),
-        ),
+        http_bind_addr: config
+            .server
+            .listen_http
+            .as_ref()
+            .expect("HTTP bind address is required")
+            .parse()
+            .unwrap(),
         http_timeout: config.server.http_timeout,
     };
 
     // 创建 DNS 服务器
     let dns_server = DnsServer::new(server_config, handler.clone());
 
+    // 启动 DoH 服务器
     let doh_server = if let Some(ref listen_http) = config.server.listen_http {
         info!(
             "DNS server initialized with UDP: {:?}, TCP: {:?}, HTTP: {:?}",

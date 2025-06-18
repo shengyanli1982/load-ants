@@ -81,7 +81,7 @@ impl DoHServer {
         tokio::select! {
             result = axum::serve(
                 listener,
-                app
+                app.into_make_service_with_connect_info::<SocketAddr>()
             )
             .with_graceful_shutdown(async {
                 let _ = shutdown_rx.await;

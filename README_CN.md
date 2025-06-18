@@ -861,12 +861,14 @@ Load Ants 提供以下 HTTP API 端点：
 
 -   **GET/POST /dns-query**
 
+    你可以在 `examples/python` 找到 `dns-message.bin` 文件。
+
     -   _描述_: 符合 RFC 8484 标准的 DNS-over-HTTPS 端点，用于使用加密的 HTTPS 协议解析 DNS 查询。
     -   _内容类型_:
         -   请求: `application/dns-message` 用于二进制 DNS 消息
         -   响应: `application/dns-message` 包含二进制 DNS 响应
     -   _用法_:
-        -   GET: `curl -H "accept: application/dns-message" "http://localhost:80/dns-query?dns=..."` (Base64url 编码的 DNS 消息)
+        -   GET: `curl -H "accept: application/dns-message" "http://localhost:80/dns-query?dns=AAABAAABAAAAAAAAA3d3dwdleGFtcGxlA2NvbQAAAQAB"` (Base64url 编码的 DNS 消息)
         -   POST: `curl -X POST -H "content-type: application/dns-message" --data-binary "@dns-message.bin" "http://localhost:80/dns-query"`
 
 -   **GET /resolve**
