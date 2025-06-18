@@ -117,6 +117,20 @@ pub mod processing_labels {
     pub const CACHED: &str = "cached";
     // 解析完成
     pub const RESOLVED: &str = "resolved";
+
+    // DoH 错误类型标签
+    pub mod error_types {
+        // 上游错误
+        pub const UPSTREAM_ERROR: &str = "upstream_error";
+        // 消息编码错误
+        pub const MESSAGE_ENCODE_ERROR: &str = "message_encode_error";
+        // 错误的请求
+        pub const BAD_REQUEST: &str = "bad_request";
+        // 不支持的媒体类型
+        pub const UNSUPPORTED_MEDIA_TYPE: &str = "unsupported_media_type";
+        // JSON序列化错误
+        pub const JSON_SERIALIZATION_ERROR: &str = "json_serialization_error";
+    }
 }
 
 // 错误类型标签
