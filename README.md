@@ -17,7 +17,7 @@ English | [中文](./README_CN.md)
 
 ## Introduction
 
-**Load Ants** is a high-performance, multi-functional DNS proxy service that converts traditional UDP/TCP DNS queries to DNS-over-HTTPS (DoH). It serves as a bridge between clients using standard DNS protocols and modern secure DoH providers, offering enhanced privacy protection, security, and flexible routing capabilities.
+**Load Ants** is a high-performance, multi-functional DNS proxy service that converts traditional UDP/TCP DNS queries to DNS-over-HTTPS (DoH) and DoH proxy forwarding. It serves as a bridge between clients using standard DNS protocols and modern secure DoH providers, offering enhanced privacy protection, security, and flexible routing capabilities.
 
 ### Why DNS-over-HTTPS?
 

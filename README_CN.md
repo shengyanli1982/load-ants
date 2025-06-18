@@ -17,7 +17,7 @@
 
 ## 项目介绍
 
-**Load Ants** 是一款高性能、多功能的 DNS 代理服务，能够将传统的 UDP/TCP DNS 查询转换为 DNS-over-HTTPS (DoH)。它作为使用标准 DNS 协议的客户端与现代安全 DoH 提供商之间的桥梁，提供增强的隐私保护、安全性和灵活的路由功能。
+**Load Ants** 是一款高性能、多功能的 DNS 代理服务，能够将传统的 UDP/TCP DNS 查询转换为 DNS-over-HTTPS (DoH) 和 DoH 代理转发。它作为使用标准 DNS 协议的客户端与现代安全 DoH 提供商之间的桥梁，提供增强的隐私保护、安全性和灵活的路由功能。
 
 ### 为什么选择 DNS-over-HTTPS？
 
