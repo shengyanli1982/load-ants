@@ -75,7 +75,7 @@ fn validate_url_path(url: &Url) -> Result<(), ValidationError> {
 
 // 自定义验证函数 - 验证权重
 fn validate_weight(weight: u32) -> Result<(), ValidationError> {
-    if weight < weight_limits::MIN_WEIGHT || weight > weight_limits::MAX_WEIGHT {
+    if !(weight_limits::MIN_WEIGHT..=weight_limits::MAX_WEIGHT).contains(&weight) {
         return Err(ValidationError::new("invalid_weight"));
     }
     Ok(())

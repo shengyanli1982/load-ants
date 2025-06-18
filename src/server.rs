@@ -210,8 +210,12 @@ pub struct DnsServerConfig {
     pub udp_bind_addr: SocketAddr,
     // TCP绑定地址
     pub tcp_bind_addr: SocketAddr,
+    // HTTP绑定地址
+    pub http_bind_addr: SocketAddr,
     // TCP空闲超时时间（秒）
     pub tcp_timeout: u64,
+    // HTTP空闲超时时间（秒）
+    pub http_timeout: u64,
 }
 
 // DNS 服务器

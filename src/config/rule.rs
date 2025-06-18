@@ -43,7 +43,7 @@ fn validate_forward_target(rule: &RemoteRuleConfig) -> Result<(), ValidationErro
 
 // 自定义验证函数 - 验证规则文件大小限制
 fn validate_rule_max_size(max_size: usize) -> Result<(), ValidationError> {
-    if max_size < remote_rule_limits::MIN_SIZE || max_size > remote_rule_limits::MAX_SIZE {
+    if !(remote_rule_limits::MIN_SIZE..=remote_rule_limits::MAX_SIZE).contains(&max_size) {
         return Err(ValidationError::new("invalid_rule_max_size"));
     }
     Ok(())

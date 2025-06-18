@@ -88,6 +88,14 @@ pub mod remote_rule_limits {
     pub const MAX_SIZE: usize = 50 * 1024 * 1024;
 }
 
+// 端口限制
+pub mod timeout_limits {
+    // 最小超时
+    pub const MIN_TIMEOUT: u64 = 1;
+    // 最大超时
+    pub const MAX_TIMEOUT: u64 = 65535;
+}
+
 //
 // 指标标签常量
 //
@@ -109,6 +117,20 @@ pub mod processing_labels {
     pub const CACHED: &str = "cached";
     // 解析完成
     pub const RESOLVED: &str = "resolved";
+
+    // DoH 错误类型标签
+    pub mod error_types {
+        // 上游错误
+        pub const UPSTREAM_ERROR: &str = "upstream_error";
+        // 消息编码错误
+        pub const MESSAGE_ENCODE_ERROR: &str = "message_encode_error";
+        // 错误的请求
+        pub const BAD_REQUEST: &str = "bad_request";
+        // 不支持的媒体类型
+        pub const UNSUPPORTED_MEDIA_TYPE: &str = "unsupported_media_type";
+        // JSON序列化错误
+        pub const JSON_SERIALIZATION_ERROR: &str = "json_serialization_error";
+    }
 }
 
 // 错误类型标签
@@ -209,16 +231,22 @@ pub mod subsystem_names {
     pub const DNS_SERVER: &str = "dns_server";
     // 管理服务器子系统
     pub const ADMIN_SERVER: &str = "admin_server";
+    // DoH服务器子系统
+    pub const DOH_SERVER: &str = "doh_server";
 }
 
 // 服务器默认值
 pub mod server_defaults {
     // 默认TCP超时（秒）
     pub const DEFAULT_TCP_TIMEOUT: u64 = 10;
+    // 默认HTTP超时（秒）
+    pub const DEFAULT_HTTP_TIMEOUT: u64 = 30;
     // 默认DNS监听地址
     pub const DEFAULT_DNS_LISTEN: &str = "127.0.0.1:53";
+    // 默认HTTP监听地址
+    pub const DEFAULT_HTTP_LISTEN: &str = "127.0.0.1:8080";
     // 默认管理服务器监听地址
-    pub const DEFAULT_ADMIN_LISTEN: &str = "127.0.0.1:8080";
+    pub const DEFAULT_ADMIN_LISTEN: &str = "127.0.0.1:9000";
 }
 
 // 上游默认值

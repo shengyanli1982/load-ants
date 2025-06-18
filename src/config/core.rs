@@ -1,5 +1,5 @@
 use crate::config::validate_socket_addr;
-use crate::r#const::{cache_limits, http_client_limits, server_defaults};
+use crate::r#const::{cache_limits, http_client_limits, server_defaults, timeout_limits};
 use serde::{Deserialize, Serialize};
 use validator::{Validate, ValidationError};
 
@@ -47,8 +47,7 @@ impl HttpClientConfig {
     pub fn validate_optional_fields(&self) -> Result<(), ValidationError> {
         // 验证空闲超时
         if let Some(idle_timeout) = self.idle_timeout {
-            if idle_timeout < http_client_limits::MIN_IDLE_TIMEOUT
-                || idle_timeout > http_client_limits::MAX_IDLE_TIMEOUT
+            if !(http_client_limits::MIN_IDLE_TIMEOUT..=http_client_limits::MAX_IDLE_TIMEOUT).contains(&idle_timeout)
             {
                 return Err(ValidationError::new("idle_timeout_out_of_range"));
             }
@@ -56,8 +55,7 @@ impl HttpClientConfig {
 
         // 验证keepalive
         if let Some(keepalive) = self.keepalive {
-            if keepalive < http_client_limits::MIN_KEEPALIVE
-                || keepalive > http_client_limits::MAX_KEEPALIVE
+            if !(http_client_limits::MIN_KEEPALIVE..=http_client_limits::MAX_KEEPALIVE).contains(&keepalive)
             {
                 return Err(ValidationError::new("keepalive_out_of_range"));
             }
@@ -83,18 +81,36 @@ pub struct ServerConfig {
         message = "Invalid TCP listen address format"
     ))]
     pub listen_tcp: String,
+    // HTTP监听地址
+    #[validate(custom(
+        function = "validate_socket_addr",
+        message = "Invalid HTTP listen address format"
+    ))]
+    pub listen_http: Option<String>,
     // TCP连接空闲超时（秒）
     #[serde(default = "default_tcp_timeout")]
     #[validate(range(
-        min = 1,
-        max = 3600,
-        message = "TCP timeout must be between {} and {} seconds"
+        min = timeout_limits::MIN_TIMEOUT,
+        max = timeout_limits::MAX_TIMEOUT,
+        message = "TCP timeout must be between 1 and 65535 seconds"
     ))]
     pub tcp_timeout: u64,
+    // HTTP连接空闲超时（秒）
+    #[serde(default = "default_http_timeout")]
+    #[validate(range(
+        min = timeout_limits::MIN_TIMEOUT,
+        max = timeout_limits::MAX_TIMEOUT,
+        message = "HTTP timeout must be between 1 and 65535 seconds"
+    ))]
+    pub http_timeout: u64,
 }
 
 fn default_tcp_timeout() -> u64 {
     server_defaults::DEFAULT_TCP_TIMEOUT
+}
+
+fn default_http_timeout() -> u64 {
+    server_defaults::DEFAULT_HTTP_TIMEOUT
 }
 
 impl Default for ServerConfig {
@@ -102,7 +118,9 @@ impl Default for ServerConfig {
         Self {
             listen_udp: server_defaults::DEFAULT_DNS_LISTEN.to_string(),
             listen_tcp: server_defaults::DEFAULT_DNS_LISTEN.to_string(),
+            listen_http: None,
             tcp_timeout: default_tcp_timeout(),
+            http_timeout: default_http_timeout(),
         }
     }
 }
@@ -129,28 +147,28 @@ pub struct CacheConfig {
     #[validate(range(
         min = cache_limits::MIN_SIZE,
         max = cache_limits::MAX_SIZE,
-        message = "Cache size must be between {} and {}"
+        message = "Cache size must be between 10 and 1000000"
     ))]
     pub max_size: usize,
     // 最小TTL（秒）
     #[validate(range(
         min = cache_limits::MIN_TTL,
         max = cache_limits::MAX_TTL,
-        message = "Minimum TTL must be between {} and {} seconds"
+        message = "Minimum TTL must be between 1 and 86400 seconds"
     ))]
     pub min_ttl: u32,
     // 最大TTL（秒）
     #[validate(range(
         min = cache_limits::MIN_TTL,
         max = cache_limits::MAX_TTL,
-        message = "Maximum TTL must be between {} and {} seconds"
+        message = "Maximum TTL must be between 1 and 86400 seconds"
     ))]
     pub max_ttl: u32,
     // 负面缓存TTL（秒）
     #[validate(range(
         min = cache_limits::MIN_TTL,
         max = cache_limits::MAX_TTL,
-        message = "Negative cache TTL must be between {} and {} seconds"
+        message = "Negative cache TTL must be between 1 and 86400 seconds"
     ))]
     pub negative_ttl: u32,
 }

@@ -1,7 +1,7 @@
 use loadants::{
-    metrics::METRICS, rule_source_labels, rule_type_labels, server::DnsServerConfig,
-    subsystem_names, AdminServer, AppError, Args, Config, DnsCache, DnsServer, MatchType,
-    RequestHandler, Router, UpstreamManager,
+    doh::server::DoHServer, metrics::METRICS, rule_source_labels, rule_type_labels,
+    server::DnsServerConfig, subsystem_names, AdminServer, AppError, Args, Config, DnsCache,
+    DnsServer, MatchType, RequestHandler, Router, UpstreamManager,
 };
 use mimalloc::MiMalloc;
 use std::process;
@@ -79,13 +79,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             subsystem_names::DNS_SERVER,
             move |s| async move { dns_server.run(s).await },
         ));
-
         // 启动管理服务器子系统
         let admin_server = components.admin_server;
         s.start(SubsystemBuilder::new(
             subsystem_names::ADMIN_SERVER,
             move |s| async move { admin_server.run(s).await },
         ));
+        // 启动DoH服务器子系统
+        if let Some(doh_server) = components.doh_server {
+            s.start(SubsystemBuilder::new(
+                subsystem_names::DOH_SERVER,
+                move |s| async move { doh_server.run(s).await },
+            ));
+        }
     });
 
     // 等待关闭
@@ -108,6 +114,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 // 应用组件
 struct AppComponents {
+    // DoH 服务器
+    doh_server: Option<DoHServer>,
     // DNS 服务器
     dns_server: DnsServer,
     // 管理服务器
@@ -295,17 +303,42 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
         udp_bind_addr: config.server.listen_udp.parse()?,
         tcp_bind_addr: config.server.listen_tcp.parse()?,
         tcp_timeout: config.server.tcp_timeout,
+        http_bind_addr: config
+            .server
+            .listen_http
+            .as_ref()
+            .expect("HTTP bind address is required")
+            .parse()
+            .unwrap(),
+        http_timeout: config.server.http_timeout,
     };
 
     // 创建 DNS 服务器
-    let dns_server = DnsServer::new(server_config, handler);
-    info!(
-        "DNS server initialized with UDP: {}, TCP: {}",
-        config.server.listen_udp, config.server.listen_tcp
-    );
+    let dns_server = DnsServer::new(server_config, handler.clone());
+
+    // 启动 DoH 服务器
+    let doh_server = if let Some(ref listen_http) = config.server.listen_http {
+        info!(
+            "DNS server initialized with UDP: {:?}, TCP: {:?}, HTTP: {:?}",
+            config.server.listen_udp, config.server.listen_tcp, config.server.listen_http
+        );
+        // 创建 DoH 服务器
+        Some(DoHServer::new(
+            listen_http.parse().unwrap(),
+            config.server.http_timeout,
+            handler,
+        ))
+    } else {
+        info!(
+            "DNS server initialized with UDP: {:?}, TCP: {:?}",
+            config.server.listen_udp, config.server.listen_tcp
+        );
+        None
+    };
 
     // 返回应用组件
     Ok(AppComponents {
+        doh_server,
         dns_server,
         admin_server,
     })

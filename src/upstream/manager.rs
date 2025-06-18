@@ -58,6 +58,14 @@ impl UpstreamManager {
         })
     }
 
+    // 创建一个空的上游管理器，用于测试
+    pub fn empty() -> Result<Self, AppError> {
+        Ok(Self {
+            groups: HashMap::new(),
+            group_clients: HashMap::new(),
+        })
+    }
+
     // 转发查询到指定上游组
     pub async fn forward(&self, query: &Message, group_name: &str) -> Result<Message, AppError> {
         debug!("Forwarding request to upstream group: {}", group_name);

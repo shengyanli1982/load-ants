@@ -17,7 +17,7 @@ English | [中文](./README_CN.md)
 
 ## Introduction
 
-**Load Ants** is a high-performance, multi-functional DNS proxy service that converts traditional UDP/TCP DNS queries to DNS-over-HTTPS (DoH). It serves as a bridge between clients using standard DNS protocols and modern secure DoH providers, offering enhanced privacy protection, security, and flexible routing capabilities.
+**Load Ants** is a high-performance, multi-functional DNS proxy service that converts traditional UDP/TCP DNS queries to DNS-over-HTTPS (DoH) and DoH proxy forwarding. It serves as a bridge between clients using standard DNS protocols and modern secure DoH providers, offering enhanced privacy protection, security, and flexible routing capabilities.
 
 ### Why DNS-over-HTTPS?
 
@@ -207,11 +207,13 @@ Load Ants uses YAML format configuration files. Below is a complete reference of
 
 ### Server Configuration (server)
 
-| Parameter   | Type    | Default        | Description                                                   | Valid Range          |
-| ----------- | ------- | -------------- | ------------------------------------------------------------- | -------------------- |
-| listen_udp  | String  | "127.0.0.1:53" | UDP DNS listen address and port (Required)                    | Valid IP:port format |
-| listen_tcp  | String  | "127.0.0.1:53" | TCP DNS listen address and port (Required)                    | Valid IP:port format |
-| tcp_timeout | Integer | 10             | TCP connection idle timeout (seconds) (Optional, default: 10) | 1-3600               |
+| Parameter    | Type    | Default        | Description                                                    | Valid Range          |
+| ------------ | ------- | -------------- | -------------------------------------------------------------- | -------------------- |
+| listen_udp   | String  | "127.0.0.1:53" | UDP DNS listen address and port (Required)                     | Valid IP:port format |
+| listen_tcp   | String  | "127.0.0.1:53" | TCP DNS listen address and port (Required)                     | Valid IP:port format |
+| listen_http  | String  | "127.0.0.1:80" | HTTP DoH server listen address and port (Required)             | Valid IP:port format |
+| tcp_timeout  | Integer | 10             | TCP connection idle timeout (seconds) (Optional, default: 10)  | 1-65535              |
+| http_timeout | Integer | 30             | HTTP connection idle timeout (seconds) (Optional, default: 30) | 1-65535              |
 
 ### Health Check Configuration (health)
 
@@ -391,7 +393,9 @@ This is a complete example including most common configurations:
 server:
     listen_udp: "0.0.0.0:53" # UDP listen address and port
     listen_tcp: "0.0.0.0:53" # TCP listen address and port
+    listen_http: "0.0.0.0:80" # HTTP DoH server listen address and port
     tcp_timeout: 10 # TCP connection idle timeout (seconds)
+    http_timeout: 30 # HTTP connection idle timeout (seconds)
 
 # Health check and management server settings
 admin:
@@ -640,6 +644,7 @@ For production environments, Kubernetes provides better scalability, high availa
             server:
               listen_udp: "0.0.0.0:53"
               listen_tcp: "0.0.0.0:53"
+              listen_http: "0.0.0.0:80"
             admin:
               listen: "0.0.0.0:8080"
             cache:
@@ -849,6 +854,30 @@ Default listening on `0.0.0.0:8080` (configurable via `health.listen`).
         -   Cache not enabled: `400 Bad Request` with `{"status":"error", "message":"Cache is not enabled"}`
         -   Other errors: `500 Internal Server Error` with `{"status":"error", "message":"Failed to clear cache"}`
     -   _Usage_: `curl -X POST http://localhost:8080/api/cache/refresh`
+
+#### DoH (DNS-over-HTTPS) Endpoints
+
+Default listening on port configured via `server.listen_http` (default: `0.0.0.0:80`).
+
+-   **GET/POST /dns-query**
+
+    You can find the `dns-message.bin` file in `examples/python`.
+
+    -   _Description_: RFC 8484 standard DNS-over-HTTPS endpoint for resolving DNS queries using encrypted HTTPS protocol.
+    -   _Content Type_:
+        -   Request: `application/dns-message` for binary DNS messages
+        -   Response: `application/dns-message` with binary DNS response
+    -   _Usage_:
+        -   GET: `curl -H "accept: application/dns-message" "http://localhost:80/dns-query?dns=AAABAAABAAAAAAAAA3d3dwdleGFtcGxlA2NvbQAAAQAB"` (Base64url encoded DNS message)
+        -   POST: `curl -X POST -H "content-type: application/dns-message" --data-binary "@dns-message.bin" "http://localhost:80/dns-query"`
+
+-   **GET /resolve**
+
+    -   _Description_: Google JSON API compatible endpoint for DNS-over-HTTPS queries.
+    -   _Content Type_:
+        -   Request: Standard HTTP GET with query parameters
+        -   Response: `application/dns-json` with JSON formatted DNS response
+    -   _Usage_: `curl "http://localhost:80/resolve?name=example.com&type=AAAA"`
 
 API endpoints follow standard HTTP status codes.
 

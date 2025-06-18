@@ -17,7 +17,7 @@
 
 ## 项目介绍
 
-**Load Ants** 是一款高性能、多功能的 DNS 代理服务，能够将传统的 UDP/TCP DNS 查询转换为 DNS-over-HTTPS (DoH)。它作为使用标准 DNS 协议的客户端与现代安全 DoH 提供商之间的桥梁，提供增强的隐私保护、安全性和灵活的路由功能。
+**Load Ants** 是一款高性能、多功能的 DNS 代理服务，能够将传统的 UDP/TCP DNS 查询转换为 DNS-over-HTTPS (DoH) 和 DoH 代理转发。它作为使用标准 DNS 协议的客户端与现代安全 DoH 提供商之间的桥梁，提供增强的隐私保护、安全性和灵活的路由功能。
 
 ### 为什么选择 DNS-over-HTTPS？
 
@@ -207,11 +207,13 @@ Load Ants 使用 YAML 格式的配置文件。以下是完整的配置选项参�
 
 ### 服务器配置 (server)
 
-| 参数        | 类型   | 默认值         | 描述                                       | 有效范围            |
-| ----------- | ------ | -------------- | ------------------------------------------ | ------------------- |
-| listen_udp  | 字符串 | "127.0.0.1:53" | UDP DNS 监听地址和端口（必选）             | 有效的 IP:端口 格式 |
-| listen_tcp  | 字符串 | "127.0.0.1:53" | TCP DNS 监听地址和端口（必选）             | 有效的 IP:端口 格式 |
-| tcp_timeout | 整数   | 10             | TCP 连接空闲超时（秒）（可选，默认值: 10） | 1-3600              |
+| 参数         | 类型   | 默认值         | 描述                                        | 有效范围            |
+| ------------ | ------ | -------------- | ------------------------------------------- | ------------------- |
+| listen_udp   | 字符串 | "127.0.0.1:53" | UDP DNS 监听地址和端口（必选）              | 有效的 IP:端口 格式 |
+| listen_tcp   | 字符串 | "127.0.0.1:53" | TCP DNS 监听地址和端口（必选）              | 有效的 IP:端口 格式 |
+| listen_http  | 字符串 | "127.0.0.1:80" | HTTP DoH 服务器监听地址和端口（必选）       | 有效的 IP:端口 格式 |
+| tcp_timeout  | 整数   | 10             | TCP 连接空闲超时（秒）（可选，默认值: 10）  | 1-65535             |
+| http_timeout | 整数   | 30             | HTTP 连接空闲超时（秒）（可选，默认值: 30） | 1-65535             |
 
 ### 健康检查配置 (health)
 
@@ -391,7 +393,9 @@ remote_rules:
 server:
     listen_udp: "0.0.0.0:53" # UDP 监听地址和端口
     listen_tcp: "0.0.0.0:53" # TCP 监听地址和端口
+    listen_http: "0.0.0.0:80" # HTTP DoH 服务器监听地址和端口
     tcp_timeout: 10 # TCP连接空闲超时(秒)
+    http_timeout: 30 # HTTP连接空闲超时(秒)
 
 # 健康检查与管理服务器设置
 admin:
@@ -640,6 +644,7 @@ load-ants [OPTIONS]
             server:
               listen_udp: "0.0.0.0:53"
               listen_tcp: "0.0.0.0:53"
+              listen_http: "0.0.0.0:80"
             admin:
               listen: "0.0.0.0:8080"
             cache:
@@ -849,6 +854,30 @@ Load Ants 提供以下 HTTP API 端点：
         -   缓存未启用: `400 Bad Request` 与 `{"status":"error", "message":"Cache is not enabled"}`
         -   其他错误: `500 Internal Server Error` 与 `{"status":"error", "message":"Failed to clear cache"}`
     -   _用法_: `curl -X POST http://localhost:8080/api/cache/refresh`
+
+#### DoH (DNS-over-HTTPS) 端点
+
+默认监听在通过 `server.listen_http` 配置的端口（默认为 `0.0.0.0:80`）。
+
+-   **GET/POST /dns-query**
+
+    你可以在 `examples/python` 找到 `dns-message.bin` 文件。
+
+    -   _描述_: 符合 RFC 8484 标准的 DNS-over-HTTPS 端点，用于使用加密的 HTTPS 协议解析 DNS 查询。
+    -   _内容类型_:
+        -   请求: `application/dns-message` 用于二进制 DNS 消息
+        -   响应: `application/dns-message` 包含二进制 DNS 响应
+    -   _用法_:
+        -   GET: `curl -H "accept: application/dns-message" "http://localhost:80/dns-query?dns=AAABAAABAAAAAAAAA3d3dwdleGFtcGxlA2NvbQAAAQAB"` (Base64url 编码的 DNS 消息)
+        -   POST: `curl -X POST -H "content-type: application/dns-message" --data-binary "@dns-message.bin" "http://localhost:80/dns-query"`
+
+-   **GET /resolve**
+
+    -   _描述_: 兼容 Google JSON API 的 DNS-over-HTTPS 查询端点。
+    -   _内容类型_:
+        -   请求: 标准 HTTP GET 带查询参数
+        -   响应: `application/dns-json` 带有 JSON 格式化的 DNS 响应
+    -   _用法_: `curl "http://localhost:80/resolve?name=example.com&type=AAAA"`
 
 API 端点遵循标准 HTTP 状态码。
 

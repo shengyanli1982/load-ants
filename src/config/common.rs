@@ -27,10 +27,8 @@ fn validate_basic_auth(auth: &AuthConfig) -> Result<(), ValidationError> {
 
 // 自定义验证函数 - 验证Bearer认证配置
 fn validate_bearer_auth(auth: &AuthConfig) -> Result<(), ValidationError> {
-    if matches!(auth.r#type, AuthType::Bearer) {
-        if auth.token.is_none() || auth.token.as_ref().unwrap().is_empty() {
-            return Err(ValidationError::new("missing_token_for_bearer_auth"));
-        }
+    if matches!(auth.r#type, AuthType::Bearer) && (auth.token.is_none() || auth.token.as_ref().unwrap().is_empty()) {
+        return Err(ValidationError::new("missing_token_for_bearer_auth"));
     }
     Ok(())
 }
