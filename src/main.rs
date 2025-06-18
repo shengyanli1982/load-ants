@@ -295,13 +295,15 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
         udp_bind_addr: config.server.listen_udp.parse()?,
         tcp_bind_addr: config.server.listen_tcp.parse()?,
         tcp_timeout: config.server.tcp_timeout,
+        http_bind_addr: config.server.listen_http.parse()?,
+        http_timeout: config.server.http_timeout,
     };
 
     // 创建 DNS 服务器
     let dns_server = DnsServer::new(server_config, handler);
     info!(
-        "DNS server initialized with UDP: {}, TCP: {}",
-        config.server.listen_udp, config.server.listen_tcp
+        "DNS server initialized with UDP: {}, TCP: {}, HTTP: {}",
+        config.server.listen_udp, config.server.listen_tcp, config.server.listen_http
     );
 
     // 返回应用组件

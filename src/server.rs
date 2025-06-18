@@ -210,8 +210,12 @@ pub struct DnsServerConfig {
     pub udp_bind_addr: SocketAddr,
     // TCP绑定地址
     pub tcp_bind_addr: SocketAddr,
+    // HTTP绑定地址
+    pub http_bind_addr: SocketAddr,
     // TCP空闲超时时间（秒）
     pub tcp_timeout: u64,
+    // HTTP空闲超时时间（秒）
+    pub http_timeout: u64,
 }
 
 // DNS 服务器
@@ -234,6 +238,8 @@ impl IntoSubsystem<AppError> for DnsServer {
     async fn run(self, subsys: SubsystemHandle) -> Result<(), AppError> {
         // 创建处理器适配器
         let adapter = HandlerAdapter::new(self.handler.clone());
+
+        // ================= UDP =================
 
         // 创建服务器实例
         let mut server = hickory_server::ServerFuture::new(adapter);
@@ -263,9 +269,30 @@ impl IntoSubsystem<AppError> for DnsServer {
             }
         };
 
+        // ================= TCP =================
+
         // 设置TCP超时
         let tcp_timeout = std::time::Duration::from_secs(self.config.tcp_timeout);
         server.register_listener(tcp_listener, tcp_timeout);
+
+        // ================= HTTP =================
+
+        // 绑定 HTTP 端口
+        let http_listener = match TcpListener::bind(self.config.http_bind_addr).await {
+            Ok(listener) => {
+                info!("HTTP server listening on {}", self.config.http_bind_addr);
+                listener
+            }
+            Err(e) => {
+                error!("Failed to bind HTTP listener: {}", e);
+                return Err(AppError::Io(e));
+            }
+        };
+
+        // 创建HTTP服务器(axum)
+        // 接收 Google(JSON) 和 RFC8484 请求, 然后都是用 handle_request 函数处理
+
+        // ================= Running =================
 
         // 使用tokio::select!监听服务器和关闭信号
         tokio::select! {

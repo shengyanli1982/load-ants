@@ -83,18 +83,36 @@ pub struct ServerConfig {
         message = "Invalid TCP listen address format"
     ))]
     pub listen_tcp: String,
+    // HTTP监听地址
+    #[validate(custom(
+        function = "validate_socket_addr",
+        message = "Invalid HTTP listen address format"
+    ))]
+    pub listen_http: String,
     // TCP连接空闲超时（秒）
     #[serde(default = "default_tcp_timeout")]
     #[validate(range(
         min = 1,
         max = 3600,
-        message = "TCP timeout must be between {} and {} seconds"
+        message = "TCP timeout must be between 1 and 3600 seconds"
     ))]
     pub tcp_timeout: u64,
+    // HTTP连接空闲超时（秒）
+    #[serde(default = "default_http_timeout")]
+    #[validate(range(
+        min = 1,
+        max = 3600,
+        message = "HTTP timeout must be between 1 and 3600 seconds"
+    ))]
+    pub http_timeout: u64,
 }
 
 fn default_tcp_timeout() -> u64 {
     server_defaults::DEFAULT_TCP_TIMEOUT
+}
+
+fn default_http_timeout() -> u64 {
+    server_defaults::DEFAULT_HTTP_TIMEOUT
 }
 
 impl Default for ServerConfig {
@@ -102,7 +120,9 @@ impl Default for ServerConfig {
         Self {
             listen_udp: server_defaults::DEFAULT_DNS_LISTEN.to_string(),
             listen_tcp: server_defaults::DEFAULT_DNS_LISTEN.to_string(),
+            listen_http: server_defaults::DEFAULT_HTTP_LISTEN.to_string(),
             tcp_timeout: default_tcp_timeout(),
+            http_timeout: default_http_timeout(),
         }
     }
 }
