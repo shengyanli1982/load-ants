@@ -1,6 +1,6 @@
 // src/doh/handlers.rs
 
-use crate::doh::json::dns_message_to_json;
+use crate::doh::json::SerializableDnsMessage;
 use crate::doh::state::AppState;
 use crate::metrics::METRICS;
 use crate::r#const::{http_headers, processing_labels, protocol_labels};
@@ -8,11 +8,12 @@ use axum::{
     body::Bytes,
     extract::{ConnectInfo, Query, State},
     http::{header, HeaderMap, StatusCode},
-    response::IntoResponse,
+    response::{IntoResponse, Json},
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use hickory_proto::op::{Message, MessageType};
-use std::collections::HashMap;
+use serde::Deserialize;
+use std::borrow::Cow;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::time::Instant;
@@ -21,13 +22,27 @@ use tracing::{error, info, warn};
 // 定义一个元组来包含错误信息
 type DohError = (StatusCode, &'static str);
 
+/// 定义 `handle_doh_get` 的查询参数结构体
+#[derive(Deserialize)]
+pub struct DohGetParams {
+    pub dns: String,
+}
+
+/// 定义 `handle_json_get` 的查询参数结构体
+#[derive(Deserialize)]
+pub struct DohJsonGetParams {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub r#type: Option<String>,
+}
+
 /// 处理 DNS 消息并生成响应
 ///
 /// 这是一个内部辅助函数，用于处理 DNS 消息并生成响应，被 GET 和 POST 处理函数共用
 async fn process_dns_message(
     state: &AppState,
     dns_message: &Message,
-) -> Result<(Vec<u8>, String), DohError> {
+) -> Result<(Vec<u8>, Cow<'static, str>), DohError> {
     // 处理 DNS 请求
     let response = match state.handler.handle_request(dns_message).await {
         Ok(resp) => resp,
@@ -44,8 +59,8 @@ async fn process_dns_message(
     let query_type = dns_message
         .queries()
         .first()
-        .map(|q| q.query_type().to_string())
-        .unwrap_or_else(|| "unknown".to_string());
+        .map(|q| Cow::from(q.query_type().to_string()))
+        .unwrap_or(Cow::from("unknown"));
 
     // 编码 DNS 响应消息
     // 预分配合理大小的缓冲区，大多数DNS响应小于512字节
@@ -68,17 +83,13 @@ async fn process_dns_message(
 pub async fn handle_doh_get(
     State(state): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    Query(params): Query<HashMap<String, String>>,
+    Query(params): Query<DohGetParams>,
 ) -> impl IntoResponse {
     let start_time = Instant::now();
-    info!("Received DoH GET request from {}", addr);
 
     let result: Result<(HeaderMap, Vec<u8>), DohError> = async {
         // 提取 DNS 查询参数
-        let dns_param = params.get("dns").ok_or((
-            StatusCode::BAD_REQUEST,
-            processing_labels::error_types::BAD_REQUEST,
-        ))?;
+        let dns_param = &params.dns;
 
         // 解码 base64url DNS 消息
         let dns_bytes = URL_SAFE_NO_PAD.decode(dns_param).map_err(|_| {
@@ -133,7 +144,6 @@ pub async fn handle_doh_post(
     body: Bytes,
 ) -> impl IntoResponse {
     let start_time = Instant::now();
-    info!("Received DoH POST request from {}", addr);
 
     let result: Result<(HeaderMap, Vec<u8>), DohError> = async {
         // 验证内容类型
@@ -197,21 +207,23 @@ pub async fn handle_doh_post(
 pub async fn handle_json_get(
     State(state): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    Query(params): Query<HashMap<String, String>>,
+    Query(params): Query<DohJsonGetParams>,
 ) -> impl IntoResponse {
     let start_time = Instant::now();
     info!("Received JSON DoH GET request from {}", addr);
 
-    let result: Result<(HeaderMap, String), DohError> = async {
+    let result: Result<(HeaderMap, Message), DohError> = async {
         // 提取必要的查询参数
-        let name = params.get("name").ok_or((
-            StatusCode::BAD_REQUEST,
-            processing_labels::error_types::BAD_REQUEST,
-        ))?;
+        let name = &params.name;
+        if name.is_empty() {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                processing_labels::error_types::BAD_REQUEST,
+            ));
+        }
 
-        // 提取查询类型 (默认为 1 = A 记录)
-        let default_type = String::from("1");
-        let type_str = params.get("type").unwrap_or(&default_type);
+        // 提取查询类型 (默认为 "1" = A 记录)
+        let type_str = params.r#type.as_deref().unwrap_or("1");
 
         // 尝试从字符串（如 "A", "AAAA"）或数字解析 RecordType
         let record_type = hickory_proto::rr::RecordType::from_str(type_str)
@@ -252,14 +264,6 @@ pub async fn handle_json_get(
             )
         })?;
 
-        // 转换为 Google JSON 格式
-        let json_response = dns_message_to_json(response).map_err(|_| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                processing_labels::error_types::JSON_SERIALIZATION_ERROR,
-            )
-        })?;
-
         // 构建 HTTP 响应
         let mut headers = HeaderMap::new();
         headers.insert(
@@ -267,16 +271,29 @@ pub async fn handle_json_get(
             header::HeaderValue::from_static(http_headers::content_types::DNS_JSON),
         );
 
+        // 记录成功的指标
         record_doh_metrics(start_time, &query_type_str, addr, &Ok(StatusCode::OK), None);
 
-        Ok((headers, json_response))
+        Ok((headers, response))
     }
     .await;
 
     match result {
-        Ok((headers, body)) => (StatusCode::OK, headers, body).into_response(),
+        Ok((headers, message)) => (
+            StatusCode::OK,
+            headers,
+            Json(SerializableDnsMessage(&message)),
+        )
+            .into_response(),
         Err((status, error_type)) => {
-            record_doh_metrics(start_time, "unknown", addr, &Err(status), Some(error_type));
+            // 记录失败的指标
+            record_doh_metrics(
+                start_time,
+                protocol_labels::UNKNOWN,
+                addr,
+                &Err(status),
+                Some(error_type),
+            );
             status.into_response()
         }
     }

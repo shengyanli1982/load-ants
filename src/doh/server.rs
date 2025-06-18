@@ -12,6 +12,9 @@ use tokio::sync::oneshot;
 use tokio_graceful_shutdown::SubsystemHandle;
 use tracing::{error, info};
 
+const DOH_QUERY_PATH: &str = "/dns-query";
+const JSON_QUERY_PATH: &str = "/resolve";
+
 /// DoH 服务器结构体
 pub struct DoHServer {
     /// 监听地址
@@ -47,9 +50,9 @@ impl DoHServer {
         // 创建路由
         Router::new()
             // RFC 8484 DoH 端点
-            .route("/dns-query", get(handle_doh_get).post(handle_doh_post))
+            .route(DOH_QUERY_PATH, get(handle_doh_get).post(handle_doh_post))
             // Google JSON DoH 端点
-            .route("/resolve", get(handle_json_get))
+            .route(JSON_QUERY_PATH, get(handle_json_get))
             // 添加应用程序状态
             .with_state(app_state)
     }

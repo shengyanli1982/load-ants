@@ -12,7 +12,9 @@ use hyper::body::Bytes;
 use loadants::{
     cache::DnsCache,
     doh::{
-        handlers::{handle_doh_get, handle_doh_post, handle_json_get},
+        handlers::{
+            handle_doh_get, handle_doh_post, handle_json_get, DohGetParams, DohJsonGetParams,
+        },
         state::AppState,
     },
     handler::RequestHandler,
@@ -130,8 +132,9 @@ async fn test_handle_doh_get_success() {
 #[tokio::test]
 async fn test_handle_doh_get_missing_param() {
     // 创建空查询参数
-    let params = HashMap::new();
-    let query_params = AxumQuery(params);
+    let query_params = AxumQuery(DohGetParams {
+        dns: "".to_string(),
+    });
 
     // 创建测试处理器
     let handler = create_test_handler(Some(create_test_dns_response()));
@@ -154,9 +157,9 @@ async fn test_handle_doh_get_missing_param() {
 #[tokio::test]
 async fn test_handle_doh_get_invalid_base64() {
     // 创建查询参数，使用无效的base64
-    let mut params = HashMap::new();
-    params.insert("dns".to_string(), "invalid-base64".to_string());
-    let query_params = AxumQuery(params);
+    let query_params = AxumQuery(DohGetParams {
+        dns: "invalid-base64".to_string(),
+    });
 
     // 创建测试处理器
     let handler = create_test_handler(Some(create_test_dns_response()));
@@ -179,12 +182,9 @@ async fn test_handle_doh_get_invalid_base64() {
 #[tokio::test]
 async fn test_handle_doh_get_invalid_dns_message() {
     // 创建查询参数，使用有效的base64但无效的DNS消息
-    let mut params = HashMap::new();
-    params.insert(
-        "dns".to_string(),
-        URL_SAFE_NO_PAD.encode(b"not-a-dns-message"),
-    );
-    let query_params = AxumQuery(params);
+    let query_params = AxumQuery(DohGetParams {
+        dns: URL_SAFE_NO_PAD.encode(b"not-a-dns-message"),
+    });
 
     // 创建测试处理器
     let handler = create_test_handler(Some(create_test_dns_response()));
@@ -207,12 +207,9 @@ async fn test_handle_doh_get_invalid_dns_message() {
 #[tokio::test]
 async fn test_handle_doh_get_handler_error() {
     // 创建查询参数
-    let mut params = HashMap::new();
-    params.insert(
-        "dns".to_string(),
-        URL_SAFE_NO_PAD.encode(&encode_dns_message(&create_test_dns_query())),
-    );
-    let query_params = AxumQuery(params);
+    let query_params = AxumQuery(DohGetParams {
+        dns: URL_SAFE_NO_PAD.encode(&encode_dns_message(&create_test_dns_query())),
+    });
 
     // 创建会返回错误的测试处理器
     let handler = create_test_handler(None);
@@ -437,9 +434,11 @@ async fn test_handle_json_get_success() {
 // 测试JSON GET请求缺少name参数
 #[tokio::test]
 async fn test_handle_json_get_missing_name() {
-    // 创建不含name参数的查询
-    let params = HashMap::new();
-    let query_params = AxumQuery(params);
+    // 创建空查询参数
+    let query_params = AxumQuery(DohJsonGetParams {
+        name: "".to_string(),
+        r#type: None,
+    });
 
     // 创建测试处理器
     let handler = create_test_handler(Some(create_test_dns_response()));
@@ -461,11 +460,11 @@ async fn test_handle_json_get_missing_name() {
 // 测试JSON GET请求无效type
 #[tokio::test]
 async fn test_handle_json_get_invalid_type() {
-    // 创建含无效type的查询
-    let mut params = HashMap::new();
-    params.insert("name".to_string(), "example.com".to_string());
-    params.insert("type".to_string(), "INVALID".to_string());
-    let query_params = AxumQuery(params);
+    // 创建无效类型的查询参数
+    let query_params = AxumQuery(DohJsonGetParams {
+        name: "example.com".to_string(),
+        r#type: Some("INVALID".to_string()),
+    });
 
     // 创建测试处理器
     let handler = create_test_handler(Some(create_test_dns_response()));
@@ -487,11 +486,11 @@ async fn test_handle_json_get_invalid_type() {
 // 测试JSON GET请求无效域名
 #[tokio::test]
 async fn test_handle_json_get_invalid_domain() {
-    // 创建含无效域名的查询
-    let mut params = HashMap::new();
-    params.insert("name".to_string(), "invalid..domain".to_string());
-    params.insert("type".to_string(), "A".to_string());
-    let query_params = AxumQuery(params);
+    // 创建无效域名的查询参数
+    let query_params = AxumQuery(DohJsonGetParams {
+        name: "invalid-domain-[-".to_string(),
+        r#type: Some("A".to_string()),
+    });
 
     // 创建测试处理器
     let handler = create_test_handler(Some(create_test_dns_response()));
@@ -514,10 +513,10 @@ async fn test_handle_json_get_invalid_domain() {
 #[tokio::test]
 async fn test_handle_json_get_handler_error() {
     // 创建查询参数
-    let mut params = HashMap::new();
-    params.insert("name".to_string(), "example.com".to_string());
-    params.insert("type".to_string(), "A".to_string());
-    let query_params = AxumQuery(params);
+    let query_params = AxumQuery(DohJsonGetParams {
+        name: "example.com".to_string(),
+        r#type: Some("A".to_string()),
+    });
 
     // 创建会返回错误的测试处理器
     let handler = create_test_handler(None);
