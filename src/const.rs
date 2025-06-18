@@ -209,6 +209,8 @@ pub mod subsystem_names {
     pub const DNS_SERVER: &str = "dns_server";
     // 管理服务器子系统
     pub const ADMIN_SERVER: &str = "admin_server";
+    // DoH服务器子系统
+    pub const DOH_SERVER: &str = "doh_server";
 }
 
 // 服务器默认值

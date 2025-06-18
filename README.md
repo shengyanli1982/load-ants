@@ -207,11 +207,13 @@ Load Ants uses YAML format configuration files. Below is a complete reference of
 
 ### Server Configuration (server)
 
-| Parameter   | Type    | Default        | Description                                                   | Valid Range          |
-| ----------- | ------- | -------------- | ------------------------------------------------------------- | -------------------- |
-| listen_udp  | String  | "127.0.0.1:53" | UDP DNS listen address and port (Required)                    | Valid IP:port format |
-| listen_tcp  | String  | "127.0.0.1:53" | TCP DNS listen address and port (Required)                    | Valid IP:port format |
-| tcp_timeout | Integer | 10             | TCP connection idle timeout (seconds) (Optional, default: 10) | 1-3600               |
+| Parameter    | Type    | Default        | Description                                                    | Valid Range          |
+| ------------ | ------- | -------------- | -------------------------------------------------------------- | -------------------- |
+| listen_udp   | String  | "127.0.0.1:53" | UDP DNS listen address and port (Required)                     | Valid IP:port format |
+| listen_tcp   | String  | "127.0.0.1:53" | TCP DNS listen address and port (Required)                     | Valid IP:port format |
+| listen_http  | String  | "127.0.0.1:80" | HTTP DoH server listen address and port (Required)             | Valid IP:port format |
+| tcp_timeout  | Integer | 10             | TCP connection idle timeout (seconds) (Optional, default: 10)  | 1-3600               |
+| http_timeout | Integer | 30             | HTTP connection idle timeout (seconds) (Optional, default: 30) | 1-3600               |
 
 ### Health Check Configuration (health)
 
@@ -391,7 +393,9 @@ This is a complete example including most common configurations:
 server:
     listen_udp: "0.0.0.0:53" # UDP listen address and port
     listen_tcp: "0.0.0.0:53" # TCP listen address and port
+    listen_http: "0.0.0.0:80" # HTTP DoH server listen address and port
     tcp_timeout: 10 # TCP connection idle timeout (seconds)
+    http_timeout: 30 # HTTP connection idle timeout (seconds)
 
 # Health check and management server settings
 admin:
@@ -640,6 +644,7 @@ For production environments, Kubernetes provides better scalability, high availa
             server:
               listen_udp: "0.0.0.0:53"
               listen_tcp: "0.0.0.0:53"
+              listen_http: "0.0.0.0:80"
             admin:
               listen: "0.0.0.0:8080"
             cache:
