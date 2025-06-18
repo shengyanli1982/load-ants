@@ -11,4 +11,7 @@ pub mod server;
 pub mod state;
 
 // 公开导出
+pub use handlers::{handle_doh_get, handle_doh_post, handle_json_get};
+pub use json::SerializableDnsMessage;
 pub use server::DoHServer;
+pub use state::AppState;

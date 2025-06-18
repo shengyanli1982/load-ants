@@ -104,7 +104,7 @@ async fn test_handle_doh_get_success() {
     let mut params = HashMap::new();
     params.insert(
         "dns".to_string(),
-        URL_SAFE_NO_PAD.encode(&encode_dns_message(&create_test_dns_query())),
+        URL_SAFE_NO_PAD.encode(encode_dns_message(&create_test_dns_query())),
     );
     // 将未使用的变量改为_开头
     let _query_params = AxumQuery(params);
@@ -208,7 +208,7 @@ async fn test_handle_doh_get_invalid_dns_message() {
 async fn test_handle_doh_get_handler_error() {
     // 创建查询参数
     let query_params = AxumQuery(DohGetParams {
-        dns: URL_SAFE_NO_PAD.encode(&encode_dns_message(&create_test_dns_query())),
+        dns: URL_SAFE_NO_PAD.encode(encode_dns_message(&create_test_dns_query())),
     });
 
     // 创建会返回错误的测试处理器

@@ -12,7 +12,7 @@ use axum::{
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use hickory_proto::op::{Message, MessageType};
-use hickory_proto::rr::RecordType;
+use hickory_proto::rr::{Name, RecordType};
 use serde::Deserialize;
 use std::borrow::Cow;
 use std::net::SocketAddr;
@@ -296,12 +296,8 @@ pub async fn handle_json_get(
         let type_str = params.r#type.as_deref().unwrap_or("1");
 
         // 尝试从字符串（如 "A", "AAAA"）或数字解析 RecordType
-        let record_type = hickory_proto::rr::RecordType::from_str(type_str)
-            .or_else(|_| {
-                type_str
-                    .parse::<u16>()
-                    .map(hickory_proto::rr::RecordType::from)
-            })
+        let record_type = RecordType::from_str(type_str)
+            .or_else(|_| type_str.parse::<u16>().map(RecordType::from))
             .map_err(|_| {
                 (
                     StatusCode::BAD_REQUEST,
@@ -332,7 +328,7 @@ pub async fn handle_json_get(
         query.set_recursion_desired(true);
         query.set_checking_disabled(checking_disabled);
 
-        let name_result = hickory_proto::rr::Name::from_ascii(name).map_err(|_| {
+        let name_result = Name::from_ascii(name).map_err(|_| {
             (
                 StatusCode::BAD_REQUEST,
                 processing_labels::error_types::BAD_REQUEST,

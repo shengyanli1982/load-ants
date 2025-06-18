@@ -9,7 +9,7 @@ use std::fmt::Write;
 /// 序列化 DNS 消息
 pub struct SerializableDnsMessage<'a>(pub &'a Message);
 
-impl<'a> Serialize for SerializableDnsMessage<'a> {
+impl Serialize for SerializableDnsMessage<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -66,7 +66,7 @@ impl<'a> Serialize for SerializableDnsMessage<'a> {
 // 辅助结构体和实现，用于序列化记录切片
 struct SerializableRecords<'a>(&'a [Record]);
 
-impl<'a> Serialize for SerializableRecords<'a> {
+impl Serialize for SerializableRecords<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -82,7 +82,7 @@ impl<'a> Serialize for SerializableRecords<'a> {
 // 辅助结构体和实现，用于序列化单个记录
 struct SerializableRecord<'a>(&'a Record);
 
-impl<'a> Serialize for SerializableRecord<'a> {
+impl Serialize for SerializableRecord<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -106,7 +106,7 @@ struct SerializableQueries<'a>(&'a [Query]);
 // 辅助结构体和实现，用于序列化单个问题
 struct SerializableQuery<'a>(&'a Query);
 
-impl<'a> Serialize for SerializableQuery<'a> {
+impl Serialize for SerializableQuery<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -118,7 +118,7 @@ impl<'a> Serialize for SerializableQuery<'a> {
     }
 }
 
-impl<'a> Serialize for SerializableQueries<'a> {
+impl Serialize for SerializableQueries<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,

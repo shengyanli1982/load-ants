@@ -47,8 +47,7 @@ impl HttpClientConfig {
     pub fn validate_optional_fields(&self) -> Result<(), ValidationError> {
         // 验证空闲超时
         if let Some(idle_timeout) = self.idle_timeout {
-            if idle_timeout < http_client_limits::MIN_IDLE_TIMEOUT
-                || idle_timeout > http_client_limits::MAX_IDLE_TIMEOUT
+            if !(http_client_limits::MIN_IDLE_TIMEOUT..=http_client_limits::MAX_IDLE_TIMEOUT).contains(&idle_timeout)
             {
                 return Err(ValidationError::new("idle_timeout_out_of_range"));
             }
@@ -56,8 +55,7 @@ impl HttpClientConfig {
 
         // 验证keepalive
         if let Some(keepalive) = self.keepalive {
-            if keepalive < http_client_limits::MIN_KEEPALIVE
-                || keepalive > http_client_limits::MAX_KEEPALIVE
+            if !(http_client_limits::MIN_KEEPALIVE..=http_client_limits::MAX_KEEPALIVE).contains(&keepalive)
             {
                 return Err(ValidationError::new("keepalive_out_of_range"));
             }
