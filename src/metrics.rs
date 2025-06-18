@@ -81,7 +81,7 @@ impl DnsMetrics {
         let http_requests_total = IntCounterVec::new(
             opts!(
                 "loadants_http_requests_total",
-                "Total DNS over HTTP requests processed by the proxy, classified by protocol and status code"
+                "Total DNS over HTTP requests processed by the proxy, classified by status code"
             ),
             &["status_code"],
         )
@@ -90,7 +90,7 @@ impl DnsMetrics {
         let http_request_duration_seconds = HistogramVec::new(
             prometheus::histogram_opts!(
                 "loadants_http_request_duration_seconds",
-                "DNS over HTTP request processing duration in seconds, classified by protocol and status code",
+                "DNS over HTTP request processing duration in seconds, classified by query type and status code",
                 vec![0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 20.0]
             ),
             &["query_type", "status_code"],

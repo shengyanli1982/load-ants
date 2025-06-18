@@ -6,11 +6,7 @@ use serde::ser::{SerializeSeq, SerializeStruct};
 use serde::{Serialize, Serializer};
 use std::fmt::Write;
 
-/// 一个包装器结构，用于为 `hickory_proto::op::Message` 实现 `serde::Serialize`。
-///
-/// 这个结构体通过借用一个 `Message` 并为其实现 `Serialize` trait，
-/// 允许我们将 DNS 消息直接流式序列化为 JSON，而无需创建中间的 `serde_json::Value`，
-/// 从而显著提高性能并减少内存分配。
+/// 序列化 DNS 消息
 pub struct SerializableDnsMessage<'a>(pub &'a Message);
 
 impl<'a> Serialize for SerializableDnsMessage<'a> {
@@ -136,6 +132,7 @@ impl<'a> Serialize for SerializableQueries<'a> {
 }
 
 /// 高效地将 `RData` 转换为字符串，尽可能减少内存分配。
+#[inline(always)]
 fn rdata_to_string(rdata: Option<&RData>) -> String {
     let rdata = match rdata {
         Some(r) => r,

@@ -438,6 +438,9 @@ async fn test_handle_json_get_missing_name() {
     let query_params = AxumQuery(DohJsonGetParams {
         name: "".to_string(),
         r#type: None,
+        cd: None,
+        do_flag: None,
+        ct: None,
     });
 
     // 创建测试处理器
@@ -464,6 +467,9 @@ async fn test_handle_json_get_invalid_type() {
     let query_params = AxumQuery(DohJsonGetParams {
         name: "example.com".to_string(),
         r#type: Some("INVALID".to_string()),
+        cd: None,
+        do_flag: None,
+        ct: None,
     });
 
     // 创建测试处理器
@@ -490,6 +496,9 @@ async fn test_handle_json_get_invalid_domain() {
     let query_params = AxumQuery(DohJsonGetParams {
         name: "invalid-domain-[-".to_string(),
         r#type: Some("A".to_string()),
+        cd: None,
+        do_flag: None,
+        ct: None,
     });
 
     // 创建测试处理器
@@ -516,6 +525,9 @@ async fn test_handle_json_get_handler_error() {
     let query_params = AxumQuery(DohJsonGetParams {
         name: "example.com".to_string(),
         r#type: Some("A".to_string()),
+        cd: None,
+        do_flag: None,
+        ct: None,
     });
 
     // 创建会返回错误的测试处理器
