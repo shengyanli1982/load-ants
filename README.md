@@ -855,6 +855,28 @@ Default listening on `0.0.0.0:8080` (configurable via `health.listen`).
         -   Other errors: `500 Internal Server Error` with `{"status":"error", "message":"Failed to clear cache"}`
     -   _Usage_: `curl -X POST http://localhost:8080/api/cache/refresh`
 
+#### DoH (DNS-over-HTTPS) Endpoints
+
+Default listening on port configured via `server.listen_http` (default: `0.0.0.0:80`).
+
+-   **GET/POST /dns-query**
+
+    -   _Description_: RFC 8484 standard DNS-over-HTTPS endpoint for resolving DNS queries using encrypted HTTPS protocol.
+    -   _Content Type_:
+        -   Request: `application/dns-message` for binary DNS messages
+        -   Response: `application/dns-message` with binary DNS response
+    -   _Usage_:
+        -   GET: `curl -H "accept: application/dns-message" "http://localhost:80/dns-query?dns=..."` (Base64url encoded DNS message)
+        -   POST: `curl -X POST -H "content-type: application/dns-message" --data-binary "@dns-message.bin" "http://localhost:80/dns-query"`
+
+-   **GET /resolve**
+
+    -   _Description_: Google JSON API compatible endpoint for DNS-over-HTTPS queries.
+    -   _Content Type_:
+        -   Request: Standard HTTP GET with query parameters
+        -   Response: `application/dns-json` with JSON formatted DNS response
+    -   _Usage_: `curl "http://localhost:80/resolve?name=example.com&type=AAAA"`
+
 API endpoints follow standard HTTP status codes.
 
 ### Use Cases

@@ -855,6 +855,28 @@ Load Ants 提供以下 HTTP API 端点：
         -   其他错误: `500 Internal Server Error` 与 `{"status":"error", "message":"Failed to clear cache"}`
     -   _用法_: `curl -X POST http://localhost:8080/api/cache/refresh`
 
+#### DoH (DNS-over-HTTPS) 端点
+
+默认监听在通过 `server.listen_http` 配置的端口（默认为 `0.0.0.0:80`）。
+
+-   **GET/POST /dns-query**
+
+    -   _描述_: 符合 RFC 8484 标准的 DNS-over-HTTPS 端点，用于使用加密的 HTTPS 协议解析 DNS 查询。
+    -   _内容类型_:
+        -   请求: `application/dns-message` 用于二进制 DNS 消息
+        -   响应: `application/dns-message` 包含二进制 DNS 响应
+    -   _用法_:
+        -   GET: `curl -H "accept: application/dns-message" "http://localhost:80/dns-query?dns=..."` (Base64url 编码的 DNS 消息)
+        -   POST: `curl -X POST -H "content-type: application/dns-message" --data-binary "@dns-message.bin" "http://localhost:80/dns-query"`
+
+-   **GET /resolve**
+
+    -   _描述_: 兼容 Google JSON API 的 DNS-over-HTTPS 查询端点。
+    -   _内容类型_:
+        -   请求: 标准 HTTP GET 带查询参数
+        -   响应: `application/dns-json` 带有 JSON 格式化的 DNS 响应
+    -   _用法_: `curl "http://localhost:80/resolve?name=example.com&type=AAAA"`
+
 API 端点遵循标准 HTTP 状态码。
 
 ### 应用场景
