@@ -86,11 +86,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             move |s| async move { admin_server.run(s).await },
         ));
         // 启动DoH服务器子系统
-        let doh_server = components.doh_server;
-        s.start(SubsystemBuilder::new(
-            subsystem_names::DOH_SERVER,
-            move |s| async move { doh_server.run(s).await },
-        ));
+        if let Some(doh_server) = components.doh_server {
+            s.start(SubsystemBuilder::new(
+                subsystem_names::DOH_SERVER,
+                move |s| async move { doh_server.run(s).await },
+            ));
+        }
     });
 
     // 等待关闭
@@ -114,7 +115,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 // 应用组件
 struct AppComponents {
     // DoH 服务器
-    doh_server: DoHServer,
+    doh_server: Option<DoHServer>,
     // DNS 服务器
     dns_server: DnsServer,
     // 管理服务器
@@ -302,24 +303,34 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
         udp_bind_addr: config.server.listen_udp.parse()?,
         tcp_bind_addr: config.server.listen_tcp.parse()?,
         tcp_timeout: config.server.tcp_timeout,
-        http_bind_addr: config.server.listen_http.parse()?,
+        http_bind_addr: config.server.listen_http.as_ref().map_or_else(
+            || "127.0.0.1:8080".parse().unwrap(),
+            |addr| addr.parse().unwrap(),
+        ),
         http_timeout: config.server.http_timeout,
     };
 
     // 创建 DNS 服务器
     let dns_server = DnsServer::new(server_config, handler.clone());
 
-    // 创建 DoH 服务器
-    let doh_server = DoHServer::new(
-        config.server.listen_http.parse().unwrap(),
-        config.server.http_timeout,
-        handler,
-    );
-
-    info!(
-        "DNS server initialized with UDP: {:?}, TCP: {:?}, HTTP: {:?}",
-        config.server.listen_udp, config.server.listen_tcp, config.server.listen_http
-    );
+    let doh_server = if let Some(ref listen_http) = config.server.listen_http {
+        info!(
+            "DNS server initialized with UDP: {:?}, TCP: {:?}, HTTP: {:?}",
+            config.server.listen_udp, config.server.listen_tcp, config.server.listen_http
+        );
+        // 创建 DoH 服务器
+        Some(DoHServer::new(
+            listen_http.parse().unwrap(),
+            config.server.http_timeout,
+            handler,
+        ))
+    } else {
+        info!(
+            "DNS server initialized with UDP: {:?}, TCP: {:?}",
+            config.server.listen_udp, config.server.listen_tcp
+        );
+        None
+    };
 
     // 返回应用组件
     Ok(AppComponents {

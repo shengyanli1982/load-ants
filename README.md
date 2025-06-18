@@ -212,8 +212,8 @@ Load Ants uses YAML format configuration files. Below is a complete reference of
 | listen_udp   | String  | "127.0.0.1:53" | UDP DNS listen address and port (Required)                     | Valid IP:port format |
 | listen_tcp   | String  | "127.0.0.1:53" | TCP DNS listen address and port (Required)                     | Valid IP:port format |
 | listen_http  | String  | "127.0.0.1:80" | HTTP DoH server listen address and port (Required)             | Valid IP:port format |
-| tcp_timeout  | Integer | 10             | TCP connection idle timeout (seconds) (Optional, default: 10)  | 1-3600               |
-| http_timeout | Integer | 30             | HTTP connection idle timeout (seconds) (Optional, default: 30) | 1-3600               |
+| tcp_timeout  | Integer | 10             | TCP connection idle timeout (seconds) (Optional, default: 10)  | 1-65535              |
+| http_timeout | Integer | 30             | HTTP connection idle timeout (seconds) (Optional, default: 30) | 1-65535              |
 
 ### Health Check Configuration (health)
 

@@ -88,6 +88,14 @@ pub mod remote_rule_limits {
     pub const MAX_SIZE: usize = 50 * 1024 * 1024;
 }
 
+// 端口限制
+pub mod timeout_limits {
+    // 最小超时
+    pub const MIN_TIMEOUT: u64 = 1;
+    // 最大超时
+    pub const MAX_TIMEOUT: u64 = 65535;
+}
+
 //
 // 指标标签常量
 //

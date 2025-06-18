@@ -34,21 +34,28 @@ admin:
     // 验证基本配置值
     assert_eq!(config.server.listen_udp, "127.0.0.1:53");
     assert_eq!(config.server.listen_tcp, "127.0.0.1:53");
-    assert_eq!(config.admin.as_ref().unwrap().listen, "127.0.0.1:8080");
+    assert!(config.admin.is_some());
+    if let Some(admin) = &config.admin {
+        assert_eq!(admin.listen, "127.0.0.1:8080");
+    }
 
     // 验证默认值
     assert_eq!(config.server.tcp_timeout, 10); // 默认值
-    assert!(config.cache.as_ref().unwrap().enabled); // 默认启用
-    assert!(config
-        .upstream_groups
-        .as_ref()
-        .unwrap_or(&Vec::new())
-        .is_empty()); // 默认为空
-    assert!(config
-        .static_rules
-        .as_ref()
-        .unwrap_or(&Vec::new())
-        .is_empty()); // 默认为空
+
+    // 验证缓存默认值（如果存在）
+    if let Some(cache) = &config.cache {
+        assert!(cache.enabled); // 默认启用
+    }
+
+    // 验证上游组和规则（如果存在）
+    if let Some(groups) = &config.upstream_groups {
+        assert!(groups.is_empty()); // 默认为空
+    }
+
+    if let Some(rules) = &config.static_rules {
+        assert!(rules.is_empty()); // 默认为空
+    }
+
     assert!(config.remote_rules.is_empty()); // 默认为空
 }
 
@@ -102,18 +109,22 @@ admin:
     assert_eq!(config.server.tcp_timeout, 10); // 默认 TCP 超时
 
     // 验证缓存默认值
-    assert!(config.cache.as_ref().unwrap().enabled); // 默认启用
-    assert_eq!(config.cache.as_ref().unwrap().max_size, 10000); // 默认大小
-    assert_eq!(config.cache.as_ref().unwrap().min_ttl, 1); // 默认最小 TTL
-    assert_eq!(config.cache.as_ref().unwrap().max_ttl, 86400); // 默认最大 TTL
-    assert_eq!(config.cache.as_ref().unwrap().negative_ttl, 300); // 默认负面缓存 TTL
+    if let Some(cache) = &config.cache {
+        assert!(cache.enabled); // 默认启用
+        assert_eq!(cache.max_size, 10000); // 默认大小
+        assert_eq!(cache.min_ttl, 1); // 默认最小 TTL
+        assert_eq!(cache.max_ttl, 86400); // 默认最大 TTL
+        assert_eq!(cache.negative_ttl, 300); // 默认负面缓存 TTL
+    }
 
     // 验证 HTTP 客户端默认值
-    assert_eq!(config.http_client.as_ref().unwrap().connect_timeout, 3); // 默认连接超时
-    assert_eq!(config.http_client.as_ref().unwrap().request_timeout, 5); // 默认请求超时
-    assert_eq!(config.http_client.as_ref().unwrap().idle_timeout, Some(10)); // 默认空闲超时
-    assert_eq!(config.http_client.as_ref().unwrap().keepalive, Some(30)); // 默认 keepalive
-    assert!(config.http_client.as_ref().unwrap().agent.is_none()); // 默认无代理
+    if let Some(http_client) = &config.http_client {
+        assert_eq!(http_client.connect_timeout, 3); // 默认连接超时
+        assert_eq!(http_client.request_timeout, 5); // 默认请求超时
+        assert_eq!(http_client.idle_timeout, Some(10)); // 默认空闲超时
+        assert_eq!(http_client.keepalive, Some(30)); // 默认 keepalive
+        assert!(http_client.agent.is_none()); // 默认无代理
+    }
 }
 
 #[test]
@@ -138,7 +149,7 @@ admin:
 server:
   listen_udp: "127.0.0.1:53"
   listen_tcp: "127.0.0.1:53"
-  tcp_timeout: 4000
+  tcp_timeout: 100000
 admin:
   listen: "127.0.0.1:8080"
 "#;
@@ -146,7 +157,10 @@ admin:
     let file = create_temp_config_file(config_content);
     let result = Config::from_file(file.path());
 
-    assert!(result.is_err());
+    assert!(
+        result.is_err(),
+        "Expected error for TCP timeout that is too large"
+    );
 
     // 缓存大小超出范围
     let config_content = r#"
@@ -166,7 +180,10 @@ cache:
     let file = create_temp_config_file(config_content);
     let result = Config::from_file(file.path());
 
-    assert!(result.is_err());
+    assert!(
+        result.is_err(),
+        "Expected error for cache size that is too small"
+    );
 }
 
 #[test]

@@ -14,6 +14,9 @@ pub struct DnsMetrics {
     dns_requests_total: IntCounterVec,
     dns_request_duration_seconds: HistogramVec,
     dns_request_errors_total: IntCounterVec,
+    http_requests_total: IntCounterVec,
+    http_request_duration_seconds: HistogramVec,
+    http_request_errors_total: IntCounterVec,
 
     // 2. 缓存效率和状态指标
     cache_entries: IntGauge,
@@ -70,6 +73,34 @@ impl DnsMetrics {
             opts!(
                 "loadants_dns_request_errors_total",
                 "Total DNS request processing errors, classified by error type"
+            ),
+            &["error_type"],
+        )
+        .unwrap();
+
+        let http_requests_total = IntCounterVec::new(
+            opts!(
+                "loadants_http_requests_total",
+                "Total DNS over HTTP requests processed by the proxy, classified by protocol and status code"
+            ),
+            &["status_code"],
+        )
+        .unwrap();
+
+        let http_request_duration_seconds = HistogramVec::new(
+            prometheus::histogram_opts!(
+                "loadants_http_request_duration_seconds",
+                "DNS over HTTP request processing duration in seconds, classified by protocol and status code",
+                vec![0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 20.0]
+            ),
+            &["query_type", "status_code"],
+        )
+        .unwrap();
+
+        let http_request_errors_total = IntCounterVec::new(
+            opts!(
+                "loadants_http_request_errors_total",
+                "Total DNS over HTTP request processing errors, classified by error type"
             ),
             &["error_type"],
         )
@@ -172,6 +203,9 @@ impl DnsMetrics {
             dns_requests_total,
             dns_request_duration_seconds,
             dns_request_errors_total,
+            http_requests_total,
+            http_request_duration_seconds,
+            http_request_errors_total,
             cache_entries,
             cache_capacity,
             cache_operations_total,
@@ -202,6 +236,15 @@ impl DnsMetrics {
             .unwrap();
         self.registry
             .register(Box::new(self.dns_request_errors_total.clone()))
+            .unwrap();
+        self.registry
+            .register(Box::new(self.http_requests_total.clone()))
+            .unwrap();
+        self.registry
+            .register(Box::new(self.http_request_duration_seconds.clone()))
+            .unwrap();
+        self.registry
+            .register(Box::new(self.http_request_errors_total.clone()))
             .unwrap();
 
         // 2. 缓存效率和状态指标
@@ -274,6 +317,18 @@ impl DnsMetrics {
 
     pub fn dns_request_errors_total(&self) -> &IntCounterVec {
         &self.dns_request_errors_total
+    }
+
+    pub fn http_requests_total(&self) -> &IntCounterVec {
+        &self.http_requests_total
+    }
+
+    pub fn http_request_duration_seconds(&self) -> &HistogramVec {
+        &self.http_request_duration_seconds
+    }
+
+    pub fn http_request_errors_total(&self) -> &IntCounterVec {
+        &self.http_request_errors_total
     }
 
     // 2. 缓存效率和状态指标
