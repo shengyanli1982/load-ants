@@ -2,7 +2,7 @@ English | [中文](./README_CN.md)
 
 <div align="center">
     <h1>LOAD ANTS</h1>
-    <h4>🐜🐜🐜 Lightweight DNS Forwarder: Seamless Conversion from UDP/TCP Queries to DoH</h4></br>
+    <h4>🐜🐜🐜 Lightweight DNS Splitter and Forwarder: Seamless Conversion from UDP/TCP Queries to DoH, Supports DoH Proxy Forwarding</h4></br>
     <img src="./images/logo.png" alt="logo" width="600">
 </div>
 
