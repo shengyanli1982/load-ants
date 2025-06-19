@@ -2,7 +2,7 @@
 
 <div align="center">
     <h1>LOAD ANTS</h1>
-    <h4>🐜🐜🐜 轻量级 DNS 转发器，实现 UDP/TCP 查询到 DoH 的无缝转换</h4></br>
+    <h4>🐜🐜🐜 轻量级 DNS 分流转发器，实现 UDP/TCP 查询到 DoH 的无缝转换，支持 DoH 代理转发</h4></br>
     <img src="./images/logo.png" alt="logo" width="600">
 </div>
 
