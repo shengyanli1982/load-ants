@@ -60,10 +60,14 @@ pub mod http_client_limits {
 
 // 重试配置限制
 pub mod retry_limits {
+    // 默认重试次数
+    pub const DEFAULT_ATTEMPTS: u32 = 3;
     // 最小重试次数
     pub const MIN_ATTEMPTS: u32 = 1;
     // 最大重试次数
     pub const MAX_ATTEMPTS: u32 = 100;
+    // 默认重试延迟（秒）
+    pub const DEFAULT_DELAY: u32 = 2;
     // 最小重试延迟（秒）
     pub const MIN_DELAY: u32 = 1;
     // 最大重试延迟（秒）
