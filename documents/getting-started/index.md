@@ -12,7 +12,7 @@
 
 ### 第一步：下载预编译程序
 
-访问项目的 [GitHub 发布页面](https://github.com/eyas-ran/load-ants/releases)，根据你的操作系统下载最新的二进制文件。
+访问项目的 [GitHub 发布页面](https://github.com/shengyanli1982/load-ants/releases)，根据你的操作系统下载最新的二进制文件。
 
 例如，如果你使用的是 64 位的 Linux 系统，你应该下载名为 `load-ants-linux-amd64` 的文件。
 
@@ -23,7 +23,7 @@
 这是让 Load Ants 运行起来的关键。最简单的方式是**从默认配置开始**。
 
 1.  **获取 `config.default.yaml`**:
-    在项目的 [GitHub 仓库](https://github.com/eyas-ran/load-ants) 中找到 `config.default.yaml` 文件，并将其下载到与 `load-ants` 程序相同的目录下。
+    在项目的 [GitHub 仓库](https://github.com/shengyanli1982/load-ants) 中找到 `config.default.yaml` 文件，并将其下载到与 `load-ants` 程序相同的目录下。
 
 2.  **重命名并编辑**:
     将 `config.default.yaml` 重命名为 `config.yaml`。

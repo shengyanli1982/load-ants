@@ -28,7 +28,7 @@
 使用 `git` 从 GitHub 克隆 Load Ants 的官方仓库。
 
 ```bash
-git clone https://github.com/eyas-ran/load-ants.git
+git clone https://github.com/shengyanli1982/load-ants.git
 cd load-ants
 ```
 
