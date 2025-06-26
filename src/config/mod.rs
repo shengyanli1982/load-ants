@@ -262,8 +262,8 @@ impl Default for Config {
                     auth: None,
                 }],
                 retry: Some(RetryConfig {
-                    attempts: 3,
-                    delay: 1,
+                    attempts: retry_limits::DEFAULT_ATTEMPTS,
+                    delay: retry_limits::DEFAULT_DELAY,
                 }),
                 proxy: None,
             }]),

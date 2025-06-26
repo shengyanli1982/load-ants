@@ -93,11 +93,11 @@ impl RemoteRuleLoader {
             let retry_policy = ExponentialBackoff::builder()
                 // 设置重试时间间隔的上下限
                 .retry_bounds(
-                    Duration::from_secs(retry_limits::MIN_DELAY as u64),
+                    Duration::from_secs(retry.delay as u64),
                     Duration::from_secs(retry_limits::MAX_DELAY as u64),
                 )
-                // 设置指数退避的基数
-                .base(retry.delay)
+                // 设置指数退避的基数, 记得这里一定要大于 1，要不然退避时间会一直不变大
+                .base(2)
                 // 使用有界抖动来避免多个客户端同时重试
                 .jitter(Jitter::Bounded)
                 // 配置最大重试次数
