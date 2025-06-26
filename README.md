@@ -1,43 +1,43 @@
-[中文](./README_CN.md) | English
+中文 | [English](./README_EN.md)
 
 <div align="center">
     <h1>LOAD ANTS</h1>
-    <h4>🐜🐜🐜 Lightweight DNS Splitter and Forwarder: Seamless Conversion from UDP/TCP Queries to DoH, Supports DoH Proxy Forwarding</h4>
+    <h4>🐜🐜🐜 轻量级 DNS 分流转发器，实现 UDP/TCP 查询到 DoH 的无缝转换，支持 DoH 代理转发</h4></br></br>
     <a href="https://shengyanli1982.github.io/load-ants/">
         <img src="./images/logo.png" alt="logo" width="600">
     </a>
 </div>
 
-<p align>
-    <!-- Badges will go here. Add relevant badges for build status, license, etc. -->
-    <a href="httpshttps://github.com/shengyanli1982/load-ants/blob/main/LICENSE"><img src="https://img.shields.io/github/license/shengyanli1982/load-ants" alt="license"></a>
+<p align="center">
+    <!-- 徽章将放在这里。可以添加构建状态、许可证等相关徽章。 -->
+    <a href="https://github.com/shengyanli1982/load-ants/blob/main/LICENSE"><img src="https://img.shields.io/github/license/shengyanli1982/load-ants" alt="license"></a>
 </p>
 
-**Load Ants** is a high-performance, multi-functional DNS proxy service designed to enhance your network privacy, security, and flexibility.
+**Load Ants** 是一款专为提升网络隐私、安全与灵活性而生的高性能、多功能 DNS 代理服务。
 
-### Core Features
+### 核心功能
 
--   🔄 **Protocol Conversion**: Seamlessly converts standard DNS queries to DNS-over-HTTPS (DoH).
--   🧠 **Intelligent Routing**: Route DNS queries based on domain patterns (exact, wildcard, regex).
--   ⚡ **High-Performance Caching**: Built-in caching to reduce latency.
--   🌐 **Flexible Upstream Management**: Group DoH servers with multiple load-balancing strategies.
+-   🔄 **协议转换**: 无缝将标准 DNS 查询转换为 DNS-over-HTTPS (DoH)。
+-   🧠 **智能路由**: 根据域名模式（精确、通配符、正则）路由 DNS 查询。
+-   ⚡ **高性能缓存**: 内置缓存机制，显著降低延迟。
+-   🌐 **灵活上游管理**: 可将 DoH 服务器分组并配置多种负载均衡策略。
 
-### 📚 Get the Full Picture!
+### 📚 阅读完整文档！
 
-All detailed documentation, including configuration, deployment guides, and advanced usage, has been moved to our dedicated documentation site.
+所有详细文档，包括配置、部署指南和高级用法，均已迁移至我们的专属文档网站。
 
-**[➡️ Visit the Official Documentation Site](https://shengyanli1982.github.io/load-ants/)**
+**[➡️ 访问官方文档网站](https://shengyanli1982.github.io/load-ants/)**
 
-### 🚀 Quick Start
+### 🚀 快速开始
 
-Get up and running in seconds with Docker:
+使用 Docker 在几秒钟内启动并运行：
 
 ```bash
-# Create a directory for your configuration
+# 为您的配置创建一个目录
 mkdir -p ./load-ants-config
-# Download the default config to get started
+# 下载默认配置以开始使用
 wget -O ./load-ants-config/config.yaml https://raw.githubusercontent.com/shengyanli1982/load-ants/main/config.default.yaml
-# Edit config.yaml to your needs, then run:
+# 根据您的需求编辑 config.yaml，然后运行：
 docker run -d \
   --name load-ants \
   -p 53:53/udp \
@@ -47,6 +47,6 @@ docker run -d \
   ghcr.io/shengyanli1982/load-ants-x64:latest -c /etc/load-ants/config.yaml
 ```
 
-### License
+### 开源许可
 
-This project is licensed under the [MIT License](./LICENSE).
+本项目采用 [MIT 许可证](./LICENSE) 授权。
