@@ -1,0 +1,1811 @@
+
+<!doctype html>
+<html lang="zh" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://github.com/shengyanli1982/load-ants/configuration/routing-rules/">
+      
+      
+        <link rel="prev" href="../upstream-groups/">
+      
+      
+        <link rel="next" href="../../deployment/">
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.14">
+    
+    
+      
+        <title>路由规则配置 - Load Ants</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.342714a4.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#_1" class="md-skip">
+          跳转至
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="页眉">
+    <a href="../.." title="Load Ants" class="md-header__button md-logo" aria-label="Load Ants" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Load Ants
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              路由规则配置
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="切换到深色模式"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="切换到深色模式" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="切换到浅色模式"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="切换到浅色模式" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="搜索" placeholder="搜索" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="查找">
+        
+        <button type="reset" class="md-search__icon md-icon" title="清空当前内容" aria-label="清空当前内容" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            正在初始化搜索引擎
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="标签" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  欢迎你
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../getting-started/" class="md-tabs__link">
+          
+  
+  
+  入门指南
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../concepts/" class="md-tabs__link">
+          
+  
+  
+  核心概念
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../architecture/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  架构设计
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+  配置指南
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../deployment/" class="md-tabs__link">
+          
+  
+  
+  部署指南
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../cookbook/" class="md-tabs__link">
+          
+  
+  
+  实操手册
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../license/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  开源许可
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="导航栏" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Load Ants" class="md-nav__button md-logo" aria-label="Load Ants" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Load Ants
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    欢迎你
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    入门指南
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            入门指南
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    快速上手
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/docker/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Docker 部署
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/build-from-source/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    从源码构建
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    核心概念
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            核心概念
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    总览
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/doh/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    DoH 详解
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/routing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    智能路由机制
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/upstream/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    上游服务器管理
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/caching/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    高性能缓存机制
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    架构设计
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    配置指南
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            配置指南
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    总览
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../server/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    服务端配置
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cache/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    缓存配置
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../http-client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    客户端配置
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../upstream-groups/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    上游组配置
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    路由规则配置
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    路由规则配置
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="目录">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      目录
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#static_rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      static_rules (静态规则)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="static_rules (静态规则)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      示例
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      参数详解
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#remote_rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      remote_rules (远程规则)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="remote_rules (远程规则)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      示例
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      参数详解
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      配置配方：实用场景示例
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="配置配方：实用场景示例">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      配方一：全面的广告和追踪器拦截
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      配方二：为特定服务配置专用代理
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    部署指南
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            部署指南
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    总览
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/system-service/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    作为系统服务运行
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/docker-compose/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    在 Docker Compose 上部署
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/kubernetes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    在 Kubernetes 上部署
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    安全最佳实践
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/monitoring/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Prometheus 监控
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    实操手册
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            实操手册
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    总览
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/ad-blocking/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    终极广告拦截
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/geo-unblocking/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    地理封锁解除
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/homelab-dns/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    家庭实验室DNS
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../license/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    开源许可
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="目录">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      目录
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#static_rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      static_rules (静态规则)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="static_rules (静态规则)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      示例
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      参数详解
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#remote_rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      remote_rules (远程规则)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="remote_rules (远程规则)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      示例
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      参数详解
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      配置配方：实用场景示例
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="配置配方：实用场景示例">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      配方一：全面的广告和追踪器拦截
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      配方二：为特定服务配置专用代理
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="_1">路由规则配置<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
+<p>路由规则是 Load Ants 的"大脑"，它决定了如何处理每一个接收到的 DNS 查询。通过组合使用静态规则 (<code>static_rules</code>) 和远程规则 (<code>remote_rules</code>)，你可以构建出强大而灵活的 DNS 流量管理策略。</p>
+<p>想要深入了解路由的工作原理和匹配优先级吗？请阅读 <a href="../../concepts/routing/"><strong>核心概念：智能路由机制</strong></a>。</p>
+<h3 id="static_rules"><code>static_rules</code> (静态规则)<a class="headerlink" href="#static_rules" title="Permanent link">&para;</a></h3>
+<p>静态规则是在 <code>config.yaml</code> 文件中手动定义的规则，适用于那些不经常变化的、固定的路由策略。</p>
+<h4 id="_2">示例<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><span class="nt">static_rules</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">match</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;exact&quot;</span>
+<span class="w">      </span><span class="nt">patterns</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;ads.example.com&quot;</span><span class="p p-Indicator">]</span>
+<span class="w">      </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;block&quot;</span>
+
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">match</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;wildcard&quot;</span>
+<span class="w">      </span><span class="nt">patterns</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;*.my-company.internal&quot;</span><span class="p p-Indicator">]</span>
+<span class="w">      </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;forward&quot;</span>
+<span class="w">      </span><span class="nt">target</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;internal_dns_group&quot;</span>
+</code></pre></div>
+<h4 id="_3">参数详解<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">参数</th>
+<th style="text-align: left;">类型</th>
+<th style="text-align: left;">描述</th>
+<th style="text-align: left;">默认值</th>
+<th style="text-align: left;">是否必填</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>match</code></td>
+<td style="text-align: left;">字符串</td>
+<td style="text-align: left;">匹配类型。可选值为 <code>exact</code> (精确), <code>wildcard</code> (通配符), <code>regex</code> (正则)。</td>
+<td style="text-align: left;">-</td>
+<td style="text-align: left;"><strong>是</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>patterns</code></td>
+<td style="text-align: left;">列表</td>
+<td style="text-align: left;">匹配模式的列表。根据 <code>match</code> 类型的不同，这里的模式格式也不同。</td>
+<td style="text-align: left;">-</td>
+<td style="text-align: left;"><strong>是</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>action</code></td>
+<td style="text-align: left;">字符串</td>
+<td style="text-align: left;">当匹配成功时执行的动作。可选值为 <code>block</code> (拦截) 或 <code>forward</code> (转发)。</td>
+<td style="text-align: left;">-</td>
+<td style="text-align: left;"><strong>是</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>target</code></td>
+<td style="text-align: left;">字符串</td>
+<td style="text-align: left;">目标上游组的名称。仅在 <code>action</code> 为 <code>forward</code> 时需要。此名称必须与 <code>upstream_groups</code> 中定义的某个组的 <code>name</code> 相对应。</td>
+<td style="text-align: left;">-</td>
+<td style="text-align: left;"><strong>是</strong> (若 <code>action</code> 为 <code>forward</code>)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="remote_rules"><code>remote_rules</code> (远程规则)<a class="headerlink" href="#remote_rules" title="Permanent link">&para;</a></h3>
+<p>远程规则允许你从一个 URL 动态加载和应用规则列表。这对于订阅由社区维护的、经常更新的列表（如广告拦截、恶意网站列表）非常有用。获取远程规则的行为会遵循全局的 <a href="../upstream-groups/#全局重试策略-retry"><code>retry</code> 配置</a>。</p>
+<h4 id="_4">示例<a class="headerlink" href="#_4" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><span class="nt">remote_rules</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;url&quot;</span>
+<span class="w">      </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/reject-list.txt&quot;</span>
+<span class="w">      </span><span class="nt">format</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;v2ray&quot;</span>
+<span class="w">      </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;block&quot;</span>
+<span class="w">      </span><span class="nt">proxy</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;http://127.0.0.1:7890&quot;</span>
+</code></pre></div>
+<h4 id="_5">参数详解<a class="headerlink" href="#_5" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">参数</th>
+<th style="text-align: left;">类型</th>
+<th style="text-align: left;">描述</th>
+<th style="text-align: left;">默认值</th>
+<th style="text-align: left;">是否必填</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>type</code></td>
+<td style="text-align: left;">字符串</td>
+<td style="text-align: left;">规则类型。目前仅支持 <code>url</code>。</td>
+<td style="text-align: left;"><code>"url"</code></td>
+<td style="text-align: left;"><strong>是</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>url</code></td>
+<td style="text-align: left;">字符串</td>
+<td style="text-align: left;">远程规则文件的 URL。</td>
+<td style="text-align: left;">-</td>
+<td style="text-align: left;"><strong>是</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>format</code></td>
+<td style="text-align: left;">字符串</td>
+<td style="text-align: left;">规则文件的格式。目前仅支持 <code>v2ray</code>。</td>
+<td style="text-align: left;"><code>"v2ray"</code></td>
+<td style="text-align: left;"><strong>是</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>action</code></td>
+<td style="text-align: left;">字符串</td>
+<td style="text-align: left;">应用于此列表中所有域名的动作。可选值为 <code>block</code> 或 <code>forward</code>。</td>
+<td style="text-align: left;">-</td>
+<td style="text-align: left;"><strong>是</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>target</code></td>
+<td style="text-align: left;">字符串</td>
+<td style="text-align: left;">目标上游组的名称。当 <code>action</code> 为 <code>forward</code> 时必填。</td>
+<td style="text-align: left;">-</td>
+<td style="text-align: left;"><strong>是</strong> (若 <code>action</code> 为 <code>forward</code>)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>proxy</code></td>
+<td style="text-align: left;">字符串</td>
+<td style="text-align: left;">(可选) 获取此规则文件时使用的 HTTP/SOCKS5 代理。</td>
+<td style="text-align: left;">-</td>
+<td style="text-align: left;">否</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>auth</code></td>
+<td style="text-align: left;">对象</td>
+<td style="text-align: left;">(可选) 访问此规则文件 URL 所需的认证配置。结构与<a href="../upstream-groups/#auth-认证-参数详解">上游组的 <code>auth</code> 配置</a>相同。</td>
+<td style="text-align: left;">-</td>
+<td style="text-align: left;">否</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>max_size</code></td>
+<td style="text-align: left;">整数</td>
+<td style="text-align: left;">(可选) 允许下载的远程规则文件的最大体积（字节）。</td>
+<td style="text-align: left;"><code>10485760</code> (10MB)</td>
+<td style="text-align: left;">否</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="_6">配置配方：实用场景示例<a class="headerlink" href="#_6" title="Permanent link">&para;</a></h3>
+<h4 id="_7">配方一：全面的广告和追踪器拦截<a class="headerlink" href="#_7" title="Permanent link">&para;</a></h4>
+<p><strong>目标</strong>：结合本地规则和远程列表，打造一个强大的广告拦截系统。</p>
+<div class="highlight"><pre><span></span><code><span class="nt">static_rules</span><span class="p">:</span>
+<span class="w">    </span><span class="c1"># 1. 手动屏蔽一些顽固的、或远程列表中没有的域名</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">match</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;exact&quot;</span>
+<span class="w">      </span><span class="nt">patterns</span><span class="p">:</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;specific-ad-server.com&quot;</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;annoying-tracker.net&quot;</span>
+<span class="w">      </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;block&quot;</span>
+
+<span class="w">    </span><span class="c1"># 2. 默认将所有流量转发到干净的上游</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">match</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;wildcard&quot;</span>
+<span class="w">      </span><span class="nt">patterns</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;*&quot;</span><span class="p p-Indicator">]</span>
+<span class="w">      </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;forward&quot;</span>
+<span class="w">      </span><span class="nt">target</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;privacy_first&quot;</span><span class="w"> </span><span class="c1"># 假设你已定义了一个注重隐私的上游组</span>
+
+<span class="nt">remote_rules</span><span class="p">:</span>
+<span class="w">    </span><span class="c1"># 3. 订阅一个由社区维护的广告域名列表</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;url&quot;</span>
+<span class="w">      </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;https://raw.githubusercontent.com/privacy-respecting-software/Blocky-Adlists/main/dns-hole-list.txt&quot;</span><span class="w"> </span><span class="c1"># 这是一个示例列表，你可以替换为任何兼容的列表</span>
+<span class="w">      </span><span class="nt">format</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;v2ray&quot;</span>
+<span class="w">      </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;block&quot;</span>
+</code></pre></div>
+<p><strong>工作原理</strong>：Load Ants 会先用远程列表和你的静态 <code>block</code> 规则去匹配查询。如果命中，查询被拦截。如果没有命中，查询会匹配到最后的全局通配符规则，被转发到干净的上游。</p>
+<h4 id="_8">配方二：为特定服务配置专用代理<a class="headerlink" href="#_8" title="Permanent link">&para;</a></h4>
+<p><strong>目标</strong>：只让特定服务（如 Netflix）的 DNS 查询通过代理，其他所有查询直连。</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># 注意：以下 upstream_groups 应在你的主配置文件的顶层定义。</span>
+<span class="c1"># 这里为了示例清晰而放在一起。</span>
+<span class="c1"># 更多详情请查阅 [上游组配置](./upstream-groups.md)。</span>
+<span class="nt">upstream_groups</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;direct_group&quot;</span>
+<span class="w">    </span><span class="nt">strategy</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;random&quot;</span>
+<span class="w">    </span><span class="nt">servers</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;https://dns.google/dns-query&quot;</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;proxy_group&quot;</span>
+<span class="w">    </span><span class="nt">strategy</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;random&quot;</span>
+<span class="w">    </span><span class="nt">proxy</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;socks5://127.0.0.1:1080&quot;</span><span class="w"> </span><span class="c1"># 你的代理地址</span>
+<span class="w">    </span><span class="nt">servers</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;https://cloudflare-dns.com/dns-query&quot;</span>
+
+<span class="nt">static_rules</span><span class="p">:</span>
+<span class="w">  </span><span class="c1"># 1. 将 Netflix 相关域名转发到&quot;代理组&quot;</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">match</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;regex&quot;</span>
+<span class="w">    </span><span class="nt">patterns</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;^(.*</span><span class="err">\</span><span class="s">.)?netflix</span><span class="err">\</span><span class="s">.com$&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;^(.*</span><span class="err">\</span><span class="s">.)?nflxvideo</span><span class="err">\</span><span class="s">.net$&quot;</span><span class="p p-Indicator">]</span>
+<span class="w">    </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;forward&quot;</span>
+<span class="w">    </span><span class="nt">target</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;proxy_group&quot;</span>
+
+<span class="w">  </span><span class="c1"># 2. 其他所有域名都转发到&quot;直连组&quot;</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">match</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;wildcard&quot;</span>
+<span class="w">    </span><span class="nt">patterns</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;*&quot;</span><span class="p p-Indicator">]</span>
+<span class="w">    </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;forward&quot;</span>
+<span class="w">    </span><span class="nt">target</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;direct_group&quot;</span>
+</code></pre></div>
+<p><strong>工作原理</strong>：由于 <code>regex</code> 匹配的优先级高于 <code>wildcard</code>，对 Netflix 的查询会优先命中第一条规则，并被转发到 <code>proxy_group</code>。其他所有查询则会匹配第二条规则，走向 <code>direct_group</code>。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  回到页面顶部
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "search.suggest", "search.highlight", "content.tabs.link", "content.code.annotation", "content.code.copy"], "search": "../../assets/javascripts/workers/search.d50fe291.min.js", "tags": null, "translations": {"clipboard.copied": "\u5df2\u590d\u5236", "clipboard.copy": "\u590d\u5236", "search.result.more.one": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.more.other": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 # \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.none": "\u6ca1\u6709\u627e\u5230\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.one": "\u627e\u5230 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.other": "# \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.placeholder": "\u952e\u5165\u4ee5\u5f00\u59cb\u641c\u7d22", "search.result.term.missing": "\u7f3a\u5c11", "select.version": "\u9009\u62e9\u5f53\u524d\u7248\u672c"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.13a4f30d.min.js"></script>
+      
+    
+  </body>
+</html>
