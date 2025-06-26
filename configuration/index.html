@@ -1439,10 +1439,6 @@
 <p><strong>当前工作目录</strong>:
     如果在启动时没有使用 <code>-c</code> 参数，Load Ants 会尝试从其<strong>当前工作目录</strong>下加载名为 <code>config.yaml</code> 的文件。</p>
 </li>
-<li>
-<p><strong>系统默认目录 (Linux/macOS)</strong>:
-    如果以上路径均未找到，它会最后尝试从 <code>/etc/load-ants/config.yaml</code> 加载。</p>
-</li>
 </ol>
 <blockquote>
 <p>✨ <strong>专家提示</strong>:
@@ -1451,7 +1447,7 @@
 <h3 id="yaml">YAML 语法基础<a class="headerlink" href="#yaml" title="Permanent link">&para;</a></h3>
 <p>Load Ants 的配置文件使用 <a href="https://yaml.org/">YAML</a> 格式。YAML 是一种对人类非常友好的数据序列化语言，其基本规则非常简单：</p>
 <ul>
-<li><strong>使用缩进表示层级</strong>: YAML 使用空格缩进（<strong>不允许使用 Tab</strong>）来表示数据的层级关系。通常建议使用 <strong>2 个空格</strong>作为一级缩进。</li>
+<li><strong>使用缩进表示层级</strong>: YAML 使用缩进来表示数据的层级关系。通常建议使用 <strong>2 个空格</strong>作为一级缩进。</li>
 <li><strong>键值对</strong>: 使用冒号 (<code>:</code>) 分隔键和值，冒号后必须跟一个空格。
     <div class="highlight"><pre><span></span><code><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">value</span>
 </code></pre></div></li>

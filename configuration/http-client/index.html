@@ -1407,11 +1407,7 @@
 
 
 <h1 id="_1">客户端配置<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
-<p><code>http_client</code> 配置块用于定义全局的 HTTP 客户端行为。这里的设置将影响 Load Ants 发出的<strong>所有</strong>出站 HTTP/HTTPS 请求，这包括：</p>
-<ul>
-<li>对上游 DoH 服务器的查询请求。</li>
-<li>下载远程规则列表 (<code>remote_rules</code>) 时的请求。</li>
-</ul>
+<p><code>http_client</code> 配置块用于定义全局的 HTTP 客户端行为。这里的设置将影响所有<strong>上游组 (<code>upstream_groups</code>)</strong> 发出的出站 DoH (DNS-over-HTTPS) 请求。</p>
 <p>精细地调整这些参数，可以帮助你优化网络连接的性能和可靠性。</p>
 <h3 id="_2">示例<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><span class="nt">http_client</span><span class="p">:</span>

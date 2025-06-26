@@ -1284,6 +1284,15 @@
         <li class="md-nav__item">
   <a href="#_2" class="md-nav__link">
     <span class="md-ellipsis">
+      架构变更解释
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_3" class="md-nav__link">
+    <span class="md-ellipsis">
       先决条件
     </span>
   </a>
@@ -1300,18 +1309,9 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#_3" class="md-nav__link">
-    <span class="md-ellipsis">
-      步骤二：启动和验证
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#_4" class="md-nav__link">
     <span class="md-ellipsis">
-      结论
+      步骤二：配置你的网络
     </span>
   </a>
   
@@ -1402,6 +1402,15 @@
         <li class="md-nav__item">
   <a href="#_2" class="md-nav__link">
     <span class="md-ellipsis">
+      架构变更解释
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_3" class="md-nav__link">
+    <span class="md-ellipsis">
       先决条件
     </span>
   </a>
@@ -1418,18 +1427,9 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#_3" class="md-nav__link">
-    <span class="md-ellipsis">
-      步骤二：启动和验证
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#_4" class="md-nav__link">
     <span class="md-ellipsis">
-      结论
+      步骤二：配置你的网络
     </span>
   </a>
   
@@ -1461,17 +1461,20 @@
 
 
 <h1 id="dns">家庭实验室 DNS<a class="headerlink" href="#dns" title="Permanent link">&para;</a></h1>
-<p>对于拥有家庭实验室 (Homelab) 或小型本地网络的用户来说，记住一堆 IP 地址（例如 <code>192.168.1.10</code> 用于 NAS，<code>192.168.1.20</code> 用于 Plex）是一件很麻烦的事。本配方将向你展示如何利用 Load Ants 最简单的 <code>static_rules</code> 功能，为你本地网络上的设备赋予友好的、易于记忆的域名（如 <code>nas.lan</code>, <code>plex.lan</code>）。</p>
+<p>对于拥有家庭实验室 (Homelab) 或小型本地网络的用户来说，记住一堆 IP 地址（例如 <code>192.168.1.10</code> 用于 NAS，<code>192.168.1.20</code> 用于 Plex）是一件很麻烦的事。本配方将向你展示如何利用 Load Ants 的路由功能，结合一个轻量级的本地 DNS 服务器，为你本地网络上的设备赋予友好的、易于记忆的域名（如 <code>nas.lan</code>, <code>plex.lan</code>）。</p>
 <h3 id="_1">目标<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h3>
 <ul>
-<li>将自定义的本地域名解析到其对应的内部 IP 地址。</li>
-<li>拦截对这些本地域名的 AAAA (IPv6) 请求，以避免某些客户端出现延迟。</li>
-<li>所有其他正常的互联网域名查询则转发给常规的上游 DNS 服务器。</li>
+<li>将对自定义本地域名（<code>.lan</code> 后缀）的 DNS 查询，转发给一个专门的本地 DNS 服务器进行解析。</li>
+<li>所有其他正常的互联网域名查询，则通过 Load Ants 转发给常规的上游 DoH 服务器。</li>
 </ul>
-<h3 id="_2">先决条件<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h3>
+<h3 id="_2">架构变更解释<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h3>
+<p>Load Ants 的核心功能是 <strong>DNS-over-HTTPS (DoH) 代理</strong>，它本身不直接从 IP 地址生成 DNS 响应。它的 <code>static_rules</code> 只能决定将查询 <code>forward</code> (转发) 到哪个上游组，或直接 <code>block</code> (拦截)。</p>
+<p>因此，为了实现本地域名解析，我们需要一个能够处理这种请求的"上游"。最简单的方法就是在你的网络中运行一个传统的 DNS 服务器（如 <code>dnsmasq</code>, <code>CoreDNS</code>, 或路由器自带的 DNS 服务），并让 Load Ants 将特定查询指向它。</p>
+<h3 id="_3">先决条件<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h3>
 <ol>
 <li>一台可以运行 Load Ants 的主机。</li>
-<li>知道你想要映射的本地设备的静态 IP 地址。</li>
+<li>一个在你的局域网中运行的、<strong>传统的 DNS 服务器</strong>。在本例中，我们假设这个服务器的地址是 <code>192.168.1.53:53</code>。你已经在这个服务器上配置好了 <code>nas.lan</code> -&gt; <code>192.168.1.10</code> 的解析。</li>
+<li>对 Load Ants 的<a href="../../configuration/upstream-groups/">上游组</a>和<a href="../../configuration/routing-rules/">路由规则</a>有基本了解。</li>
 </ol>
 <h3 id="configyaml">步骤一：<code>config.yaml</code> 配置<a class="headerlink" href="#configyaml" title="Permanent link">&para;</a></h3>
 <p>这个配方的配置非常简单，并且可以轻松地与本 Cookbook 中的其他配方（如广告拦截）组合使用。</p>
@@ -1484,97 +1487,61 @@
 <span class="c1"># 上游服务器组</span>
 <span class="c1"># ----------------------------------</span>
 <span class="nt">upstream_groups</span><span class="p">:</span>
+<span class="w">    </span><span class="c1"># 1. 公共 DNS 组：用于所有常规的互联网查询</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;public_dns&quot;</span>
 <span class="w">      </span><span class="nt">strategy</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;random&quot;</span>
 <span class="w">      </span><span class="nt">servers</span><span class="p">:</span>
 <span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;https://dns.google/dns-query&quot;</span>
 
+<span class="w">    </span><span class="c1"># 2. 本地 DNS 组：专门用于解析内部域名</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;local_dns&quot;</span>
+<span class="w">      </span><span class="nt">strategy</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;roundrobin&quot;</span>
+<span class="w">      </span><span class="c1"># 重要：这里的 URL 指向你的本地传统 DNS 服务器的 DoH 封装</span>
+<span class="w">      </span><span class="c1"># 如果你的本地 DNS 不支持 DoH，你需要一个转换器，</span>
+<span class="w">      </span><span class="c1"># 或者使用支持直接转发到 UDP/TCP 的 DNS 代理。</span>
+<span class="w">      </span><span class="c1"># 注意：当前版本的 Load Ants 只支持 DoH 上游。</span>
+<span class="w">      </span><span class="c1"># 这里的示例是一个假设性的 DoH 转换器地址。</span>
+<span class="w">      </span><span class="nt">servers</span><span class="p">:</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;http://192.168.1.53:8053/dns-query&quot;</span><span class="w"> </span><span class="c1"># 假设你有一个 DoH 转换器</span>
+
 <span class="c1"># ----------------------------------</span>
 <span class="c1"># 路由规则</span>
 <span class="c1"># ----------------------------------</span>
 <span class="nt">static_rules</span><span class="p">:</span>
-<span class="w">    </span><span class="c1"># --- 本地域名解析 ---</span>
-<span class="w">    </span><span class="c1"># 将 nas.lan 解析到 192.168.1.10</span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">match</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;exact&quot;</span>
-<span class="w">      </span><span class="nt">patterns</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;nas.lan&quot;</span><span class="p p-Indicator">]</span>
-<span class="w">      </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;resolve&quot;</span>
-<span class="w">      </span><span class="nt">target</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;192.168.1.10&quot;</span>
-
-<span class="w">    </span><span class="c1"># 将 plex.lan 解析到 192.168.1.20</span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">match</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;exact&quot;</span>
-<span class="w">      </span><span class="nt">patterns</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;plex.lan&quot;</span><span class="p p-Indicator">]</span>
-<span class="w">      </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;resolve&quot;</span>
-<span class="w">      </span><span class="nt">target</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;192.168.1.20&quot;</span>
-
-<span class="w">    </span><span class="c1"># --- 拦截本地名的 IPv6 查询 ---</span>
-<span class="w">    </span><span class="c1"># 避免客户端在请求 A 记录后，又徒劳地等待一个不存在的 AAAA 记录的响应</span>
+<span class="w">    </span><span class="c1"># --- 本地域名解析规则 ---</span>
+<span class="w">    </span><span class="c1"># 将所有以 .lan 结尾的域名查询，都转发到本地 DNS 组</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">match</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;regex&quot;</span>
-<span class="w">      </span><span class="nt">patterns</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;^.*\\.lan$&quot;</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="c1"># 匹配所有以 .lan 结尾的域名</span>
-<span class="w">      </span><span class="nt">query_type</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;AAAA&quot;</span><span class="p p-Indicator">]</span>
-<span class="w">      </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;block&quot;</span>
+<span class="w">      </span><span class="nt">patterns</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;(^.*\\.lan$)|(^lan$)&quot;</span><span class="p p-Indicator">]</span>
+<span class="w">      </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;forward&quot;</span>
+<span class="w">      </span><span class="nt">target</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;local_dns&quot;</span>
 
 <span class="w">    </span><span class="c1"># --- 默认规则 ---</span>
-<span class="w">    </span><span class="c1"># 将所有其他查询转发到公共 DNS</span>
+<span class="w">    </span><span class="c1"># 其他所有查询都转发到公共 DNS</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">match</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;wildcard&quot;</span>
 <span class="w">      </span><span class="nt">patterns</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;*&quot;</span><span class="p p-Indicator">]</span>
 <span class="w">      </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;forward&quot;</span>
 <span class="w">      </span><span class="nt">target</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;public_dns&quot;</span>
 </code></pre></div>
-<p><strong>配置逻辑解读</strong>:</p>
+<h3 id="_4">步骤二：配置你的网络<a class="headerlink" href="#_4" title="Permanent link">&para;</a></h3>
+<p>将你的设备或路由器的 DNS 设置指向运行 Load Ants 的主机。</p>
+<p><strong>工作原理</strong>:</p>
 <ol>
-<li>
-<p><strong><code>action: "resolve"</code></strong>: 这是我们第一次使用这个特殊的动作。当 <code>action</code> 被设置为 <code>resolve</code> 时，<code>target</code> 字段不再是一个上游组的名称，而是一个 <strong>IP 地址</strong>。Load Ants 会立即以此 IP 地址作为响应，而不会向上游发出任何查询。这是实现自定义 DNS 记录的核心。</p>
-</li>
-<li>
-<p><strong><code>match: "exact"</code></strong>: 我们为每一个本地域名使用 <code>exact</code> 匹配，这是最高效、最精确的方式。</p>
-</li>
-<li>
-<p><strong>拦截 AAAA 请求</strong>: 这是一个重要的优化。很多现代操作系统和浏览器会默认同时请求一个域名的 A (IPv4) 和 AAAA (IPv6) 记录（这种行为被称为 "Happy Eyeballs"）。对于我们只拥有 IPv4 地址的本地域名，如果不处理 AAAA 请求，客户端可能会因为等待一个永远不会到来的 AAAA 响应而产生微小的延迟。因此，我们添加了一条 <code>regex</code> 规则，它匹配所有以 <code>.lan</code> 结尾的域名的 <code>AAAA</code> 类型查询，并直接 <code>block</code> (拦截) 它们，从而立即告知客户端此域名没有 IPv6 地址。</p>
-</li>
-<li>
-<p><strong><code>query_type</code></strong>: 在拦截 AAAA 的规则中，我们使用了 <code>query_type</code> 字段来限定此条规则只对特定类型的 DNS 查询生效。</p>
-</li>
-<li>
-<p><strong>默认规则</strong>: 和其他配方一样，一个 <code>wildcard</code> 规则作为"接球手"，确保所有非本地域名的查询都能被正常地转发出去。</p>
-</li>
+<li>当一个对 <code>nas.lan</code> 的查询到达 Load Ants 时，它会匹配第一条 <code>static_rules</code> 规则（正则表达式匹配）。</li>
+<li>该规则的 <code>action</code> 是 <code>forward</code>，<code>target</code> 是 <code>local_dns</code> 上游组。</li>
+<li>Load Ants 随即将该查询通过 DoH 转发给你配置的本地 DNS 服务 (<code>http://192.168.1.53:8053/dns-query</code>)。</li>
+<li>你的本地 DNS 服务解析 <code>nas.lan</code> 到 <code>192.168.1.10</code> 并返回结果。</li>
+<li>当一个对 <code>www.google.com</code> 的查询到达时，它无法匹配第一条规则，于是匹配了第二条 <code>wildcard</code> 规则，被转发到 <code>public_dns</code> 组，并由谷歌的 DoH 服务器解析。</li>
 </ol>
-<h3 id="_3">步骤二：启动和验证<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h3>
-<ol>
-<li>
-<p><strong>启动 Load Ants</strong> 并将你的客户端 DNS 指向它。</p>
-</li>
-<li>
-<p><strong>验证</strong>:
-    使用 <code>dig</code> 或 <code>nslookup</code>。</p>
-<ul>
-<li>
-<p><strong>测试一个本地域名</strong>:</p>
-<div class="highlight"><pre><span></span><code>dig<span class="w"> </span>@localhost<span class="w"> </span>nas.lan
-</code></pre></div>
-<p>你应该能立即收到 <code>192.168.1.10</code> 这个 A 记录的响应。</p>
-</li>
-<li>
-<p><strong>测试本地域名的 AAAA 记录</strong>:</p>
-<div class="highlight"><pre><span></span><code>dig<span class="w"> </span>@localhost<span class="w"> </span>AAAA<span class="w"> </span>nas.lan
-</code></pre></div>
-<p>你应该会收到一个 <code>NXDOMAIN</code> 或 <code>0.0.0.0</code> 的响应，表示查询被成功拦截。</p>
-</li>
-<li>
-<p><strong>测试一个公共域名</strong>:
-    <div class="highlight"><pre><span></span><code>dig<span class="w"> </span>@localhost<span class="w"> </span>www.google.com
-</code></pre></div>
-    你应该会收到一个正常的、由上游 <code>public_dns</code> 服务器返回的响应。</p>
-</li>
-</ul>
-</li>
-</ol>
-<h3 id="_4">结论<a class="headerlink" href="#_4" title="Permanent link">&para;</a></h3>
-<p>通过 <code>resolve</code> 动作，Load Ants 不仅是一个 DNS 代理和转发器，更可以成为一个轻量级的权威 DNS 服务器，让你能够完全掌控自己网络内的域名解析，极大地提升了家庭网络的便利性。</p>
+<p>这个方法虽然比想象中复杂，但它正确地利用了 Load Ants 的核心能力，并实现了稳定、可扩展的本地网络 DNS 管理。</p>
+<blockquote>
+<p><strong>注意：关于 DoH 转换器</strong></p>
+<p>当前版本的 Load Ants <strong>只支持 DoH 上游</strong>。如果你的本地 DNS 服务器（如 dnsmasq）只提供传统的 UDP/53 端口，你将需要一个额外的软件（如 <code>dns-over-https/doh-server</code>）来将传统 DNS 查询封装成 DoH。上述配置示例假设了这样一个转换器正在运行。在未来的版本中，Load Ants 可能会支持直接转发到 UDP/TCP 上游，从而简化此配置。</p>
+</blockquote>
 <hr />
 <h3 id="_5">下一步<a class="headerlink" href="#_5" title="Permanent link">&para;</a></h3>
 <ul>
+<li><a href="../ad-blocking/">➡️ 学习广告拦截配方</a></li>
 <li><a href="../../configuration/routing-rules/">➡️ 回顾路由规则配置</a></li>
-<li><a href="../ad-blocking/">➡️ 尝试其他实例</a></li>
 <li><a href="../">➡️ 返回实例总览</a></li>
 </ul>
 

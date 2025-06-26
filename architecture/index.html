@@ -1420,7 +1420,7 @@
 <p><strong>路由引擎 (Routing Engine)</strong>:</p>
 <ul>
 <li><strong>如果缓存未命中</strong> (<code>cache miss</code>)，请求将被交给路由引擎。</li>
-<li>路由引擎是 Load Ants 的决策中心。它会根据 <code>config.yaml</code> 中定义的 <code>static_rules</code> 规则，对查询的域名进行匹配。</li>
+<li>路由引擎是 Load Ants 的决策中心。它会根据 <code>config.yaml</code> 中定义的 <code>static_rules</code> 或者 <code>remote_rules</code> 规则，对查询的域名进行匹配。</li>
 <li>匹配支持多种方式：精确域名、通配符 (<code>*.example.com</code>) 和正则表达式。</li>
 <li>根据匹配到的第一条规则，路由引擎决定下一步的操作，通常是 <code>forward</code> (转发) 或 <code>block</code> (拦截)。</li>
 </ul>
@@ -1447,7 +1447,7 @@
 <ul>
 <li>当 DoH 服务器返回 HTTPS 响应后，HTTP 客户端会解析出其中的 DNS 响应数据。</li>
 <li>该响应首先会被送往缓存模块进行<strong>更新</strong> (<code>cache update</code>)，以便下一次相同的查询可以直接命中缓存。</li>
-<li>最后，响应被打包成标准的 DNS UDP/TCP 数据包，通过最初的监听器连接返回给客户端。</li>
+<li>最后，响应被打包成标准的 DNS UDP/TCP 数据包或者 DoH 响应，通过最初的监听器连接返回给客户端。</li>
 </ul>
 </li>
 </ol>

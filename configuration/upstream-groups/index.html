@@ -1725,6 +1725,9 @@
 <hr />
 <h3 id="retry">全局重试策略 (<code>retry</code>)<a class="headerlink" href="#retry" title="Permanent link">&para;</a></h3>
 <p>此配置块定义了当向上游服务器发出的请求失败时的全局重试行为。它位于配置文件的顶层，与 <code>upstream_groups</code> 平级。</p>
+<blockquote>
+<p><strong>注意</strong>：此全局策略不影响 <code>remote_rules</code> 的下载，后者拥有自己独立的 <code>retry</code> 配置。</p>
+</blockquote>
 <div class="highlight"><pre><span></span><code><span class="c1"># 在 config.yaml 的顶层</span>
 <span class="nt">retry</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">attempts</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span>

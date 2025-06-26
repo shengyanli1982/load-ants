@@ -1610,7 +1610,8 @@
 </table>
 <hr />
 <h3 id="remote_rules"><code>remote_rules</code> (远程规则)<a class="headerlink" href="#remote_rules" title="Permanent link">&para;</a></h3>
-<p>远程规则允许你从一个 URL 动态加载和应用规则列表。这对于订阅由社区维护的、经常更新的列表（如广告拦截、恶意网站列表）非常有用。获取远程规则的行为会遵循全局的 <a href="../upstream-groups/#全局重试策略-retry"><code>retry</code> 配置</a>。</p>
+<p>远程规则允许你从一个 URL 动态加载和应用规则列表。这对于订阅由社区维护的、经常更新的列表（如广告拦截、恶意网站列表）非常有用。</p>
+<p>与上游组 (<code>upstream_groups</code>) 不同，<code>remote_rules</code> 拥有自己独立的网络配置，用于控制规则文件的下载行为。</p>
 <h4 id="_4">示例<a class="headerlink" href="#_4" title="Permanent link">&para;</a></h4>
 <div class="highlight"><pre><span></span><code><span class="nt">remote_rules</span><span class="p">:</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;url&quot;</span>
@@ -1681,6 +1682,13 @@
 <td style="text-align: left;">否</td>
 </tr>
 <tr>
+<td style="text-align: left;"><code>retry</code></td>
+<td style="text-align: left;">对象</td>
+<td style="text-align: left;">(可选) 获取此规则文件时的网络重试策略。结构与<a href="../upstream-groups/#全局重试策略-retry">全局重试策略</a>相同，但此为该规则独享的配置。</td>
+<td style="text-align: left;">-</td>
+<td style="text-align: left;">否</td>
+</tr>
+<tr>
 <td style="text-align: left;"><code>max_size</code></td>
 <td style="text-align: left;">整数</td>
 <td style="text-align: left;">(可选) 允许下载的远程规则文件的最大体积（字节）。</td>
@@ -1689,6 +1697,10 @@
 </tr>
 </tbody>
 </table>
+<blockquote>
+<p>✨ <strong>专家提示</strong>:</p>
+<p><strong>独立的网络配置</strong>：<code>remote_rules</code> 拥有独立的 <code>proxy</code>, <code>auth</code>, <code>retry</code> 配置，是因为规则文件所在的服务器网络环境可能与你日常使用的 DoH 服务器完全不同。例如，某个规则列表可能托管在需要特定代理才能访问的 GitHub Gist 上，而你的 DoH 查询则希望直连。这种独立性提供了极大的灵活性。</p>
+</blockquote>
 <hr />
 <h3 id="_6">配置配方：实用场景示例<a class="headerlink" href="#_6" title="Permanent link">&para;</a></h3>
 <h4 id="_7">配方一：全面的广告和追踪器拦截<a class="headerlink" href="#_7" title="Permanent link">&para;</a></h4>
