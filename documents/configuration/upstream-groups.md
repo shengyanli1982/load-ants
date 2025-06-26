@@ -57,6 +57,8 @@ upstream_groups:
 
 此配置块定义了当向上游服务器发出的请求失败时的全局重试行为。它位于配置文件的顶层，与 `upstream_groups` 平级。
 
+> **注意**：此全局策略不影响 `remote_rules` 的下载，后者拥有自己独立的 `retry` 配置。
+
 ```yaml
 # 在 config.yaml 的顶层
 retry:

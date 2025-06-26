@@ -1,17 +1,23 @@
 # 家庭实验室 DNS
 
-对于拥有家庭实验室 (Homelab) 或小型本地网络的用户来说，记住一堆 IP 地址（例如 `192.168.1.10` 用于 NAS，`192.168.1.20` 用于 Plex）是一件很麻烦的事。本配方将向你展示如何利用 Load Ants 最简单的 `static_rules` 功能，为你本地网络上的设备赋予友好的、易于记忆的域名（如 `nas.lan`, `plex.lan`）。
+对于拥有家庭实验室 (Homelab) 或小型本地网络的用户来说，记住一堆 IP 地址（例如 `192.168.1.10` 用于 NAS，`192.168.1.20` 用于 Plex）是一件很麻烦的事。本配方将向你展示如何利用 Load Ants 的路由功能，结合一个轻量级的本地 DNS 服务器，为你本地网络上的设备赋予友好的、易于记忆的域名（如 `nas.lan`, `plex.lan`）。
 
 ### 目标
 
--   将自定义的本地域名解析到其对应的内部 IP 地址。
--   拦截对这些本地域名的 AAAA (IPv6) 请求，以避免某些客户端出现延迟。
--   所有其他正常的互联网域名查询则转发给常规的上游 DNS 服务器。
+-   将对自定义本地域名（`.lan` 后缀）的 DNS 查询，转发给一个专门的本地 DNS 服务器进行解析。
+-   所有其他正常的互联网域名查询，则通过 Load Ants 转发给常规的上游 DoH 服务器。
+
+### 架构变更解释
+
+Load Ants 的核心功能是 **DNS-over-HTTPS (DoH) 代理**，它本身不直接从 IP 地址生成 DNS 响应。它的 `static_rules` 只能决定将查询 `forward` (转发) 到哪个上游组，或直接 `block` (拦截)。
+
+因此，为了实现本地域名解析，我们需要一个能够处理这种请求的"上游"。最简单的方法就是在你的网络中运行一个传统的 DNS 服务器（如 `dnsmasq`, `CoreDNS`, 或路由器自带的 DNS 服务），并让 Load Ants 将特定查询指向它。
 
 ### 先决条件
 
 1.  一台可以运行 Load Ants 的主机。
-2.  知道你想要映射的本地设备的静态 IP 地址。
+2.  一个在你的局域网中运行的、**传统的 DNS 服务器**。在本例中，我们假设这个服务器的地址是 `192.168.1.53:53`。你已经在这个服务器上配置好了 `nas.lan` -> `192.168.1.10` 的解析。
+3.  对 Load Ants 的[上游组](../configuration/upstream-groups.md)和[路由规则](../configuration/routing-rules.md)有基本了解。
 
 ### 步骤一：`config.yaml` 配置
 
@@ -27,92 +33,64 @@
 # 上游服务器组
 # ----------------------------------
 upstream_groups:
+    # 1. 公共 DNS 组：用于所有常规的互联网查询
     - name: "public_dns"
       strategy: "random"
       servers:
           - url: "https://dns.google/dns-query"
 
+    # 2. 本地 DNS 组：专门用于解析内部域名
+    - name: "local_dns"
+      strategy: "roundrobin"
+      # 重要：这里的 URL 指向你的本地传统 DNS 服务器的 DoH 封装
+      # 如果你的本地 DNS 不支持 DoH，你需要一个转换器，
+      # 或者使用支持直接转发到 UDP/TCP 的 DNS 代理。
+      # 注意：当前版本的 Load Ants 只支持 DoH 上游。
+      # 这里的示例是一个假设性的 DoH 转换器地址。
+      servers:
+          - url: "http://192.168.1.53:8053/dns-query" # 假设你有一个 DoH 转换器
+
 # ----------------------------------
 # 路由规则
 # ----------------------------------
 static_rules:
-    # --- 本地域名解析 ---
-    # 将 nas.lan 解析到 192.168.1.10
-    - match: "exact"
-      patterns: ["nas.lan"]
-      action: "resolve"
-      target: "192.168.1.10"
-
-    # 将 plex.lan 解析到 192.168.1.20
-    - match: "exact"
-      patterns: ["plex.lan"]
-      action: "resolve"
-      target: "192.168.1.20"
-
-    # --- 拦截本地名的 IPv6 查询 ---
-    # 避免客户端在请求 A 记录后，又徒劳地等待一个不存在的 AAAA 记录的响应
+    # --- 本地域名解析规则 ---
+    # 将所有以 .lan 结尾的域名查询，都转发到本地 DNS 组
     - match: "regex"
-      patterns: ["^.*\\.lan$"] # 匹配所有以 .lan 结尾的域名
-      query_type: ["AAAA"]
-      action: "block"
+      patterns: ["(^.*\\.lan$)|(^lan$)"]
+      action: "forward"
+      target: "local_dns"
 
     # --- 默认规则 ---
-    # 将所有其他查询转发到公共 DNS
+    # 其他所有查询都转发到公共 DNS
     - match: "wildcard"
       patterns: ["*"]
       action: "forward"
       target: "public_dns"
 ```
 
-**配置逻辑解读**:
+### 步骤二：配置你的网络
 
-1.  **`action: "resolve"`**: 这是我们第一次使用这个特殊的动作。当 `action` 被设置为 `resolve` 时，`target` 字段不再是一个上游组的名称，而是一个 **IP 地址**。Load Ants 会立即以此 IP 地址作为响应，而不会向上游发出任何查询。这是实现自定义 DNS 记录的核心。
+将你的设备或路由器的 DNS 设置指向运行 Load Ants 的主机。
 
-2.  **`match: "exact"`**: 我们为每一个本地域名使用 `exact` 匹配，这是最高效、最精确的方式。
+**工作原理**:
 
-3.  **拦截 AAAA 请求**: 这是一个重要的优化。很多现代操作系统和浏览器会默认同时请求一个域名的 A (IPv4) 和 AAAA (IPv6) 记录（这种行为被称为 "Happy Eyeballs"）。对于我们只拥有 IPv4 地址的本地域名，如果不处理 AAAA 请求，客户端可能会因为等待一个永远不会到来的 AAAA 响应而产生微小的延迟。因此，我们添加了一条 `regex` 规则，它匹配所有以 `.lan` 结尾的域名的 `AAAA` 类型查询，并直接 `block` (拦截) 它们，从而立即告知客户端此域名没有 IPv6 地址。
+1.  当一个对 `nas.lan` 的查询到达 Load Ants 时，它会匹配第一条 `static_rules` 规则（正则表达式匹配）。
+2.  该规则的 `action` 是 `forward`，`target` 是 `local_dns` 上游组。
+3.  Load Ants 随即将该查询通过 DoH 转发给你配置的本地 DNS 服务 (`http://192.168.1.53:8053/dns-query`)。
+4.  你的本地 DNS 服务解析 `nas.lan` 到 `192.168.1.10` 并返回结果。
+5.  当一个对 `www.google.com` 的查询到达时，它无法匹配第一条规则，于是匹配了第二条 `wildcard` 规则，被转发到 `public_dns` 组，并由谷歌的 DoH 服务器解析。
 
-4.  **`query_type`**: 在拦截 AAAA 的规则中，我们使用了 `query_type` 字段来限定此条规则只对特定类型的 DNS 查询生效。
+这个方法虽然比想象中复杂，但它正确地利用了 Load Ants 的核心能力，并实现了稳定、可扩展的本地网络 DNS 管理。
 
-5.  **默认规则**: 和其他配方一样，一个 `wildcard` 规则作为"接球手"，确保所有非本地域名的查询都能被正常地转发出去。
-
-### 步骤二：启动和验证
-
-1.  **启动 Load Ants** 并将你的客户端 DNS 指向它。
-
-2.  **验证**:
-    使用 `dig` 或 `nslookup`。
-
-    -   **测试一个本地域名**:
-
-        ```bash
-        dig @localhost nas.lan
-        ```
-
-        你应该能立即收到 `192.168.1.10` 这个 A 记录的响应。
-
-    -   **测试本地域名的 AAAA 记录**:
-
-        ```bash
-        dig @localhost AAAA nas.lan
-        ```
-
-        你应该会收到一个 `NXDOMAIN` 或 `0.0.0.0` 的响应，表示查询被成功拦截。
-
-    -   **测试一个公共域名**:
-        ```bash
-        dig @localhost www.google.com
-        ```
-        你应该会收到一个正常的、由上游 `public_dns` 服务器返回的响应。
-
-### 结论
-
-通过 `resolve` 动作，Load Ants 不仅是一个 DNS 代理和转发器，更可以成为一个轻量级的权威 DNS 服务器，让你能够完全掌控自己网络内的域名解析，极大地提升了家庭网络的便利性。
+> **注意：关于 DoH 转换器**
+>
+> 当前版本的 Load Ants **只支持 DoH 上游**。如果你的本地 DNS 服务器（如 dnsmasq）只提供传统的 UDP/53 端口，你将需要一个额外的软件（如 `dns-over-https/doh-server`）来将传统 DNS 查询封装成 DoH。上述配置示例假设了这样一个转换器正在运行。在未来的版本中，Load Ants 可能会支持直接转发到 UDP/TCP 上游，从而简化此配置。
 
 ---
 
 ### 下一步
 
+-   [➡️ 学习广告拦截配方](./ad-blocking.md)
 -   [➡️ 回顾路由规则配置](../configuration/routing-rules.md)
--   [➡️ 尝试其他实例](./ad-blocking.md)
 -   [➡️ 返回实例总览](./index.md)

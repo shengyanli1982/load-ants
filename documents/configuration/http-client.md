@@ -1,9 +1,6 @@
 # 客户端配置
 
-`http_client` 配置块用于定义全局的 HTTP 客户端行为。这里的设置将影响 Load Ants 发出的**所有**出站 HTTP/HTTPS 请求，这包括：
-
--   对上游 DoH 服务器的查询请求。
--   下载远程规则列表 (`remote_rules`) 时的请求。
+`http_client` 配置块用于定义全局的 HTTP 客户端行为。这里的设置将影响所有**上游组 (`upstream_groups`)** 发出的出站 DoH (DNS-over-HTTPS) 请求。
 
 精细地调整这些参数，可以帮助你优化网络连接的性能和可靠性。
 
