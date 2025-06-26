@@ -92,3 +92,11 @@ static_rules:
 ```
 
 通过将服务器分组并应用不同策略，你可以构建一个高度定制化、既可靠又高效的 DNS 解析系统。
+
+---
+
+### 下一步
+
+-   [➡️ 学习如何配置上游组](../configuration/upstream-groups.md)
+-   [➡️ 了解什么是 DNS over HTTPS (DoH)](./doh.md)
+-   [➡️ 返回核心概念概览](./index.md)

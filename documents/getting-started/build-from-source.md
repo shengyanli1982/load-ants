@@ -71,3 +71,11 @@ cargo build --release
     > **注意**：如果你的 `config.yaml` 中配置了需要特权的端口（如 53），你可能需要使用 `sudo` 或以管理员身份运行此命令。
 
 恭喜你，现在你已经成功地从源代码构建并运行了 Load Ants！
+
+---
+
+### 下一步
+
+-   [➡️ 探索不同的部署方式](../deployment/index.md)
+-   [➡️ 学习核心概念](../concepts/index.md)
+-   [➡️ 返回快速开始](./index.md)

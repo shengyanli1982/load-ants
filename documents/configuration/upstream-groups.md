@@ -120,3 +120,11 @@ upstream_groups:
             #   type: "bearer"
             #   token: "YOUR_API_KEY"
 ```
+
+---
+
+### 下一步
+
+-   [➡️ 回顾上游的核心概念](../concepts/upstream.md)
+-   [➡️ 配置路由规则](./routing-rules.md)
+-   [➡️ 返回配置总览](./index.md)

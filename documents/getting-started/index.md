@@ -123,10 +123,10 @@ example.com.		172800	IN	A	93.184.216.34
 
 如果你能看到类似于上面的响应，**恭喜你！** Load Ants 已经成功运行，并将你的 DNS 查询通过 DoH 加密发送了出去。
 
+---
+
 ### 下一步
 
-现在你已经成功运行了 Load Ants，可以继续探索更强大的功能了：
-
--   [通过 Docker 部署](./docker.md)
--   [学习核心概念](../concepts/index.md)
--   [查阅所有配置选项](../configuration/index.md)
+-   [➡️ 使用 Docker 部署](./docker.md)
+-   [➡️ 从源码构建](./build-from-source.md)
+-   [➡️ 了解核心概念](../concepts/index.md)

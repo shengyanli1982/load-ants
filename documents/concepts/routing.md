@@ -120,3 +120,11 @@ remote_rules:
 ```
 
 这个配置会下载一个域名列表，并将列表中的所有域名作为 `block` 规则添加到路由引擎中。
+
+---
+
+### 下一步
+
+-   [➡️ 学习如何配置路由规则](../configuration/routing-rules.md)
+-   [➡️ 探索一些路由应用实例 (Cookbook)](../cookbook/index.md)
+-   [➡️ 返回核心概念概览](./index.md)

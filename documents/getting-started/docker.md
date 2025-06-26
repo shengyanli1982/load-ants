@@ -104,8 +104,6 @@ docker run -d \
 
 ### 下一步
 
-你已成功通过 Docker 运行了 Load Ants，接下来可以深入探索更高级的功能了。
-
--   [从源码构建](./build-from-source.md)
--   [学习核心概念](../concepts/index.md)
--   [查阅所有配置选项](../configuration/index.md)
+-   [➡️ 尝试用 Docker Compose 部署](../deployment/docker-compose.md)
+-   [➡️ 学习核心概念](../concepts/index.md)
+-   [➡️ 查阅所有配置选项](../configuration/index.md)

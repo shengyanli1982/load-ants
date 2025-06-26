@@ -108,3 +108,11 @@ static_rules:
 ### 结论
 
 通过 `resolve` 动作，Load Ants 不仅是一个 DNS 代理和转发器，更可以成为一个轻量级的权威 DNS 服务器，让你能够完全掌控自己网络内的域名解析，极大地提升了家庭网络的便利性。
+
+---
+
+### 下一步
+
+-   [➡️ 回顾路由规则配置](../configuration/routing-rules.md)
+-   [➡️ 尝试其他实例](./ad-blocking.md)
+-   [➡️ 返回实例总览](./index.md)

@@ -43,3 +43,11 @@ DNS-over-HTTPS (DoH) 是 Load Ants 实现网络隐私和安全的核心技术。
 
 -   🌍 **规避网络审查 (Censorship Circumvention)**
     由于 DoH 查询流量与普通的 HTTPS 网页浏览流量混合在一起，它更难被网络防火墙识别和封锁。这有助于你访问那些可能被传统 DNS 技术限制的网站。
+
+---
+
+### 下一步
+
+-   [➡️ 了解上游 (Upstream) 的概念](./upstream.md)
+-   [➡️ 学习如何配置上游组](../configuration/upstream-groups.md)
+-   [➡️ 返回核心概念概览](./index.md)

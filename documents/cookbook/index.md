@@ -23,3 +23,11 @@
     -   _涉及模块_：`static_rules` (使用 `exact` 匹配)。
 
 跟随这些配方，你将能更深入地体会到 Load Ants 的灵活性和强大功能。
+
+---
+
+### 下一步
+
+-   [➡️ 实现广告屏蔽](./ad-blocking.md)
+-   [➡️ 实现 GEO 解锁](./geo-unblocking.md)
+-   [➡️ 用于家庭实验网络](./homelab-dns.md)

@@ -32,3 +32,11 @@ http_client:
 >
 > -   在一个网络状况不佳的环境中，你可能需要适当增加 `connect_timeout` 和 `request_timeout` 的值，以避免因网络波动导致的请求失败。
 > -   `idle_timeout` 和 `keepalive` 是优化连接池性能的关键参数。对于大多数场景，默认值是合理的。如果你需要与大量不同的上游服务器通信，且每个服务器的请求频率不高，可以适当调低 `idle_timeout` 来更快地回收空闲连接。
+
+---
+
+### 下一步
+
+-   [➡️ 了解上游组配置](./upstream-groups.md)
+-   [➡️ 回顾 DoH 概念](../concepts/doh.md)
+-   [➡️ 返回配置总览](./index.md)

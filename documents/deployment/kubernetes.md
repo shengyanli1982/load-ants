@@ -245,3 +245,11 @@ Kubernetes 的 `ConfigMap` 用于将配置文件与应用程序解耦。我们�
     kubectl run -it --rm --image=busybox:1.28 dns-test --restart=Never -- nslookup kubernetes.default.svc.cluster.local load-ants-svc.dns
     ```
     如果一切正常，你应该会收到 `kubernetes.default` 的 IP 地址。
+
+---
+
+### 下一步
+
+-   [➡️ 了解安全注意事项](./security.md)
+-   [➡️ 了解如何监控服务](./monitoring.md)
+-   [➡️ 返回部署总览](./index.md)
