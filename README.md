@@ -8,7 +8,7 @@
     </a>
 </div>
 
-<p align="center">
+<p align>
     <!-- 徽章将放在这里。可以添加构建状态、许可证等相关徽章。 -->
     <a href="https://github.com/shengyanli1982/load-ants/blob/main/LICENSE"><img src="https://img.shields.io/github/license/shengyanli1982/load-ants" alt="license"></a>
 </p>
