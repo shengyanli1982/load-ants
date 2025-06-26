@@ -58,9 +58,10 @@ cargo build --release
 
 2.  **运行程序**:
 
-    ```bash
+    将编译好的文件和配置文件放在一起运行。
+
+    ```
     # 在 Linux 或 macOS 上
-    # 将编译好的文件和配置文件放在一起运行
     ./target/release/load-ants -c ./config.yaml
 
     # 在 Windows 上

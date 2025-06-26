@@ -25,6 +25,12 @@ theme:
     - content.code.annotation
     - content.code.copy
 
+markdown_extensions:
+  - toc:
+      permalink: true
+  - pymdownx.superfences # 使用这个替代默认的 fenced_code
+  - admonition
+
 nav:
   - "欢迎你": "index.md"
   - "入门指南":
@@ -46,7 +52,7 @@ nav:
       - "上游组配置": "configuration/upstream-groups.md"
       - "路由规则配置": "configuration/routing-rules.md"
   - "部署指南":
-      - "概述": "deployment/index.md"
+      - "总览": "deployment/index.md"
       - "作为系统服务运行": "deployment/system-service.md"
       - "在 Docker Compose 上部署": "deployment/docker-compose.md"
       - "在 Kubernetes 上部署": "deployment/kubernetes.md"

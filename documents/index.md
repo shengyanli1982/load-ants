@@ -1,4 +1,4 @@
-# 欢迎你来到 Load Ants 的世界
+# 欢迎来到 Load Ants 的世界
 
 <div align="center">
     <img src="./images/logo.png" alt="logo" width="600">
