@@ -1,110 +1,92 @@
 # Load Ants 配置示例
 
-# 服务器监听设置（必选）
+# 服务器监听设置
 server:
-  listen_udp: "0.0.0.0:53" # UDP 监听地址和端口 (有效格式: IP:端口)（必选）
-  listen_tcp: "0.0.0.0:53" # TCP 监听地址和端口 (有效格式: IP:端口)（必选）
-  listen_http: "0.0.0.0:8080" # HTTP 监听地址和端口 (有效格式: IP:端口)（可选）
-  tcp_timeout: 10 # TCP 连接空闲超时（秒）(有效范围: 1-3600)（可选，默认值: 10）
-  http_timeout: 30 # HTTP 连接空闲超时（秒）(有效范围: 1-3600)（可选，默认值: 30）
+  listen_udp: "0.0.0.0:53" # UDP 监听地址和端口
+  listen_tcp: "0.0.0.0:53" # TCP 监听地址和端口
+  listen_http: "0.0.0.0:8080"
 
-# 健康检查与管理服务器设置（可选）
+# 管理服务器设置
 admin:
-  listen: "0.0.0.0:9000" # 健康检查服务监听地址和端口 (有效格式: IP:端口)（必选，如果提供 health 部分）
+  listen: "0.0.0.0:9000" # 管理服务器监听地址和端口
 
-# 缓存设置（可选）
+# 缓存设置
 cache:
-  enabled: true # 是否启用缓存（必选，如果提供 cache 部分）
-  max_size: 10000 # 最大缓存条目数 (有效范围: 10-1000000)（必选，如果提供 cache 部分）
-  min_ttl: 60 # 最小 TTL（秒），会覆盖原始响应中更小的 TTL 值 (有效范围: 1-86400)（必选，如果提供 cache 部分）
-  max_ttl: 3600 # 所有缓存条目的最大生存时间上限（秒）(有效范围: 1-86400)（必选，如果提供 cache 部分）
-  negative_ttl: 300 # 负向缓存 TTL（秒），用于缓存错误、不存在域名等响应 (有效范围: 1-86400)（必选，如果提供 cache 部分）
+  enabled: true
+  max_size: 10000 # 最大缓存条目数 (有效范围: 10-1000000)
+  min_ttl: 60 # 缓存条目最小 TTL（秒）(有效范围: 1-86400)
+  max_ttl: 3600 # 缓存条目最大 TTL（秒）(有效范围: 1-86400)
+  negative_ttl: 60 # 负面缓存 TTL（秒）(有效范围: 1-86400)
 
-# HTTP 客户端设置 (全局)（可选）
+# 所有上游请求共享的 HTTP 客户端设置
 http_client:
-  connect_timeout: 5 # 连接超时（秒）(有效范围: 1-120)（必选，如果提供 http_client 部分）
-  request_timeout: 10 # 请求超时（秒）(有效范围: 1-1200)（必选，如果提供 http_client 部分）
-  idle_timeout: 60 # 空闲连接超时（秒）(有效范围: 5-1800)（可选）
-  keepalive: 60 # TCP Keepalive（秒）(有效范围: 5-600)（可选）
-  agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" # HTTP 用户代理（可选）
+  connect_timeout: 5 # 连接超时（秒）(有效范围: 1-120)
+  request_timeout: 10 # 请求超时（秒）(有效范围: 1-1200)
+  idle_timeout: 60 # 可选：空闲连接超时（秒）(有效范围: 5-1800)
+  keepalive: 60 # 可选：TCP Keepalive（秒）(有效范围: 5-600)
+  agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" # 可选：HTTP 用户代理
 
-# 上游 DoH 服务器组（可选）
+# 上游 DoH 服务器组
 upstream_groups:
-  - name: "google" # 组名称 (必选, 需唯一)
-    strategy: "random" # 负载均衡策略: roundrobin(轮询), weighted(加权轮询), random(随机)（必选）
+  - name: "google"
+    strategy: "random"
     servers:
-      - url: "https://8.8.8.8/dns-query" # DoH 服务器 URL (必选)
-        method: "get" # DoH 请求方法: get, post (可选，默认 post)
+      - url: "https://8.8.8.8/resolve" #
+        method: "get"
+        content_type: "json" # 使用 application/dns-json 内容类型
       # - url: "https://1.0.0.1/dns-query"
       #   method: "get"
-      #   content_type: "json" # 使用 application/dns-json 内容类型 (可选，默认 message)
-    proxy: "http://127.0.0.1:7890" # 访问此组服务器时使用的代理 (可选)
+      #   content_type: "json" # 使用 application/dns-json 内容类型
+    proxy: "http://127.0.0.1:7890"
 
-  - name: "public" # 组名称 (必选, 需唯一)
-    strategy: "roundrobin" # 负载均衡策略: roundrobin(轮询), weighted(加权轮询), random(随机)（必选）
+  - name: "public"
+    strategy: "roundrobin"
     servers:
-      - url: "https://223.5.5.5/dns-query" # DoH 服务器 URL (必选)
-        method: "get" # DoH 请求方法: get, post (可选，默认 post)
-        content_type: "message" # 内容类型: message(application/dns-message), json(application/dns-json)（可选，默认 message）
+      - url: "https://223.5.5.5/dns-query"
+        method: "get"
+        content_type: "message" # 使用 application/dns-message 内容类型
       - url: "https://223.6.6.6/dns-query"
         method: "get"
-        content_type: "message"
+        content_type: "message" # 使用 application/dns-message 内容类型
       - url: "https://1.12.12.12/dns-query"
         method: "get"
-        content_type: "message"
+        content_type: "message" # 使用 application/dns-message 内容类型
       - url: "https://120.53.53.53/dns-query"
         method: "get"
-        content_type: "message"
+        content_type: "message" # 使用 application/dns-message 内容类型
 
-# 路由规则（静态配置）（可选）
+# 路由规则（静态配置）
 static_rules:
   # 阻止特定域名
-  - match: "exact" # 精确匹配 - 完全匹配完整域名，最高优先级（必选）
-    patterns: ["ads.example.com", "ads2.example.com"] # 匹配模式列表 (必选, 至少一个模式)
-    action: "block" # 路由动作: block(阻止), forward(转发)（必选）
+  - match: "exact" # exact: 精确匹配，不支持通配符
+    patterns: ["ads.example.com", "ads2.example.com"] # 匹配模式必须非空
+    action: "block" # 动作：block, forward
 
-  # # 将内部域名路由到内部解析器
-  # - match: "wildcard" # 通配符匹配 - 使用通配符匹配特定域名模式，次高优先级
-  #   patterns: ["*.baidu.com"] # 匹配模式列表，格式必须是'*'或'*.domain.com'
-  #   action: "forward" # 路由动作
-  #   target: "cloudflare_secure" # 目标上游组 (当action为forward时必须提供)
+  # 默认规则：将所有其他流量转发到 public（强烈推荐显式配置）
+  - match: "wildcard"
+    patterns: ["*"] # 匹配所有域名
+    action: "forward"
+    target: "public" # 默认上游
 
-  # 使用正则表达式进行模式匹配
-  - match: "regex" # 正则表达式匹配 - 使用正则表达式进行复杂匹配，较低优先级（必选）
-    patterns: ["^(mail|audio)\\.google\\.com$"] # 匹配模式列表，必须是有效的正则表达式（必选，至少一个模式）
-    action: "forward" # 路由动作：block(阻止), forward(转发)（必选）
-    target: "google" # 目标上游组（当action为forward时必选）
-
-  # 默认规则：将所有其他流量转发到默认上游
-  - match: "wildcard" # 全局通配符匹配 - 匹配任何域名，最低优先级（必选）
-    patterns: ["*"] # 匹配所有域名（必选，至少一个模式）
-    action: "forward" # 路由动作：block(阻止), forward(转发)（必选）
-    target: "public" # 目标上游组（当action为forward时必选）
-
-# 远程规则配置（可选）
 remote_rules:
   # 从URL获取阻止列表
-  - type: "url" # 规则类型，目前仅支持 "url"（必选）
-    url: "https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/reject-list.txt" # 远程规则文件的 URL (必选)
-    format: "v2ray" # 规则文件格式: v2ray (必选)
-    action: "block" # 应用于此规则列表中所有域名的动作: block(阻止), forward(转发)（必选）
-    retry: # 获取规则的重试策略 (可选)
-      attempts: 3 # 重试次数 (有效范围: 1-100)
-      delay: 1 # 初始延迟（秒）(有效范围: 1-120)
-    # proxy: "http://127.0.0.1:7890" # 获取规则时使用的 HTTP/SOCKS5 代理 (可选)
-    max_size: 1048576 # 远程规则文件的最大大小 (字节), 1048576 表示 1MB（可选，默认值: 10MB）
+  - type: "url" # URL规则类型，从外部URL获取规则
+    url: "https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/reject-list.txt"
+    format: "v2ray" # 支持的格式: v2ray, clash，默认v2ray
+    action: "block" # 阻止列表中的所有域名
+    retry: # 获取规则的重试策略
+      attempts: 3
+      delay: 1
+    proxy: "http://127.0.0.1:7890"
+    refresh: 60
 
   # 从URL获取代理列表
-  - type: "url" # 规则类型（必选）
-    url: "https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/proxy-list.txt" # 远程规则文件的 URL（必选）
-    format: "v2ray" # 规则文件格式（必选）
-    action: "forward" # 应用于此规则列表中所有域名的动作（必选）
-    target: "google" # 目标上游组 (当 action 为 forward 时必须提供)（当action为forward时必选）
-    retry: # 获取规则的重试策略（可选）
-      attempts: 3 # 重试次数
-      delay: 1 # 初始延迟（秒）
-    # proxy: "http://127.0.0.1:7890" # 获取规则时使用的代理 (可选)
-    max_size: 1048576 # 远程规则文件的最大大小 (字节), 1048576 表示 1MB（可选，默认值: 10MB）
-    # auth: # 访问远程规则 URL 的认证配置 (可选)
-    #   type: "bearer" # 认证类型: basic, bearer
-    #   token: "your_secure_token" # 令牌 (当 type 为 bearer 时使用)
+  - type: "url"
+    url: "https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/proxy-list.txt"
+    format: "v2ray" # 支持的格式: v2ray, clash，默认v2ray
+    action: "forward" # 转发列表中的所有域名
+    target: "google" # 转发目标上游组
+    retry:
+      attempts: 3
+      delay: 1
+    proxy: "http://127.0.0.1:7890"
