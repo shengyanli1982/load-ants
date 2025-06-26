@@ -1,0 +1,60 @@
+site_name: "Load Ants"
+site_url: "https://github.com/shengyanli1982/load-ants"
+docs_dir: "documents"
+
+theme:
+  name: "material"
+  language: "zh"
+  palette:
+    # Palette toggle for light vs dark mode
+    - scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: 切换到深色模式
+    - scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: 切换到浅色模式
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.tabs.link
+    - content.code.annotation
+    - content.code.copy
+
+nav:
+  - "欢迎你": "index.md"
+  - "入门指南":
+      - "快速上手": "getting-started/index.md"
+      - "Docker 部署": "getting-started/docker.md"
+      - "从源码构建": "getting-started/build-from-source.md"
+  - "核心概念":
+      - "总览": "concepts/index.md"
+      - "DoH 详解": "concepts/doh.md"
+      - "智能路由机制": "concepts/routing.md"
+      - "上游服务器管理": "concepts/upstream.md"
+      - "高性能缓存机制": "concepts/caching.md"
+  - "架构设计": "architecture/index.md"
+  - "配置指南":
+      - "总览": "configuration/index.md"
+      - "服务端配置": "configuration/server.md"
+      - "缓存配置": "configuration/cache.md"
+      - "客户端配置": "configuration/http-client.md"
+      - "上游组配置": "configuration/upstream-groups.md"
+      - "路由规则配置": "configuration/routing-rules.md"
+  - "部署指南":
+      - "概述": "deployment/index.md"
+      - "作为系统服务运行": "deployment/system-service.md"
+      - "在 Docker Compose 上部署": "deployment/docker-compose.md"
+      - "在 Kubernetes 上部署": "deployment/kubernetes.md"
+      - "安全最佳实践": "deployment/security.md"
+      - "Prometheus 监控": "deployment/monitoring.md"
+  - "实操手册":
+      - "总览": "cookbook/index.md"
+      - "终极广告拦截": "cookbook/ad-blocking.md"
+      - "地理封锁解除": "cookbook/geo-unblocking.md"
+      - "家庭实验室DNS": "cookbook/homelab-dns.md"
+  - "开源许可": "license/index.md"
