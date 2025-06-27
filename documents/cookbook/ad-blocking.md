@@ -102,7 +102,7 @@ remote_rules:
       action: "block"
       retry:
           attempts: 3
-          delay: 60 # 如果下载失败，60秒后重试
+          delay: 1 # 指数回退，初始延迟1秒
 ```
 
 **配置逻辑解读**:
