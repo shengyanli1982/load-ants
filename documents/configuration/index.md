@@ -72,12 +72,12 @@ remote_rules:
 
 接下来，我们将分章节详细拆解每一个配置块。
 
--   [➡️ `server`](./server.md): 配置 DNS 服务的监听地址和参数。
--   [➡️ `admin`](./server.md#admin-管理服务器): 配置健康检查与管理 API 的监听地址。
--   [➡️ `cache`](./cache.md): 配置内置 DNS 缓存的行为。
--   [➡️ `http_client`](./http-client.md): 定义全局 HTTP 客户端的行为，影响所有出站请求。
--   [➡️ `upstream_groups`](./upstream-groups.md): 定义所有可用的上游 DoH 服务器组。
--   [➡️ `static_rules` & `remote_rules`](./routing-rules.md): 定义静态及远程加载的路由规则。
+-   [`server`](./server.md): 配置 DNS 服务的监听地址和参数。
+-   [`admin`](./server.md#admin-管理服务器): 配置健康检查与管理 API 的监听地址。
+-   [`cache`](./cache.md): 配置内置 DNS 缓存的行为。
+-   [`http_client`](./http-client.md): 定义全局 HTTP 客户端的行为，影响所有出站请求。
+-   [`upstream_groups`](./upstream-groups.md): 定义所有可用的上游 DoH 服务器组。
+-   [`static_rules` & `remote_rules`](./routing-rules.md): 定义静态及远程加载的路由规则。
 
 ---
 
