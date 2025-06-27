@@ -1590,7 +1590,7 @@
 <span class="w">      </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;block&quot;</span>
 <span class="w">      </span><span class="nt">retry</span><span class="p">:</span>
 <span class="w">          </span><span class="nt">attempts</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span>
-<span class="w">          </span><span class="nt">delay</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">60</span><span class="w"> </span><span class="c1"># 如果下载失败，60秒后重试</span>
+<span class="w">          </span><span class="nt">delay</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span><span class="w"> </span><span class="c1"># 指数回退，初始延迟1秒</span>
 </code></pre></div>
 <p><strong>配置逻辑解读</strong>:</p>
 <ol>
