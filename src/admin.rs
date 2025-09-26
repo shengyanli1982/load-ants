@@ -12,7 +12,7 @@ use serde_json::json;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
-use tokio::sync::oneshot;
+use tokio::sync::watch;
 use tokio_graceful_shutdown::{IntoSubsystem, SubsystemHandle};
 use tracing::{error, info};
 
@@ -20,10 +20,8 @@ use tracing::{error, info};
 pub struct AdminServer {
     // 监听地址
     listen_addr: SocketAddr,
-    // 停止信号接收端
-    shutdown_rx: Option<oneshot::Receiver<()>>,
-    // 停止信号发送端
-    shutdown_tx: Option<oneshot::Sender<()>>,
+    // 停止信号
+    shutdown_requested: watch::Sender<bool>,
     // DNS缓存引用
     cache: Option<Arc<DnsCache>>,
 }
@@ -31,12 +29,9 @@ pub struct AdminServer {
 impl AdminServer {
     // 创建新的管理服务器
     pub fn new(listen_addr: SocketAddr) -> Self {
-        let (shutdown_tx, shutdown_rx) = oneshot::channel();
-
         Self {
             listen_addr,
-            shutdown_rx: Some(shutdown_rx),
-            shutdown_tx: Some(shutdown_tx),
+            shutdown_requested: watch::channel(false).0,
             cache: None,
         }
     }
@@ -48,15 +43,13 @@ impl AdminServer {
     }
 
     // 停止管理服务器
-    pub fn shutdown(&mut self) {
-        if let Some(tx) = self.shutdown_tx.take() {
-            let _ = tx.send(());
-            info!("Admin server stop signal sent");
-        }
+    pub fn shutdown(&self) {
+        self.shutdown_requested.send_replace(true);
+        info!("Admin server stop signal sent");
     }
 
     // 启动管理服务器
-    pub async fn start(&mut self) -> Result<(), AppError> {
+    pub async fn start(&self) -> Result<(), AppError> {
         // 组合健康检查和指标路由
         let app = Router::new()
             .route("/health", get(health_handler))
@@ -67,14 +60,11 @@ impl AdminServer {
         let listener = TcpListener::bind(self.listen_addr).await?;
         info!("Admin server listening on {}", self.listen_addr);
 
-        let shutdown_rx = self
-            .shutdown_rx
-            .take()
-            .expect("Admin server already started");
+        let mut shutdown_rx = self.shutdown_requested.subscribe();
 
         let server = axum::serve(listener, app);
-        let server_with_graceful_shutdown = server.with_graceful_shutdown(async {
-            let _ = shutdown_rx.await;
+        let server_with_graceful_shutdown = server.with_graceful_shutdown(async move {
+            let _ = shutdown_rx.wait_for(|requested| *requested).await;
             info!("Admin server received shutdown signal");
         });
 
@@ -85,7 +75,7 @@ impl AdminServer {
 
     // 运行服务器（用于优雅关闭集成）
     #[allow(dead_code)]
-    pub async fn start_server(mut self) -> Result<(), AppError> {
+    pub async fn start_server(self) -> Result<(), AppError> {
         self.start().await
     }
 }
@@ -93,21 +83,25 @@ impl AdminServer {
 #[async_trait::async_trait]
 impl IntoSubsystem<AppError> for AdminServer {
     async fn run(mut self, subsys: SubsystemHandle) -> Result<(), AppError> {
-        tokio::select! {
-            res = self.start() => {
-                if let Err(err) = res {
-                    error!("Admin server error: {}", err);
-                    Err(err)
-                } else {
-                    info!("Admin server stopped");
-                    Ok(())
-                }
-            }
-            _ = subsys.on_shutdown_requested() => {
-                info!("Received subsystem shutdown request, admin server is stopping");
+        let result = tokio::try_join! {
+            async {
+                let result = self.start().await;
+                subsys.request_local_shutdown();
+                result
+            },
+            async {
+                subsys.on_shutdown_requested().await;
                 self.shutdown();
                 Ok(())
             }
+        };
+
+        if let Err(err) = result {
+            error!("Admin server error: {}", err);
+            Err(err)
+        } else {
+            info!("Admin server stopped");
+            Ok(())
         }
     }
 }
