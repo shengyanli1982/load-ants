@@ -77,13 +77,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let dns_server = components.dns_server;
         s.start(SubsystemBuilder::new(
             subsystem_names::DNS_SERVER,
-            move |s| async move { dns_server.run(s).await },
+            dns_server.into_subsystem(),
         ));
         // 启动管理服务器子系统
         let admin_server = components.admin_server;
         s.start(SubsystemBuilder::new(
             subsystem_names::ADMIN_SERVER,
-            move |s| async move { admin_server.run(s).await },
+            admin_server.into_subsystem(),
         ));
         // 启动DoH服务器子系统
         if let Some(doh_server) = components.doh_server {
