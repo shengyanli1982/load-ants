@@ -1,6 +1,6 @@
 # Stage 1: Build static binaries using Rust MUSL target
 # 构建阶段
-FROM rust:1.84.1-alpine AS builder
+FROM rust:1.93.1-alpine AS builder
 
 # 设置构建环境 (静态链接)
 ENV RUSTFLAGS="-C target-feature=+crt-static"
@@ -32,7 +32,7 @@ RUN cargo build --bin loadants --target x86_64-unknown-linux-musl --release
 # Stage 2: Create final minimal image
 # 使用 alpine 作为基础镜像。可以考虑换成 gcr.io/distroless/static-debian11 以获得更小的镜像尺寸和更高的安全性，
 # 但 alpine 包含 shell，可能便于调试。
-FROM alpine:3.19
+FROM alpine:3.20
 
 # 设置时区为上海 (可选)
 RUN apk add --no-cache tzdata && \
