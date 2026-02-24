@@ -1,6 +1,6 @@
 [package]
 name = "loadants"
-version = "0.1.11"
+version = "0.1.12"
 edition = "2021"
 description = "An lightweight DNS forwarder converting UDP/TCP queries to DoH, written in Rust."
 license = "MIT"
@@ -22,7 +22,10 @@ path = "src/main.rs"
 [dependencies]
 hickory-server = { version = "0.24", features = ["hickory-resolver"] }
 hickory-proto = "0.24"
-reqwest = { version = "0.12", default-features = false, features = ["json", "native-tls"] } # 用于 DoH 请求
+reqwest = { version = "0.12", default-features = false, features = [
+    "json",
+    "native-tls",
+] } # 用于 DoH 请求
 reqwest-middleware = "0.4"
 reqwest-retry = "0.7"
 retry-policies = "0.4"
@@ -65,5 +68,5 @@ openssl-sys = "0.9"
 [dev-dependencies]
 tempfile = "3.8"
 tokio-test = "0.4"
-assert_matches = "1.5" 
+assert_matches = "1.5"
 wiremock = "0.6"
