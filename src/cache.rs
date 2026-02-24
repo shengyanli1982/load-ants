@@ -101,7 +101,12 @@ impl DnsCache {
     // 创建新的DNS缓存
     pub fn new(size: usize, min_ttl: u32, negative_ttl: Option<u32>) -> Self {
         // 验证配置
-        let size = size.clamp(cache_limits::MIN_SIZE, cache_limits::MAX_SIZE);
+        // size=0 表示禁用缓存；此时不进行 clamp，避免“禁用但实际启用”的语义错误。
+        let size = if size == 0 {
+            0
+        } else {
+            size.clamp(cache_limits::MIN_SIZE, cache_limits::MAX_SIZE)
+        };
         let min_ttl = min_ttl.clamp(cache_limits::MIN_TTL, cache_limits::MAX_TTL);
         // 使用配置的负面缓存TTL或默认值
         let negative_ttl = negative_ttl
@@ -124,6 +129,7 @@ impl DnsCache {
 
         // 设置缓存容量指标
         METRICS.cache_capacity().set(size as i64);
+        METRICS.cache_entries().set(0);
 
         Self {
             cache,
@@ -245,7 +251,6 @@ impl DnsCache {
             .cache_operations_total()
             .with_label_values(&[cache_labels::INSERT])
             .inc();
-        METRICS.cache_entries().set(self.cache.entry_count() as i64);
 
         Ok(())
     }
@@ -334,12 +339,6 @@ impl DnsCache {
             }
         }
 
-        // 记录TTL调整
-        METRICS
-            .cache_operations_total()
-            .with_label_values(&[cache_labels::ADJUSTED])
-            .inc();
-
         min_ttl
     }
 
@@ -391,12 +390,6 @@ impl DnsCache {
             };
             record.set_ttl(new_ttl);
         }
-
-        // 记录TTL调整
-        METRICS
-            .cache_operations_total()
-            .with_label_values(&[cache_labels::ADJUSTED])
-            .inc();
     }
 
     // 获取缓存条目数量

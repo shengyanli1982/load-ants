@@ -1,14 +1,43 @@
 use loadants::{
-    doh::server::DoHServer, metrics::METRICS, rule_source_labels, rule_type_labels,
-    server::DnsServerConfig, subsystem_names, AdminServer, AppError, Args, Config, DnsCache,
-    DnsServer, MatchType, RequestHandler, Router, UpstreamManager,
+    doh::server::DoHServer, metrics::METRICS, r#const::server_defaults, rule_source_labels,
+    rule_type_labels, server::DnsServerConfig, subsystem_names, AdminServer, AppError, Args,
+    Config, DnsCache, DnsServer, MatchType, RequestHandler, RouteAction, Router, UpstreamManager,
 };
 use mimalloc::MiMalloc;
-use std::net::SocketAddr;
 use std::process;
 use std::sync::Arc;
 use tokio_graceful_shutdown::{IntoSubsystem, SubsystemBuilder, Toplevel};
 use tracing::{error, info, warn};
+
+fn validate_strict_runtime_config(config: &Config) -> Result<(), loadants::error::ConfigError> {
+    let static_rules_count = config.static_rules.as_ref().map_or(0, |rules| rules.len());
+    let remote_rules_count = config.remote_rules.len();
+
+    if static_rules_count == 0 && remote_rules_count == 0 {
+        return Err(loadants::error::ConfigError::ValidationError(
+            "No routing rules configured: please configure 'static_rules' and/or 'remote_rules'"
+                .to_string(),
+        ));
+    }
+
+    let has_forward_rule = config
+        .static_rules
+        .as_ref()
+        .is_some_and(|rules| rules.iter().any(|r| r.action == RouteAction::Forward))
+        || config
+            .remote_rules
+            .iter()
+            .any(|r| r.action == RouteAction::Forward);
+
+    if !has_forward_rule {
+        return Err(loadants::error::ConfigError::ValidationError(
+            "No forward rules configured: please add at least one rule with action 'forward'"
+                .to_string(),
+        ));
+    }
+
+    Ok(())
+}
 
 // 使用 mimalloc 分配器提高内存效率
 #[global_allocator]
@@ -56,6 +85,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             process::exit(1);
         }
     };
+
+    if let Err(e) = validate_strict_runtime_config(&config) {
+        error!("Invalid configuration: {}", e);
+        process::exit(1);
+    }
 
     // 如果是测试模式，成功验证配置后退出
     if args.test_config {
@@ -127,8 +161,13 @@ struct AppComponents {
 async fn create_components(config: Config) -> Result<AppComponents, AppError> {
     // 创建 DNS 缓存
     let cache = if let Some(cache_config) = &config.cache {
+        let cache_size = if cache_config.enabled {
+            cache_config.max_size
+        } else {
+            0
+        };
         let cache = Arc::new(DnsCache::new(
-            cache_config.max_size,
+            cache_size,
             cache_config.min_ttl,
             Some(cache_config.negative_ttl),
         ));
@@ -137,9 +176,6 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
                 "DNS cache enabled, size: {}, min TTL: {}s, negative TTL: {}s",
                 cache_config.max_size, cache_config.min_ttl, cache_config.negative_ttl
             );
-
-            // 设置缓存容量指标
-            METRICS.cache_capacity().set(cache_config.max_size as i64);
         } else {
             info!("DNS cache disabled");
         }
@@ -154,8 +190,11 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
     let admin_listen_addr = match &config.admin {
         Some(admin_config) => admin_config.listen.parse()?,
         None => {
-            warn!("Admin server configuration not provided, using default address 127.0.0.1:8080");
-            SocketAddr::from(([127, 0, 0, 1], 8080))
+            warn!(
+                "Admin server configuration not provided, using default address {}",
+                server_defaults::DEFAULT_ADMIN_LISTEN
+            );
+            server_defaults::DEFAULT_ADMIN_LISTEN.parse()?
         }
     };
     let admin_server = AdminServer::new(admin_listen_addr).with_cache(Arc::clone(&cache));

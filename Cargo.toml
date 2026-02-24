@@ -70,3 +70,6 @@ tempfile = "3.8"
 tokio-test = "0.4"
 assert_matches = "1.5"
 wiremock = "0.6"
+
+[lints.clippy]
+unnecessary_unwrap = "allow"

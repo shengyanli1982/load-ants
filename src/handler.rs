@@ -277,12 +277,6 @@ impl RequestHandler {
         let cache_insert_time = Instant::now();
         if let Err(e) = self.cache.insert(request, response).await {
             warn!("Cache insertion failed: {}", e);
-
-            // 记录错误指标
-            METRICS
-                .cache_operations_total()
-                .with_label_values(&[cache_labels::INSERT_ERROR])
-                .inc();
         } else {
             info!(
                 "Cache insertion for {} took {:?}",

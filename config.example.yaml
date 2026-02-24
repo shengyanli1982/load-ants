@@ -7,12 +7,12 @@ server:
   listen_udp: "0.0.0.0:53" # UDP 监听地址和端口 (有效格式: IP:端口)（必选）
   listen_tcp: "0.0.0.0:53" # TCP 监听地址和端口 (有效格式: IP:端口)（必选）
   listen_http: "0.0.0.0:8080" # DoH 监听地址和端口 (有效格式: IP:端口)（可选）
-  tcp_timeout: 10 # TCP 连接空闲超时（秒）(有效范围: 1-3600)（可选，默认值: 10）
-  http_timeout: 30 # HTTP 连接空闲超时（秒）(有效范围: 1-3600)（可选，默认值: 30）
+  tcp_timeout: 10 # TCP 连接空闲超时（秒）(有效范围: 1-65535)（可选，默认值: 10）
+  http_timeout: 30 # HTTP 连接空闲超时（秒）(有效范围: 1-65535)（可选，默认值: 30）
 
-# 健康检查与管理服务器设置（可选）
+# 管理服务器设置（可选）
 admin:
-  listen: "0.0.0.0:9000" # 健康检查服务监听地址和端口 (有效格式: IP:端口)（必选，如果提供 health 部分）
+  listen: "0.0.0.0:9000" # 管理服务监听地址和端口 (有效格式: IP:端口)（必选，如果提供 admin 部分）
 
 # 缓存设置（可选）
 cache:
@@ -30,7 +30,7 @@ http_client:
   keepalive: 60 # TCP Keepalive（秒）(有效范围: 5-600)（可选）
   agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" # HTTP 用户代理（可选）
 
-# 上游 DoH 服务器组（可选）
+# 上游 DoH 服务器组（条件必选：只要存在任何 forward 规则，就必须配置 upstream_groups）
 upstream_groups:
   - name: "google" # 组名称 (必选, 需唯一)
     strategy: "random" # 负载均衡策略: roundrobin(轮询), weighted(加权轮询), random(随机)（必选）
@@ -58,7 +58,7 @@ upstream_groups:
         method: "get"
         content_type: "message"
 
-# 路由规则（静态配置）（可选）
+# 路由规则（静态配置）（可选，但必须至少配置 static_rules 或 remote_rules 之一）
 static_rules:
   # 阻止特定域名
   - match: "exact" # 精确匹配 - 完全匹配完整域名，最高优先级（必选）
@@ -83,7 +83,7 @@ static_rules:
     action: "forward" # 路由动作：block(阻止), forward(转发)（必选）
     target: "public" # 目标上游组（当action为forward时必选）
 
-# 远程规则配置（可选）
+# 远程规则配置（可选，但必须至少配置 static_rules 或 remote_rules 之一）
 remote_rules:
   # 从URL获取阻止列表
   - type: "url" # 规则类型，目前仅支持 "url"（必选）

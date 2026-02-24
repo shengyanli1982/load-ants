@@ -29,6 +29,17 @@
 
 **[➡️ 访问官方文档网站](https://shengyanli1982.github.io/load-ants/)**
 
+### 配置校验（重要）
+
+- 必须至少配置 `static_rules` 或 `remote_rules` 之一（至少一个规则来源）。
+- 必须至少存在一个 `action: forward` 的规则，否则程序会在启动阶段报错退出。
+- 只要存在任何 `forward` 规则：必须配置 `upstream_groups`，且所有 `target` 必须引用已存在的上游组名。
+- 可用命令校验配置（校验通过后直接退出）：
+
+```bash
+loadants --test -c ./config.yaml
+```
+
 ### 🚀 快速开始
 
 使用 Docker 在几秒钟内启动并运行：

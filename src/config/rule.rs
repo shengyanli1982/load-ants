@@ -1,6 +1,8 @@
 use crate::config::validate_url;
 use crate::r#const::remote_rule_limits;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use validator::{Validate, ValidationError};
 
 use super::common::{AuthConfig, RetryConfig};
@@ -63,6 +65,7 @@ pub struct RemoteRuleConfig {
     #[validate(custom(function = "validate_url", message = "Invalid URL format"))]
     pub url: String,
     // 认证配置（可选）
+    #[validate(nested)]
     pub auth: Option<AuthConfig>,
     // 规则格式（默认为v2ray）
     #[serde(default = "default_rule_format")]
@@ -72,6 +75,7 @@ pub struct RemoteRuleConfig {
     // 目标上游组（当action为Forward时必须提供）
     pub target: Option<String>,
     // 重试配置（可选）
+    #[validate(nested)]
     pub retry: Option<RetryConfig>,
     // 代理（可选）
     pub proxy: Option<String>,
@@ -114,6 +118,53 @@ fn validate_patterns_not_empty(patterns: &[String]) -> Result<(), ValidationErro
     Ok(())
 }
 
+// 自定义验证函数 - 校验 RouteRuleConfig 的 patterns 与 match_type 语义一致
+fn validate_route_rule_patterns(rule: &RouteRuleConfig) -> Result<(), ValidationError> {
+    match rule.match_type {
+        MatchType::Exact => Ok(()),
+        MatchType::Wildcard => {
+            for pattern in &rule.patterns {
+                if pattern == "*" {
+                    continue;
+                }
+                let Some(suffix) = pattern.strip_prefix("*.") else {
+                    let mut err = ValidationError::new("invalid_wildcard_pattern");
+                    err.message = Some(Cow::from(format!(
+                        "Invalid wildcard pattern '{}': expected '*' or '*.domain.tld'",
+                        pattern
+                    )));
+                    return Err(err);
+                };
+
+                // 允许配置里带尾随 '.'，与 Router 的 normalize 行为对齐
+                let suffix = suffix.trim_end_matches('.');
+                if suffix.is_empty() || suffix.starts_with('.') || suffix.contains("..") {
+                    let mut err = ValidationError::new("invalid_wildcard_pattern");
+                    err.message = Some(Cow::from(format!(
+                        "Invalid wildcard pattern '{}': invalid domain suffix",
+                        pattern
+                    )));
+                    return Err(err);
+                }
+            }
+            Ok(())
+        }
+        MatchType::Regex => {
+            for pattern in &rule.patterns {
+                if let Err(e) = Regex::new(pattern) {
+                    let mut err = ValidationError::new("invalid_regex_pattern");
+                    err.message = Some(Cow::from(format!(
+                        "Invalid regex pattern '{}': {}",
+                        pattern, e
+                    )));
+                    return Err(err);
+                }
+            }
+            Ok(())
+        }
+    }
+}
+
 // 自定义验证函数 - 验证静态规则的Forward动作时必须有target
 fn validate_static_forward_target(rule: &RouteRuleConfig) -> Result<(), ValidationError> {
     if matches!(rule.action, RouteAction::Forward) && rule.target.is_none() {
@@ -127,6 +178,10 @@ fn validate_static_forward_target(rule: &RouteRuleConfig) -> Result<(), Validati
 #[validate(schema(
     function = "validate_static_forward_target",
     message = "Forward action requires target field"
+))]
+#[validate(schema(
+    function = "validate_route_rule_patterns",
+    message = "Invalid route rule patterns"
 ))]
 #[serde(rename_all = "lowercase")]
 pub struct RouteRuleConfig {

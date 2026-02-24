@@ -80,7 +80,6 @@ remote_rules:
       attempts: 3
       delay: 1
     proxy: "http://127.0.0.1:7890"
-    refresh: 60
 
   # 从URL获取代理列表
   - type: "url"
