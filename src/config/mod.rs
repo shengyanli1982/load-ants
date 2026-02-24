@@ -226,6 +226,41 @@ impl Config {
         }
         Ok(())
     }
+
+    /// 校验程序运行所需的“配置语义约束”。
+    ///
+    /// 注意：该校验不属于结构化字段校验（`validator`），因此不会在 `from_file()` 中自动触发，
+    /// 由二进制入口（例如 `src/main.rs`）在启动阶段显式调用，以保持现有库接口与测试兼容。
+    pub fn validate_runtime_requirements(&self) -> ConfigResult<()> {
+        let static_rules_count = self.static_rules.as_ref().map_or(0, |rules| rules.len());
+        let remote_rules_count = self.remote_rules.len();
+
+        if static_rules_count == 0 && remote_rules_count == 0 {
+            return Err(ConfigError::ValidationError(
+                "No routing rules configured: please configure 'static_rules' and/or 'remote_rules'"
+                    .to_string(),
+            ));
+        }
+
+        let has_forward_in_static = self.static_rules.as_ref().is_some_and(|rules| {
+            rules
+                .iter()
+                .any(|rule| matches!(rule.action, RouteAction::Forward))
+        });
+        let has_forward_in_remote = self
+            .remote_rules
+            .iter()
+            .any(|rule| matches!(rule.action, RouteAction::Forward));
+
+        if !(has_forward_in_static || has_forward_in_remote) {
+            return Err(ConfigError::ValidationError(
+                "No forward rules configured: please add at least one rule with action 'forward'"
+                    .to_string(),
+            ));
+        }
+
+        Ok(())
+    }
 }
 
 // 将 ValidationErrors 转换为友好的错误信息

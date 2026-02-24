@@ -1,43 +1,13 @@
 use loadants::{
     doh::server::DoHServer, metrics::METRICS, r#const::server_defaults, rule_source_labels,
     rule_type_labels, server::DnsServerConfig, subsystem_names, AdminServer, AppError, Args,
-    Config, DnsCache, DnsServer, MatchType, RequestHandler, RouteAction, Router, UpstreamManager,
+    Config, DnsCache, DnsServer, MatchType, RequestHandler, Router, UpstreamManager,
 };
 use mimalloc::MiMalloc;
 use std::process;
 use std::sync::Arc;
 use tokio_graceful_shutdown::{IntoSubsystem, SubsystemBuilder, Toplevel};
 use tracing::{error, info, warn};
-
-fn validate_strict_runtime_config(config: &Config) -> Result<(), loadants::error::ConfigError> {
-    let static_rules_count = config.static_rules.as_ref().map_or(0, |rules| rules.len());
-    let remote_rules_count = config.remote_rules.len();
-
-    if static_rules_count == 0 && remote_rules_count == 0 {
-        return Err(loadants::error::ConfigError::ValidationError(
-            "No routing rules configured: please configure 'static_rules' and/or 'remote_rules'"
-                .to_string(),
-        ));
-    }
-
-    let has_forward_rule = config
-        .static_rules
-        .as_ref()
-        .is_some_and(|rules| rules.iter().any(|r| r.action == RouteAction::Forward))
-        || config
-            .remote_rules
-            .iter()
-            .any(|r| r.action == RouteAction::Forward);
-
-    if !has_forward_rule {
-        return Err(loadants::error::ConfigError::ValidationError(
-            "No forward rules configured: please add at least one rule with action 'forward'"
-                .to_string(),
-        ));
-    }
-
-    Ok(())
-}
 
 // 使用 mimalloc 分配器提高内存效率
 #[global_allocator]
@@ -86,7 +56,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    if let Err(e) = validate_strict_runtime_config(&config) {
+    if let Err(e) = config.validate_runtime_requirements() {
         error!("Invalid configuration: {}", e);
         process::exit(1);
     }
