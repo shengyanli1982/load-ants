@@ -10,34 +10,46 @@ Load Ants 在启动时会按照以下顺序寻找并加载配置文件：
     这是最推荐的方式，可以明确指定配置文件的路径。
 
     ```bash
-    ./load-ants -c /path/to/your/config.yaml
+    ./loadants -c /path/to/your/config.yaml
     ```
 
 2.  **当前工作目录**:
     如果在启动时没有使用 `-c` 参数，Load Ants 会尝试从其**当前工作目录**下加载名为 `config.yaml` 的文件。
 
-3.  **系统默认目录 (Linux/macOS)**:
-    如果以上路径均未找到，它会最后尝试从 `/etc/load-ants/config.yaml` 加载。
-
 > ✨ **专家提示**:
 > 为了保证可移植性和清晰性，强烈建议始终将 `config.yaml` 文件与 Load Ants 程序放在同一个目录下，并使用 `-c ./config.yaml` 的方式来显式加载它。
+
+### 启动阶段配置校验（重要）
+
+Load Ants 在启动时会对配置做两类校验：
+
+1. **结构化校验（加载时）**：字段类型/格式、取值范围、上游组名称唯一性、路由规则 `target` 引用是否存在等。
+2. **运行时语义校验（启动阶段）**：
+    - 必须至少配置 `static_rules` 或 `remote_rules` 之一（至少一个规则来源）。
+    - 必须至少存在一个 `action: forward` 的规则，否则程序会在启动阶段报错退出。
+
+你可以使用 `--test` 在不启动服务的情况下验证配置（校验通过后直接退出）：
+
+```bash
+loadants --test -c ./config.yaml
+```
 
 ### YAML 语法基础
 
 Load Ants 的配置文件使用 [YAML](https://yaml.org/) 格式。YAML 是一种对人类非常友好的数据序列化语言，其基本规则非常简单：
 
--   **使用缩进表示层级**: YAML 使用空格缩进（**不允许使用 Tab**）来表示数据的层级关系。通常建议使用 **2 个空格**作为一级缩进。
--   **键值对**: 使用冒号 (`:`) 分隔键和值，冒号后必须跟一个空格。
+- **使用缩进表示层级**: YAML 使用缩进来表示数据的层级关系。通常建议使用 **2 个空格**作为一级缩进。
+- **键值对**: 使用冒号 (`:`) 分隔键和值，冒号后必须跟一个空格。
     ```yaml
     key: value
     ```
--   **列表 (数组)**: 使用短横线 (`-`) 加一个空格来表示列表中的一个元素。
+- **列表 (数组)**: 使用短横线 (`-`) 加一个空格来表示列表中的一个元素。
     ```yaml
     list:
         - item1
         - item2
     ```
--   **注释**: 使用井号 (`#`) 来添加注释，从 `#` 开始到行尾的内容都会被忽略。
+- **注释**: 使用井号 (`#`) 来添加注释，从 `#` 开始到行尾的内容都会被忽略。
 
 ### 配置文件顶层结构
 
@@ -75,18 +87,18 @@ remote_rules:
 
 接下来，我们将分章节详细拆解每一个配置块。
 
--   [➡️ `server`](./server.md): 配置 DNS 服务的监听地址和参数。
--   [➡️ `admin`](./server.md#admin-管理服务器): 配置健康检查与管理 API 的监听地址。
--   [➡️ `cache`](./cache.md): 配置内置 DNS 缓存的行为。
--   [➡️ `http_client`](./http-client.md): 定义全局 HTTP 客户端的行为，影响所有出站请求。
--   [➡️ `upstream_groups`](./upstream-groups.md): 定义所有可用的上游 DoH 服务器组。
--   [➡️ `static_rules` & `remote_rules`](./routing-rules.md): 定义静态及远程加载的路由规则。
+- [`server`](./server.md): 配置 DNS 服务的监听地址和参数。
+- [`admin`](./server.md#admin-管理服务器): 配置健康检查与管理 API 的监听地址。
+- [`cache`](./cache.md): 配置内置 DNS 缓存的行为。
+- [`http_client`](./http-client.md): 定义全局 HTTP 客户端的行为，影响所有出站请求。
+- [`upstream_groups`](./upstream-groups.md): 定义所有可用的上游 DoH 服务器组。
+- [`static_rules` & `remote_rules`](./routing-rules.md): 定义静态及远程加载的路由规则。
 
 ---
 
 ### 下一步
 
--   [➡️ 配置服务监听](./server.md)
--   [➡️ 配置上游组](./upstream-groups.md)
--   [➡️ 配置路由规则](./routing-rules.md)
--   [➡️ 配置缓存](./cache.md)
+- [➡️ 配置服务监听](./server.md)
+- [➡️ 配置上游组](./upstream-groups.md)
+- [➡️ 配置路由规则](./routing-rules.md)
+- [➡️ 配置缓存](./cache.md)

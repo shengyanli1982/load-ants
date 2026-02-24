@@ -15,10 +15,10 @@ pub enum AuthType {
 // 自定义验证函数 - 验证Basic认证配置
 fn validate_basic_auth(auth: &AuthConfig) -> Result<(), ValidationError> {
     if matches!(auth.r#type, AuthType::Basic) {
-        if auth.username.is_none() || auth.username.as_ref().unwrap().is_empty() {
+        if auth.username.as_deref().is_none_or(str::is_empty) {
             return Err(ValidationError::new("missing_username_for_basic_auth"));
         }
-        if auth.password.is_none() || auth.password.as_ref().unwrap().is_empty() {
+        if auth.password.as_deref().is_none_or(str::is_empty) {
             return Err(ValidationError::new("missing_password_for_basic_auth"));
         }
     }
@@ -27,7 +27,7 @@ fn validate_basic_auth(auth: &AuthConfig) -> Result<(), ValidationError> {
 
 // 自定义验证函数 - 验证Bearer认证配置
 fn validate_bearer_auth(auth: &AuthConfig) -> Result<(), ValidationError> {
-    if matches!(auth.r#type, AuthType::Bearer) && (auth.token.is_none() || auth.token.as_ref().unwrap().is_empty()) {
+    if matches!(auth.r#type, AuthType::Bearer) && auth.token.as_deref().is_none_or(str::is_empty) {
         return Err(ValidationError::new("missing_token_for_bearer_auth"));
     }
     Ok(())

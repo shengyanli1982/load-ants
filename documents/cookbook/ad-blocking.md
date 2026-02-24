@@ -4,11 +4,11 @@
 
 ### 目标
 
--   订阅一个或多个社区维护的域名黑名单。
--   能够手动屏蔽或解封特定域名。
--   为正常的 DNS 查询选择一个或多个可信的、注重隐私的上游 DoH 服务器。
--   启用缓存以加速常见查询。
--   通过 Docker Compose 轻松部署和管理。
+- 订阅一个或多个社区维护的域名黑名单。
+- 能够手动屏蔽或解封特定域名。
+- 为正常的 DNS 查询选择一个或多个可信的、注重隐私的上游 DoH 服务器。
+- 启用缓存以加速常见查询。
+- 通过 Docker Compose 轻松部署和管理。
 
 ### 先决条件
 
@@ -102,7 +102,7 @@ remote_rules:
       action: "block"
       retry:
           attempts: 3
-          delay: 60 # 如果下载失败，60秒后重试
+          delay: 1 # 指数回退，初始延迟1秒
 ```
 
 **配置逻辑解读**:
@@ -110,10 +110,10 @@ remote_rules:
 1.  **`upstream_groups`**: 我们只定义了一个名为 `clean_dns` 的上游组，其中包含了两个广受好评的公共 DNS 解析服务。
 2.  **`remote_rules`**: 我们订阅了一个远程维护的黑名单。Load Ants 会在启动和固定的时间间隔自动下载这个列表。所有在此列表中的域名都将被 `block` (拦截)。
 3.  **`static_rules`**:
-    -   我们设置的 `exact` 匹配规则优先级高于远程规则和 `wildcard` 规则。这给了我们最终的控制权。
-    -   你可以通过向 `good-domain.com` 列表中添加域名来创建"白名单"，强制某个域名被解析。
-    -   `very-bad-domain.com` 则是你的私人"黑名单"。
-    -   最后，`wildcard` 规则 `"*"` 确保任何没有被拦截的域名都会被正常转发出去解析。
+    - 我们设置的 `exact` 匹配规则优先级高于远程规则和 `wildcard` 规则。这给了我们最终的控制权。
+    - 你可以通过向 `good-domain.com` 列表中添加域名来创建"白名单"，强制某个域名被解析。
+    - `very-bad-domain.com` 则是你的私人"黑名单"。
+    - 最后，`wildcard` 规则 `"*"` 确保任何没有被拦截的域名都会被正常转发出去解析。
 
 ### 步骤三：`docker-compose.yml` 配置
 
@@ -153,8 +153,7 @@ services:
 
 2.  **验证**:
     使用 `dig` 或 `nslookup` 工具，将 DNS 服务器指向你的 Docker 主机 IP。
-
-    -   **测试一个正常域名**:
+    - **测试一个正常域名**:
 
         ```bash
         dig @<your_docker_host_ip> www.google.com
@@ -162,8 +161,8 @@ services:
 
         你应该能收到一个正常的 A 记录。
 
-    -   **测试一个被拦截的域名**:
-        从你订阅的[列表](https://raw.githubusercontent.com/privacy-respecting-software/Blocky-Adlists/main/dns-hole-list.txt)中找一个域名，例如 `101com.com`。
+    - **测试一个被拦截的域名**:
+      从你订阅的[列表](https://raw.githubusercontent.com/privacy-respecting-software/Blocky-Adlists/main/dns-hole-list.txt)中找一个域名，例如 `101com.com`。
 
         ```bash
         dig @<your_docker_host_ip> 101com.com
@@ -171,7 +170,7 @@ services:
 
         你应该会收到一个 `NXDOMAIN` 或 `0.0.0.0` 的响应，表示域名被成功拦截。
 
-    -   **查看日志**:
+    - **查看日志**:
         ```bash
         docker-compose logs -f
         ```
@@ -181,8 +180,8 @@ services:
 
 现在你的 DNS 拦截服务已经成功运行，最后一步是让你的设备使用它。
 
--   **在路由器上配置**: 这是最推荐的方法。登录你的路由器管理页面，找到 DNS 设置，将主 DNS 服务器的 IP 地址改为你运行 Docker 的那台主机的 IP 地址。这样，连接到你 WiFi 的所有设备都会自动受到保护。
--   **在单个设备上配置**: 你也可以在你的电脑或手机的网络设置中手动指定 DNS 服务器。
+- **在路由器上配置**: 这是最推荐的方法。登录你的路由器管理页面，找到 DNS 设置，将主 DNS 服务器的 IP 地址改为你运行 Docker 的那台主机的 IP 地址。这样，连接到你 WiFi 的所有设备都会自动受到保护。
+- **在单个设备上配置**: 你也可以在你的电脑或手机的网络设置中手动指定 DNS 服务器。
 
 恭喜！你现在拥有了一个属于自己的、功能强大的网络"净化器"。
 
@@ -190,6 +189,6 @@ services:
 
 ### 下一步
 
--   [➡️ 回顾路由规则配置](../configuration/routing-rules.md)
--   [➡️ 尝试其他实例](./geo-unblocking.md)
--   [➡️ 返回实例总览](./index.md)
+- [➡️ 回顾路由规则配置](../configuration/routing-rules.md)
+- [➡️ 尝试其他实例](./geo-unblocking.md)
+- [➡️ 返回实例总览](./index.md)

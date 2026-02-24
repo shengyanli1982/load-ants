@@ -11,8 +11,8 @@
 
 ### 场景描述
 
--   **服务 A (`load-ants`)**: 我们的 DNS 代理，它将监听 UDP 端口 5353。
--   **服务 B (`my-app`)**: 一个模拟应用（我们用 `curl` 容器代替），它需要解析域名。我们将配置它把所有 DNS 查询发送给 `load-ants` 服务。
+- **服务 A (`load-ants`)**: 我们的 DNS 代理，它将监听 UDP 端口 5353。
+- **服务 B (`my-app`)**: 一个模拟应用（我们用 `curl` 容器代替），它需要解析域名。我们将配置它把所有 DNS 查询发送给 `load-ants` 服务。
 
 ### 步骤一：创建项目目录结构
 
@@ -25,8 +25,8 @@ load-ants-compose/
     └── config.yaml
 ```
 
--   `docker-compose.yml`: `docker-compose` 的核心定义文件。
--   `config/config.yaml`: 你的 Load Ants 配置文件。
+- `docker-compose.yml`: `docker-compose` 的核心定义文件。
+- `config/config.yaml`: 你的 Load Ants 配置文件。
 
 ### 步骤二：配置 `config.yaml`
 
@@ -84,11 +84,11 @@ networks:
 
 **配置解释**:
 
--   **`services`**: 定义了两个服务，`load-ants` 和 `my-app`。
--   **`volumes`**: 我们将本地的 `config.yaml` 文件挂载到 `load-ants` 容器的 `/app/config.yaml` 路径，这样容器就能读取到我们的配置。
--   **`dns`**: 这是最关键的部分。我们为 `my-app` 服务设置了 DNS 服务器。Docker 的内置 DNS 服务会将服务名 `load-ants` 解析为 `load-ants` 容器在 `ants-network` 网络中的内部 IP 地址。这意味着 `my-app` 容器内的任何 DNS 查询都会被发送到 `load-ants` 容器。
--   **`networks`**: 我们创建了一个自定义的桥接网络 `ants-network`，并让两个服务都连接到这个网络。这能确保它们之间可以相互通信，并且拥有可预测的 DNS 名称。如果需要将服务暴露给主机或其他外部网络，请务必参考[安全最佳实践](./security.md)中的建议。
--   **`depends_on`**: 确保了容器的启动顺序，`my-app` 会在 `load-ants` 成功启动后才启动。
+- **`services`**: 定义了两个服务，`load-ants` 和 `my-app`。
+- **`volumes`**: 我们将本地的 `config.yaml` 文件挂载到 `load-ants` 容器的 `/app/config.yaml` 路径，这样容器就能读取到我们的配置。
+- **`dns`**: 这是最关键的部分。我们为 `my-app` 服务设置了 DNS 服务器。Docker 的内置 DNS 服务会将服务名 `load-ants` 解析为 `load-ants` 容器在 `ants-network` 网络中的内部 IP 地址。这意味着 `my-app` 容器内的任何 DNS 查询都会被发送到 `load-ants` 容器。
+- **`networks`**: 我们创建了一个自定义的桥接网络 `ants-network`，并让两个服务都连接到这个网络。这能确保它们之间可以相互通信，并且拥有可预测的 DNS 名称。如果需要将服务暴露给主机或其他外部网络，请务必参考[安全最佳实践](./security.md)中的建议。
+- **`depends_on`**: 确保了容器的启动顺序，`my-app` 会在 `load-ants` 成功启动后才启动。
 
 ### 步骤四：启动和验证
 
@@ -120,6 +120,6 @@ networks:
 
 ### 下一步
 
--   [➡️ 了解安全注意事项](./security.md)
--   [➡️ 了解如何监控服务](./monitoring.md)
--   [➡️ 返回部署总览](./index.md)
+- [➡️ 了解安全注意事项](./security.md)
+- [➡️ 了解如何监控服务](./monitoring.md)
+- [➡️ 返回部署总览](./index.md)

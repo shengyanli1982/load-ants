@@ -10,23 +10,35 @@
 
 <p align>
     <!-- Badges will go here. Add relevant badges for build status, license, etc. -->
-    <a href="httpshttps://github.com/shengyanli1982/load-ants/blob/main/LICENSE"><img src="https://img.shields.io/github/license/shengyanli1982/load-ants" alt="license"></a>
+    <a href="https://github.com/shengyanli1982/load-ants/blob/main/LICENSE"><img src="https://img.shields.io/github/license/shengyanli1982/load-ants" alt="license"></a>
+    <a href="https://deepwiki.com/shengyanli1982/load-ants"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
 </p>
 
 **Load Ants** is a high-performance, multi-functional DNS proxy service designed to enhance your network privacy, security, and flexibility.
 
 ### Core Features
 
--   🔄 **Protocol Conversion**: Seamlessly converts standard DNS queries to DNS-over-HTTPS (DoH).
--   🧠 **Intelligent Routing**: Route DNS queries based on domain patterns (exact, wildcard, regex).
--   ⚡ **High-Performance Caching**: Built-in caching to reduce latency.
--   🌐 **Flexible Upstream Management**: Group DoH servers with multiple load-balancing strategies.
+- 🔄 **Protocol Conversion**: Seamlessly converts standard DNS queries to DNS-over-HTTPS (DoH).
+- 🧠 **Intelligent Routing**: Route DNS queries based on domain patterns (exact, wildcard, regex).
+- ⚡ **High-Performance Caching**: Built-in caching to reduce latency.
+- 🌐 **Flexible Upstream Management**: Group DoH servers with multiple load-balancing strategies.
 
 ### 📚 Get the Full Picture!
 
 All detailed documentation, including configuration, deployment guides, and advanced usage, has been moved to our dedicated documentation site.
 
 **[➡️ Visit the Official Documentation Site](https://shengyanli1982.github.io/load-ants/)**
+
+### Config Validation (Important)
+
+- You must configure at least one rule source: `static_rules` and/or `remote_rules`.
+- You must have at least one rule with `action: forward`, otherwise the program will fail fast during startup.
+- If any `forward` rule exists: `upstream_groups` must be configured, and every `target` must reference an existing upstream group name.
+- Validate your config and exit:
+
+```bash
+loadants --test -c ./config.yaml
+```
 
 ### 🚀 Quick Start
 

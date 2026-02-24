@@ -8,19 +8,17 @@
 
 ### 可用配方
 
--   **[终极广告与追踪器拦截](./ad-blocking.md)**
+- **[终极广告与追踪器拦截](./ad-blocking.md)**
+    - _目标_：搭建一个强大的、全网络范围的广告和恶意追踪器过滤系统。
+    - _涉及模块_：`remote_rules`, `static_rules`, `cache`。
 
-    -   _目标_：搭建一个强大的、全网络范围的广告和恶意追踪器过滤系统。
-    -   _涉及模块_：`remote_rules`, `static_rules`, `cache`。
+- **[流媒体服务地理封锁解除](./geo-unblocking.md)**
+    - _目标_：为特定流媒体服务（如 Netflix）配置代理，实现跨区访问，同时保持其他流量直连。
+    - _涉及模块_：`upstream_groups` (带 `proxy` 配置), `routing_rules` (使用 `regex` 匹配)。
 
--   **[流媒体服务地理封锁解除](./geo-unblocking.md)**
-
-    -   _目标_：为特定流媒体服务（如 Netflix）配置代理，实现跨区访问，同时保持其他流量直连。
-    -   _涉及模块_：`upstream_groups` (带 `proxy` 配置), `routing_rules` (使用 `regex` 匹配)。
-
--   **[为你的家庭实验室提供内部 DNS](./homelab-dns.md)**
-    -   _目标_：为你内部网络的服务（如 `nas.local`, `plex.local`）提供简单、易于管理的 DNS 解析。
-    -   _涉及模块_：`static_rules` (使用 `exact` 匹配)。
+- **[为你的家庭实验室提供内部 DNS](./homelab-dns.md)**
+    - _目标_：为你内部网络的服务（如 `nas.local`, `plex.local`）提供简单、易于管理的 DNS 解析。
+    - _涉及模块_：`static_rules` (使用 `exact` 匹配)。
 
 跟随这些配方，你将能更深入地体会到 Load Ants 的灵活性和强大功能。
 
@@ -28,6 +26,6 @@
 
 ### 下一步
 
--   [➡️ 实现广告屏蔽](./ad-blocking.md)
--   [➡️ 实现 GEO 解锁](./geo-unblocking.md)
--   [➡️ 用于家庭实验网络](./homelab-dns.md)
+- [➡️ 实现广告屏蔽](./ad-blocking.md)
+- [➡️ 实现 GEO 解锁](./geo-unblocking.md)
+- [➡️ 用于家庭实验网络](./homelab-dns.md)

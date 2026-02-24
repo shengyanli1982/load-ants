@@ -1,7 +1,7 @@
 use loadants::{
-    doh::server::DoHServer, metrics::METRICS, rule_source_labels, rule_type_labels,
-    server::DnsServerConfig, subsystem_names, AdminServer, AppError, Args, Config, DnsCache,
-    DnsServer, MatchType, RequestHandler, Router, UpstreamManager,
+    doh::server::DoHServer, metrics::METRICS, r#const::server_defaults, rule_source_labels,
+    rule_type_labels, server::DnsServerConfig, subsystem_names, AdminServer, AppError, Args,
+    Config, DnsCache, DnsServer, MatchType, RequestHandler, Router, UpstreamManager,
 };
 use mimalloc::MiMalloc;
 use std::process;
@@ -56,6 +56,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
+    if let Err(e) = config.validate_runtime_requirements() {
+        error!("Invalid configuration: {}", e);
+        process::exit(1);
+    }
+
     // 如果是测试模式，成功验证配置后退出
     if args.test_config {
         info!("Configuration file validation successful");
@@ -77,13 +82,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let dns_server = components.dns_server;
         s.start(SubsystemBuilder::new(
             subsystem_names::DNS_SERVER,
-            move |s| async move { dns_server.run(s).await },
+            dns_server.into_subsystem(),
         ));
         // 启动管理服务器子系统
         let admin_server = components.admin_server;
         s.start(SubsystemBuilder::new(
             subsystem_names::ADMIN_SERVER,
-            move |s| async move { admin_server.run(s).await },
+            admin_server.into_subsystem(),
         ));
         // 启动DoH服务器子系统
         if let Some(doh_server) = components.doh_server {
@@ -126,8 +131,13 @@ struct AppComponents {
 async fn create_components(config: Config) -> Result<AppComponents, AppError> {
     // 创建 DNS 缓存
     let cache = if let Some(cache_config) = &config.cache {
+        let cache_size = if cache_config.enabled {
+            cache_config.max_size
+        } else {
+            0
+        };
         let cache = Arc::new(DnsCache::new(
-            cache_config.max_size,
+            cache_size,
             cache_config.min_ttl,
             Some(cache_config.negative_ttl),
         ));
@@ -136,9 +146,6 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
                 "DNS cache enabled, size: {}, min TTL: {}s, negative TTL: {}s",
                 cache_config.max_size, cache_config.min_ttl, cache_config.negative_ttl
             );
-
-            // 设置缓存容量指标
-            METRICS.cache_capacity().set(cache_config.max_size as i64);
         } else {
             info!("DNS cache disabled");
         }
@@ -151,10 +158,13 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
 
     // 创建管理服务器
     let admin_listen_addr = match &config.admin {
-        Some(admin_config) => admin_config.listen.parse().unwrap(),
+        Some(admin_config) => admin_config.listen.parse()?,
         None => {
-            warn!("Admin server configuration not provided, using default address 127.0.0.1:8080");
-            "127.0.0.1:8080".parse().unwrap()
+            warn!(
+                "Admin server configuration not provided, using default address {}",
+                server_defaults::DEFAULT_ADMIN_LISTEN
+            );
+            server_defaults::DEFAULT_ADMIN_LISTEN.parse()?
         }
     };
     let admin_server = AdminServer::new(admin_listen_addr).with_cache(Arc::clone(&cache));
@@ -303,13 +313,13 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
         udp_bind_addr: config.server.listen_udp.parse()?,
         tcp_bind_addr: config.server.listen_tcp.parse()?,
         tcp_timeout: config.server.tcp_timeout,
+        // DNS 服务器当前并不依赖 HTTP 监听地址；若未配置，则使用一个占位地址避免 panic。
         http_bind_addr: config
             .server
             .listen_http
-            .as_ref()
-            .expect("HTTP bind address is required")
-            .parse()
-            .unwrap(),
+            .as_deref()
+            .unwrap_or("127.0.0.1:0")
+            .parse()?,
         http_timeout: config.server.http_timeout,
     };
 
@@ -324,7 +334,7 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
         );
         // 创建 DoH 服务器
         Some(DoHServer::new(
-            listen_http.parse().unwrap(),
+            listen_http.parse()?,
             config.server.http_timeout,
             handler,
         ))

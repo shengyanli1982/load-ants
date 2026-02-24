@@ -9,18 +9,29 @@ use std::path::PathBuf;
     name = "loadants",
     author,
     version,
-    about = "An lightweight DNS forwarder converting UDP/TCP queries to DoH\n\n\
-             Key Features:\n\
-             - Protocol Conversion: UDP/53 and TCP/53 DNS requests to DNS-over-HTTPS (RFC 8484)\n\
-             - Intelligent Routing: Exact domain matching, Wildcard domain matching, Regex pattern matching\n\
-             - Upstream Management: Server grouping, Multiple load balancing strategies (RR, WRR, Random)\n\
-             - Authentication Support: HTTP Basic Auth and Bearer Token for upstream DoH servers\n\
-             - Performance Optimization: Built-in DNS caching, Reusable HTTP connection pool\n\
-             - Reliability: Automatic retry mechanism for failed DoH requests\n\
-             - Usability: Simple YAML configuration, Configuration validation, Command-line interface\n\n\
-             Author: shengyanli1982\n\
-             Email: shengyanlee36@gmail.com\n\
-             GitHub: https://github.com/shengyanli1982"
+    about = r#"
+ __         ______     ______     _____     ______     __   __     ______   ______    
+/\ \       /\  __ \   /\  __ \   /\  __-.  /\  __ \   /\ "-.\ \   /\__  _\ /\  ___\   
+\ \ \____  \ \ \/\ \  \ \  __ \  \ \ \/\ \ \ \  __ \  \ \ \-.  \  \/_/\ \/ \ \___  \  
+ \ \_____\  \ \_____\  \ \_\ \_\  \ \____-  \ \_\ \_\  \ \_\\"\_\    \ \_\  \/\_____\ 
+  \/_____/   \/_____/   \/_/\/_/   \/____/   \/_/\/_/   \/_/ \/_/     \/_/   \/_____/ 
+          
+
+An lightweight DNS forwarder converting UDP/TCP queries or DoH requests to DoHServer
+
+Key Features:
+- Protocol Conversion: UDP/53 and TCP/53 DNS requests to DNS-over-HTTPS (RFC 8484)
+- Intelligent Routing: Exact domain matching, Wildcard domain matching, Regex pattern matching
+- Upstream Management: Server grouping, Multiple load balancing strategies (RR, WRR, Random)
+- Authentication Support: HTTP Basic Auth and Bearer Token for upstream DoH servers
+- Performance Optimization: Built-in DNS caching, Reusable HTTP connection pool
+- Reliability: Automatic retry mechanism for failed DoH requests
+- Usability: Simple YAML configuration, Configuration validation, Command-line interfacen
+
+Author: shengyanli1982
+Email: shengyanlee36@gmail.com
+GitHub: https://github.com/shengyanli1982
+"#
 )]
 pub struct Args {
     // 配置文件路径
@@ -29,9 +40,9 @@ pub struct Args {
 
     // 测试配置
     #[arg(
-        short = 't', 
-        long = "test", 
-        action = ArgAction::SetTrue, 
+        short = 't',
+        long = "test",
+        action = ArgAction::SetTrue,
         help = "Test configuration file for validity and exit"
     )]
     pub test_config: bool,

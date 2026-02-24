@@ -6,7 +6,7 @@
 
 ### 先决条件
 
-1.  **二进制文件**: 你已经拥有了编译好的 `load-ants` 二进制文件。
+1.  **二进制文件**: 你已经拥有了编译好的 `loadants` 二进制文件。
 2.  **配置文件**: 你的 `config.yaml` 文件已经配置完毕。
 3.  **权限**: 你拥有 `sudo` 或 `root` 权限来创建服务文件和管理服务。
 
@@ -21,10 +21,10 @@
     ```
 
 2.  **复制二进制文件**:
-    假设你的二进制文件名为 `load-ants`，位于当前目录。
+    假设你的二进制文件名为 `loadants`，位于当前目录。
 
     ```bash
-    sudo cp ./load-ants /usr/local/bin/load-ants/
+    sudo cp ./loadants /usr/local/bin/load-ants/
     ```
 
 3.  **创建配置目录**:
@@ -63,7 +63,7 @@
     Type=simple
     User=root
     Group=root
-    ExecStart=/usr/local/bin/load-ants/load-ants -c /etc/load-ants/config.yaml
+    ExecStart=/usr/local/bin/load-ants/loadants -c /etc/load-ants/config.yaml
     Restart=on-failure
     RestartSec=5s
     LimitNOFILE=65535
@@ -74,13 +74,13 @@
 
 **参数解释**:
 
--   `Description`: 服务的简单描述。
--   `After=network.target`: 表示此服务应该在网络连接准备好之后启动。
--   `User`/`Group`: 指定运行服务的用户和组。使用 `root` 是因为 Load Ants 可能需要监听特权端口（如 53）。如果你的监听端口大于 1024，可以考虑使用一个非特权用户以增强安全性。更多信息请参考[安全最佳实践](./security.md)。
--   `ExecStart`: 定义启动服务的命令。我们使用 `-c` 参数明确指定配置文件的路径。
--   `Restart=on-failure`: 如果服务因非正常退出（例如崩溃）而停止，`systemd` 将尝试重启它。
--   `LimitNOFILE`: 增加进程可以打开的文件描述符数量的上限，这对于高并发的 DNS 服务很重要。
--   `WantedBy=multi-user.target`: 将服务安装到多用户运行级别，使其能在系统启动时自动运行。
+- `Description`: 服务的简单描述。
+- `After=network.target`: 表示此服务应该在网络连接准备好之后启动。
+- `User`/`Group`: 指定运行服务的用户和组。使用 `root` 是因为 Load Ants 可能需要监听特权端口（如 53）。如果你的监听端口大于 1024，可以考虑使用一个非特权用户以增强安全性。更多信息请参考[安全最佳实践](./security.md)。
+- `ExecStart`: 定义启动服务的命令。我们使用 `-c` 参数明确指定配置文件的路径。
+- `Restart=on-failure`: 如果服务因非正常退出（例如崩溃）而停止，`systemd` 将尝试重启它。
+- `LimitNOFILE`: 增加进程可以打开的文件描述符数量的上限，这对于高并发的 DNS 服务很重要。
+- `WantedBy=multi-user.target`: 将服务安装到多用户运行级别，使其能在系统启动时自动运行。
 
 ### 步骤三：管理服务
 
@@ -125,14 +125,14 @@
 
 ### 服务管理备忘单
 
--   **停止服务**: `sudo systemctl stop load-ants`
--   **重启服务**: `sudo systemctl restart load-ants`
--   **禁用开机自启**: `sudo systemctl disable load-ants`
+- **停止服务**: `sudo systemctl stop load-ants`
+- **重启服务**: `sudo systemctl restart load-ants`
+- **禁用开机自启**: `sudo systemctl disable load-ants`
 
 ---
 
 ### 下一步
 
--   [➡️ 了解安全注意事项](./security.md)
--   [➡️ 了解如何监控服务](./monitoring.md)
--   [➡️ 返回部署总览](./index.md)
+- [➡️ 了解安全注意事项](./security.md)
+- [➡️ 了解如何监控服务](./monitoring.md)
+- [➡️ 返回部署总览](./index.md)

@@ -6,6 +6,7 @@ use hickory_proto::{
     rr::{DNSClass, RecordType},
 };
 use moka::future::Cache;
+use moka::policy::Expiry;
 use rand::{seq::SliceRandom, thread_rng};
 use std::{
     sync::Arc,
@@ -48,6 +49,42 @@ struct CacheEntry {
     _ttl: u32,
 }
 
+struct CacheEntryExpiry;
+
+impl Expiry<CacheKey, CacheEntry> for CacheEntryExpiry {
+    fn expire_after_create(
+        &self,
+        _key: &CacheKey,
+        value: &CacheEntry,
+        _created_at: Instant,
+    ) -> Option<Duration> {
+        Some(Duration::from_secs(value._ttl as u64))
+    }
+
+    fn expire_after_read(
+        &self,
+        _key: &CacheKey,
+        _value: &CacheEntry,
+        _read_at: Instant,
+        duration_until_expiry: Option<Duration>,
+        _last_modified_at: Instant,
+    ) -> Option<Duration> {
+        // 固定 TTL（非 sliding），不因为读取而延长或缩短。
+        duration_until_expiry
+    }
+
+    fn expire_after_update(
+        &self,
+        _key: &CacheKey,
+        value: &CacheEntry,
+        _updated_at: Instant,
+        _duration_until_expiry: Option<Duration>,
+    ) -> Option<Duration> {
+        // 更新条目时，以新 value 的 ttl 重新计算过期时间。
+        Some(Duration::from_secs(value._ttl as u64))
+    }
+}
+
 // DNS缓存
 pub struct DnsCache {
     // 缓存存储
@@ -64,7 +101,12 @@ impl DnsCache {
     // 创建新的DNS缓存
     pub fn new(size: usize, min_ttl: u32, negative_ttl: Option<u32>) -> Self {
         // 验证配置
-        let size = size.clamp(cache_limits::MIN_SIZE, cache_limits::MAX_SIZE);
+        // size=0 表示禁用缓存；此时不进行 clamp，避免“禁用但实际启用”的语义错误。
+        let size = if size == 0 {
+            0
+        } else {
+            size.clamp(cache_limits::MIN_SIZE, cache_limits::MAX_SIZE)
+        };
         let min_ttl = min_ttl.clamp(cache_limits::MIN_TTL, cache_limits::MAX_TTL);
         // 使用配置的负面缓存TTL或默认值
         let negative_ttl = negative_ttl
@@ -74,6 +116,8 @@ impl DnsCache {
         // 创建缓存
         let cache = Cache::builder()
             .max_capacity(size as u64)
+            // 按条目 TTL 过期（由 CacheEntry._ttl 决定）。
+            .expire_after(CacheEntryExpiry)
             // 过期时间为最大可能的TTL
             .time_to_live(Duration::from_secs(cache_limits::MAX_TTL as u64))
             .build();
@@ -85,6 +129,7 @@ impl DnsCache {
 
         // 设置缓存容量指标
         METRICS.cache_capacity().set(size as i64);
+        METRICS.cache_entries().set(0);
 
         Self {
             cache,
@@ -180,7 +225,9 @@ impl DnsCache {
         };
 
         // 计算TTL
-        let ttl = self.calculate_min_ttl(&response);
+        let ttl = self
+            .calculate_min_ttl(&response)
+            .clamp(cache_limits::MIN_TTL, cache_limits::MAX_TTL);
 
         // 记录TTL指标
         METRICS
@@ -204,7 +251,6 @@ impl DnsCache {
             .cache_operations_total()
             .with_label_values(&[cache_labels::INSERT])
             .inc();
-        METRICS.cache_entries().set(self.cache.entry_count() as i64);
 
         Ok(())
     }
@@ -293,12 +339,6 @@ impl DnsCache {
             }
         }
 
-        // 记录TTL调整
-        METRICS
-            .cache_operations_total()
-            .with_label_values(&[cache_labels::ADJUSTED])
-            .inc();
-
         min_ttl
     }
 
@@ -350,12 +390,6 @@ impl DnsCache {
             };
             record.set_ttl(new_ttl);
         }
-
-        // 记录TTL调整
-        METRICS
-            .cache_operations_total()
-            .with_label_values(&[cache_labels::ADJUSTED])
-            .inc();
     }
 
     // 获取缓存条目数量

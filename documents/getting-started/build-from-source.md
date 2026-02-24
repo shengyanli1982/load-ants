@@ -10,11 +10,10 @@
 
 在开始之前，请确保你的系统满足以下条件：
 
--   **Git**: 用于克隆项目源代码。
--   **Rust 工具链**: 这是构建项目的核心。根据 `README` 文件，项目推荐使用：
-
-    -   Rust `1.84.1` 或更高版本。
-    -   GCC `14.2.0` 或更高版本。
+- **Git**: 用于克隆项目源代码。
+- **Rust 工具链**: 这是构建项目的核心。根据 `README` 文件，项目推荐使用：
+    - Rust `1.84.1` 或更高版本。
+    - GCC `14.2.0` 或更高版本。
 
     如果你尚未安装 Rust，我们强烈建议通过 [rustup](https://rustup.rs/) 官方安装脚本来安装和管理你的 Rust 版本。`rustup` 会自动处理好编译器、包管理器 (`cargo`) 和标准库。
 
@@ -48,8 +47,8 @@ cargo build --release
 
 构建成功后，你可以在 `target/release/` 目录下找到生成的可执行文件。
 
--   **在 Linux / macOS 上**: 文件名为 `load-ants`
--   **在 Windows 上**: 文件名为 `load-ants.exe`
+- **在 Linux / macOS 上**: 文件名为 `loadants`
+- **在 Windows 上**: 文件名为 `loadants.exe`
 
 现在，你可以像在 [快速上手](./index.md) 指南中一样运行它：
 
@@ -62,10 +61,10 @@ cargo build --release
 
     ```
     # 在 Linux 或 macOS 上
-    ./target/release/load-ants -c ./config.yaml
+    ./target/release/loadants -c ./config.yaml
 
     # 在 Windows 上
-    .\target\release\load-ants.exe -c .\config.yaml
+    .\target\release\loadants.exe -c .\config.yaml
     ```
 
     > **注意**：如果你的 `config.yaml` 中配置了需要特权的端口（如 53），你可能需要使用 `sudo` 或以管理员身份运行此命令。
@@ -76,6 +75,6 @@ cargo build --release
 
 ### 下一步
 
--   [➡️ 探索不同的部署方式](../deployment/index.md)
--   [➡️ 学习核心概念](../concepts/index.md)
--   [➡️ 返回快速开始](./index.md)
+- [➡️ 探索不同的部署方式](../deployment/index.md)
+- [➡️ 学习核心概念](../concepts/index.md)
+- [➡️ 返回快速开始](./index.md)

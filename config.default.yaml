@@ -1,10 +1,12 @@
 # Load Ants 配置示例
+# 必选：表示该配置项必须提供
+# 可选：表示该配置项可以不提供，使用默认值
 
 # 服务器监听设置
 server:
   listen_udp: "0.0.0.0:53" # UDP 监听地址和端口
   listen_tcp: "0.0.0.0:53" # TCP 监听地址和端口
-  listen_http: "0.0.0.0:8080"
+  listen_http: "0.0.0.0:8080" # DOH 监听地址和端口
 
 # 管理服务器设置
 admin:
@@ -78,7 +80,6 @@ remote_rules:
       attempts: 3
       delay: 1
     proxy: "http://127.0.0.1:7890"
-    refresh: 60
 
   # 从URL获取代理列表
   - type: "url"

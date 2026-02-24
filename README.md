@@ -8,25 +8,37 @@
     </a>
 </div>
 
-<p align>
-    <!-- 徽章将放在这里。可以添加构建状态、许可证等相关徽章。 -->
+<p align="center">
+    <!-- 徽章：许可证、DeepWiki -->
     <a href="https://github.com/shengyanli1982/load-ants/blob/main/LICENSE"><img src="https://img.shields.io/github/license/shengyanli1982/load-ants" alt="license"></a>
+    <a href="https://deepwiki.com/shengyanli1982/load-ants"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
 </p>
 
 **Load Ants** 是一款专为提升网络隐私、安全与灵活性而生的高性能、多功能 DNS 代理服务。
 
 ### 核心功能
 
--   🔄 **协议转换**: 无缝将标准 DNS 查询转换为 DNS-over-HTTPS (DoH)。
--   🧠 **智能路由**: 根据域名模式（精确、通配符、正则）路由 DNS 查询。
--   ⚡ **高性能缓存**: 内置缓存机制，显著降低延迟。
--   🌐 **灵活上游管理**: 可将 DoH 服务器分组并配置多种负载均衡策略。
+- 🔄 **协议转换**: 无缝将标准 DNS 查询转换为 DNS-over-HTTPS (DoH)。
+- 🧠 **智能路由**: 根据域名模式（精确、通配符、正则）路由 DNS 查询。
+- ⚡ **高性能缓存**: 内置缓存机制，显著降低延迟。
+- 🌐 **灵活上游管理**: 可将 DoH 服务器分组并配置多种负载均衡策略。
 
 ### 📚 阅读完整文档！
 
 所有详细文档，包括配置、部署指南和高级用法，均已迁移至我们的专属文档网站。
 
 **[➡️ 访问官方文档网站](https://shengyanli1982.github.io/load-ants/)**
+
+### 配置校验（重要）
+
+- 必须至少配置 `static_rules` 或 `remote_rules` 之一（至少一个规则来源）。
+- 必须至少存在一个 `action: forward` 的规则，否则程序会在启动阶段报错退出。
+- 只要存在任何 `forward` 规则：必须配置 `upstream_groups`，且所有 `target` 必须引用已存在的上游组名。
+- 可用命令校验配置（校验通过后直接退出）：
+
+```bash
+loadants --test -c ./config.yaml
+```
 
 ### 🚀 快速开始
 

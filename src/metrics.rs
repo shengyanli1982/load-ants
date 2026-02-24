@@ -120,7 +120,10 @@ impl DnsMetrics {
         .unwrap();
 
         let cache_operations_total = IntCounterVec::new(
-            opts!("loadants_cache_operations_total", "Total cache operations, classified by operation type (hit, miss, insert, evict, expire)"),
+            opts!(
+                "loadants_cache_operations_total",
+                "Total cache operations, classified by operation type (hit, miss, insert, insert_error, clear)"
+            ),
             &["operation"]
         ).unwrap();
 

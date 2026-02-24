@@ -190,14 +190,8 @@ fn rdata_to_string(rdata: Option<&RData>) -> String {
 
             // The Display trait for SvcParam is expected to format as "key=value".
             for (key, value) in svcb.svc_params() {
-                write!(
-                    s,
-                    " {
-                }={
-                }",
-                    key, value
-                )
-                .unwrap();
+                // 写入到 String 的 fmt::Write 理论上不会失败，这里保持 unwrap 简化逻辑。
+                write!(s, " {}={}", key, value).unwrap();
             }
             s
         }

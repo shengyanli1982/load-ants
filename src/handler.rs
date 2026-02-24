@@ -1,7 +1,6 @@
 use crate::{
-    cache_labels, error_labels, metrics::METRICS, processing_labels, protocol_labels,
-    rule_action_labels, rule_source_labels, rule_type_labels, AppError, DnsCache, RouteAction,
-    Router, UpstreamManager,
+    cache_labels, error_labels, metrics::METRICS, processing_labels, protocol_labels, AppError,
+    DnsCache, RouteAction, Router, UpstreamManager,
 };
 use hickory_proto::op::{Message, MessageType, ResponseCode};
 use std::sync::Arc;
@@ -200,23 +199,6 @@ impl RequestHandler {
             route_match_time.elapsed()
         );
 
-        // 记录路由匹配指标
-        METRICS
-            .route_matches_total()
-            .with_label_values(&[
-                route_match.rule_type,
-                route_match
-                    .target
-                    .as_deref()
-                    .unwrap_or(rule_type_labels::NO_TARGET),
-                rule_source_labels::STATIC,
-                match route_match.action {
-                    RouteAction::Forward => rule_action_labels::FORWARD,
-                    RouteAction::Block => rule_action_labels::BLOCK,
-                },
-            ])
-            .inc();
-
         debug!(
             "Route match: {} -> Rule type: '{}', Pattern: '{}', Action: {:?}, Target: {}",
             query_name.to_utf8(),
@@ -295,12 +277,6 @@ impl RequestHandler {
         let cache_insert_time = Instant::now();
         if let Err(e) = self.cache.insert(request, response).await {
             warn!("Cache insertion failed: {}", e);
-
-            // 记录错误指标
-            METRICS
-                .cache_operations_total()
-                .with_label_values(&[cache_labels::INSERT_ERROR])
-                .inc();
         } else {
             info!(
                 "Cache insertion for {} took {:?}",

@@ -1,4 +1,4 @@
-use crate::config::validate_socket_addr;
+use crate::config::{validate_idle_timeout, validate_keepalive, validate_socket_addr};
 use crate::r#const::{cache_limits, http_client_limits, server_defaults, timeout_limits};
 use serde::{Deserialize, Serialize};
 use validator::{Validate, ValidationError};
@@ -22,8 +22,16 @@ pub struct HttpClientConfig {
     ))]
     pub request_timeout: u64,
     // 空闲连接超时（秒）（可选）
+    #[validate(custom(
+        function = "validate_idle_timeout",
+        message = "Idle timeout must be between minimum and maximum values"
+    ))]
     pub idle_timeout: Option<u64>,
     // TCP Keepalive（秒）（可选）
+    #[validate(custom(
+        function = "validate_keepalive",
+        message = "Keepalive must be between minimum and maximum values"
+    ))]
     pub keepalive: Option<u32>,
     // HTTP用户代理（可选）
     pub agent: Option<String>,
@@ -47,7 +55,8 @@ impl HttpClientConfig {
     pub fn validate_optional_fields(&self) -> Result<(), ValidationError> {
         // 验证空闲超时
         if let Some(idle_timeout) = self.idle_timeout {
-            if !(http_client_limits::MIN_IDLE_TIMEOUT..=http_client_limits::MAX_IDLE_TIMEOUT).contains(&idle_timeout)
+            if !(http_client_limits::MIN_IDLE_TIMEOUT..=http_client_limits::MAX_IDLE_TIMEOUT)
+                .contains(&idle_timeout)
             {
                 return Err(ValidationError::new("idle_timeout_out_of_range"));
             }
@@ -55,7 +64,8 @@ impl HttpClientConfig {
 
         // 验证keepalive
         if let Some(keepalive) = self.keepalive {
-            if !(http_client_limits::MIN_KEEPALIVE..=http_client_limits::MAX_KEEPALIVE).contains(&keepalive)
+            if !(http_client_limits::MIN_KEEPALIVE..=http_client_limits::MAX_KEEPALIVE)
+                .contains(&keepalive)
             {
                 return Err(ValidationError::new("keepalive_out_of_range"));
             }

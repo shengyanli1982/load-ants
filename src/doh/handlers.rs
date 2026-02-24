@@ -22,6 +22,10 @@ use tracing::{error, info, warn};
 
 // 定义一个元组来包含错误信息
 type DohError = (StatusCode, &'static str);
+type DohQueryType = Cow<'static, str>;
+type DohHandlerError = (StatusCode, &'static str, DohQueryType);
+type DohBinaryHandlerResult = Result<(HeaderMap, Vec<u8>), DohHandlerError>;
+type DohResponseHandlerResult = Result<Response, DohHandlerError>;
 
 /// 根据记录类型高效地返回一个 Cow<'static, str>
 /// 对于常见类型，它借用一个静态字符串，避免了分配。
@@ -99,63 +103,62 @@ pub async fn handle_doh_get(
 ) -> impl IntoResponse {
     let start_time = Instant::now();
 
-    let result: Result<(HeaderMap, Vec<u8>), (StatusCode, &'static str, Cow<'static, str>)> =
-        async {
-            // 提取 DNS 查询参数
-            let dns_param = &params.dns;
+    let result: DohBinaryHandlerResult = async {
+        // 提取 DNS 查询参数
+        let dns_param = &params.dns;
 
-            // 解码 base64url DNS 消息
-            let dns_bytes = URL_SAFE_NO_PAD.decode(dns_param).map_err(|_| {
-                (
-                    StatusCode::BAD_REQUEST,
-                    processing_labels::error_types::BAD_REQUEST,
-                    Cow::from(protocol_labels::UNKNOWN),
-                )
-            })?;
+        // 解码 base64url DNS 消息
+        let dns_bytes = URL_SAFE_NO_PAD.decode(dns_param).map_err(|_| {
+            (
+                StatusCode::BAD_REQUEST,
+                processing_labels::error_types::BAD_REQUEST,
+                Cow::from(protocol_labels::UNKNOWN),
+            )
+        })?;
 
-            // 解析 DNS 消息
-            let dns_message = Message::from_vec(&dns_bytes).map_err(|_| {
-                (
-                    StatusCode::BAD_REQUEST,
-                    processing_labels::error_types::BAD_REQUEST,
-                    Cow::from(protocol_labels::UNKNOWN),
-                )
-            })?;
+        // 解析 DNS 消息
+        let dns_message = Message::from_vec(&dns_bytes).map_err(|_| {
+            (
+                StatusCode::BAD_REQUEST,
+                processing_labels::error_types::BAD_REQUEST,
+                Cow::from(protocol_labels::UNKNOWN),
+            )
+        })?;
 
-            // 提前获取查询类型，以便在错误日志中也能使用
-            let query_type = dns_message
-                .queries()
-                .first()
-                .map(|q| record_type_to_cow_str(q.query_type()))
-                .unwrap_or(Cow::from(protocol_labels::UNKNOWN));
+        // 提前获取查询类型，以便在错误日志中也能使用
+        let query_type = dns_message
+            .queries()
+            .first()
+            .map(|q| record_type_to_cow_str(q.query_type()))
+            .unwrap_or(Cow::from(protocol_labels::UNKNOWN));
 
-            // 处理 DNS 消息
-            let response = process_dns_message(&state, &dns_message)
-                .await
-                .map_err(|(status, err_type)| (status, err_type, query_type.clone()))?;
+        // 处理 DNS 消息
+        let response = process_dns_message(&state, &dns_message)
+            .await
+            .map_err(|(status, err_type)| (status, err_type, query_type.clone()))?;
 
-            // 编码 DNS 响应消息
-            let response_bytes = response.to_vec().map_err(|_| {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    processing_labels::error_types::MESSAGE_ENCODE_ERROR,
-                    query_type.clone(),
-                )
-            })?;
+        // 编码 DNS 响应消息
+        let response_bytes = response.to_vec().map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                processing_labels::error_types::MESSAGE_ENCODE_ERROR,
+                query_type.clone(),
+            )
+        })?;
 
-            // 构建 HTTP 响应
-            let mut headers = HeaderMap::new();
-            headers.insert(
-                header::CONTENT_TYPE,
-                header::HeaderValue::from_static(http_headers::content_types::DNS_MESSAGE),
-            );
+        // 构建 HTTP 响应
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::CONTENT_TYPE,
+            header::HeaderValue::from_static(http_headers::content_types::DNS_MESSAGE),
+        );
 
-            // 记录成功的指标
-            record_doh_metrics(start_time, &query_type, addr, &Ok(StatusCode::OK), None);
+        // 记录成功的指标
+        record_doh_metrics(start_time, &query_type, addr, &Ok(StatusCode::OK), None);
 
-            Ok((headers, response_bytes))
-        }
-        .await;
+        Ok((headers, response_bytes))
+    }
+    .await;
 
     match result {
         Ok((headers, body)) => (StatusCode::OK, headers, body).into_response(),
@@ -184,67 +187,66 @@ pub async fn handle_doh_post(
 ) -> impl IntoResponse {
     let start_time = Instant::now();
 
-    let result: Result<(HeaderMap, Vec<u8>), (StatusCode, &'static str, Cow<'static, str>)> =
-        async {
-            // 验证内容类型
-            if let Some(content_type) = headers.get(header::CONTENT_TYPE) {
-                if content_type != http_headers::content_types::DNS_MESSAGE {
-                    return Err((
-                        StatusCode::UNSUPPORTED_MEDIA_TYPE,
-                        processing_labels::error_types::UNSUPPORTED_MEDIA_TYPE,
-                        Cow::from(protocol_labels::UNKNOWN),
-                    ));
-                }
-            } else {
+    let result: DohBinaryHandlerResult = async {
+        // 验证内容类型
+        if let Some(content_type) = headers.get(header::CONTENT_TYPE) {
+            if content_type != http_headers::content_types::DNS_MESSAGE {
                 return Err((
-                    StatusCode::BAD_REQUEST,
-                    processing_labels::error_types::BAD_REQUEST,
+                    StatusCode::UNSUPPORTED_MEDIA_TYPE,
+                    processing_labels::error_types::UNSUPPORTED_MEDIA_TYPE,
                     Cow::from(protocol_labels::UNKNOWN),
                 ));
             }
-
-            // 解析 DNS 消息
-            let dns_message = Message::from_vec(&body).map_err(|_| {
-                (
-                    StatusCode::BAD_REQUEST,
-                    processing_labels::error_types::BAD_REQUEST,
-                    Cow::from(protocol_labels::UNKNOWN),
-                )
-            })?;
-
-            // 提前获取查询类型，以便在错误日志中也能使用
-            let query_type = dns_message
-                .queries()
-                .first()
-                .map(|q| record_type_to_cow_str(q.query_type()))
-                .unwrap_or(Cow::from(protocol_labels::UNKNOWN));
-
-            // 处理 DNS 消息
-            let response = process_dns_message(&state, &dns_message)
-                .await
-                .map_err(|(status, err_type)| (status, err_type, query_type.clone()))?;
-
-            // 编码 DNS 响应消息
-            let response_bytes = response.to_vec().map_err(|_| {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    processing_labels::error_types::MESSAGE_ENCODE_ERROR,
-                    query_type.clone(),
-                )
-            })?;
-
-            // 构建 HTTP 响应
-            let mut headers = HeaderMap::new();
-            headers.insert(
-                header::CONTENT_TYPE,
-                header::HeaderValue::from_static(http_headers::content_types::DNS_MESSAGE),
-            );
-            // 记录成功的指标
-            record_doh_metrics(start_time, &query_type, addr, &Ok(StatusCode::OK), None);
-
-            Ok((headers, response_bytes))
+        } else {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                processing_labels::error_types::BAD_REQUEST,
+                Cow::from(protocol_labels::UNKNOWN),
+            ));
         }
-        .await;
+
+        // 解析 DNS 消息
+        let dns_message = Message::from_vec(&body).map_err(|_| {
+            (
+                StatusCode::BAD_REQUEST,
+                processing_labels::error_types::BAD_REQUEST,
+                Cow::from(protocol_labels::UNKNOWN),
+            )
+        })?;
+
+        // 提前获取查询类型，以便在错误日志中也能使用
+        let query_type = dns_message
+            .queries()
+            .first()
+            .map(|q| record_type_to_cow_str(q.query_type()))
+            .unwrap_or(Cow::from(protocol_labels::UNKNOWN));
+
+        // 处理 DNS 消息
+        let response = process_dns_message(&state, &dns_message)
+            .await
+            .map_err(|(status, err_type)| (status, err_type, query_type.clone()))?;
+
+        // 编码 DNS 响应消息
+        let response_bytes = response.to_vec().map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                processing_labels::error_types::MESSAGE_ENCODE_ERROR,
+                query_type.clone(),
+            )
+        })?;
+
+        // 构建 HTTP 响应
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::CONTENT_TYPE,
+            header::HeaderValue::from_static(http_headers::content_types::DNS_MESSAGE),
+        );
+        // 记录成功的指标
+        record_doh_metrics(start_time, &query_type, addr, &Ok(StatusCode::OK), None);
+
+        Ok((headers, response_bytes))
+    }
+    .await;
 
     match result {
         Ok((headers, body)) => (StatusCode::OK, headers, body).into_response(),
@@ -272,7 +274,7 @@ pub async fn handle_json_get(
 ) -> impl IntoResponse {
     let start_time = Instant::now();
 
-    let result: Result<Response, (StatusCode, &'static str, Cow<'static, str>)> = async {
+    let result: DohResponseHandlerResult = async {
         // 提取必要的查询参数
         let name = &params.name;
         if name.is_empty() {
