@@ -82,7 +82,7 @@ jobs:
               if: runner.os == 'Windows'
               run: |
                   # 安装指定版本的 MSYS2
-                  choco install msys2 --version=20250221.0.0 --allow-downgrade
+                  choco install msys2 --version=20251213.0.0 --allow-downgrade
                   # 刷新环境变量
                   refreshenv
                   # 使用 MSYS2 安装必要的工具链以及OpenSSL
