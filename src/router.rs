@@ -28,6 +28,12 @@ struct CompiledRegexRule {
     target: Option<Arc<String>>,
 }
 
+#[derive(Clone)]
+struct WildcardRule {
+    target: Option<Arc<String>>,
+    pattern: String,
+}
+
 // 添加类型别名用于简化复杂类型
 /// 路由规则元组类型，包含(模式, 动作, 目标)
 pub type RouteRuleTuple = (Option<String>, RouteAction, Option<Arc<String>>);
@@ -45,12 +51,12 @@ pub struct Router {
 
     // 通配符匹配规则树 - 分离block和forward规则
     // 键为反转后的域名后缀，值为(目标,原始模式)
-    wildcard_block_rules: BTreeMap<String, Option<Arc<String>>>,
-    wildcard_forward_rules: BTreeMap<String, Option<Arc<String>>>,
+    wildcard_block_rules: BTreeMap<String, WildcardRule>,
+    wildcard_forward_rules: BTreeMap<String, WildcardRule>,
 
     // 全局通配符规则（模式为 "*"）- 分离block和forward规则
-    global_wildcard_block_rule: Option<(Option<Arc<String>>, String)>,
-    global_wildcard_forward_rule: Option<(Option<Arc<String>>, String)>,
+    global_wildcard_block_rule: Option<WildcardRule>,
+    global_wildcard_forward_rule: Option<WildcardRule>,
 
     // 正则表达式匹配规则 - 分离block和forward规则
     regex_block_rules: Vec<CompiledRegexRule>,
@@ -77,6 +83,19 @@ pub struct RouteMatch {
 }
 
 impl Router {
+    #[inline(always)]
+    fn normalize_domain_like(mut s: String) -> String {
+        if s.ends_with('.') {
+            s.pop();
+        }
+        if s.is_ascii() {
+            s.make_ascii_lowercase();
+        } else {
+            s = s.to_lowercase();
+        }
+        s
+    }
+
     // 反转域名标签，例如 "example.com" -> "com.example"
     // 这个函数在 `find_match` 方法中被多次调用，因此使用 `#[inline(always)]` 优化
     #[inline(always)]
@@ -168,6 +187,7 @@ impl Router {
                 MatchType::Exact => {
                     // 添加精确匹配规则，根据动作类型分别存储
                     for pattern in rule.patterns {
+                        let pattern = Self::normalize_domain_like(pattern);
                         match rule.action {
                             RouteAction::Block => {
                                 exact_block_rules.insert(pattern, target.clone());
@@ -187,28 +207,53 @@ impl Router {
                                     if global_wildcard_block_rule.is_some() {
                                         debug!("Multiple definitions of global wildcard block rule '*', using the last one");
                                     }
-                                    global_wildcard_block_rule = Some((target.clone(), pattern));
+                                    global_wildcard_block_rule = Some(WildcardRule {
+                                        target: target.clone(),
+                                        pattern,
+                                    });
                                 }
                                 RouteAction::Forward => {
                                     if global_wildcard_forward_rule.is_some() {
                                         debug!("Multiple definitions of global wildcard forward rule '*', using the last one");
                                     }
-                                    global_wildcard_forward_rule = Some((target.clone(), pattern));
+                                    global_wildcard_forward_rule = Some(WildcardRule {
+                                        target: target.clone(),
+                                        pattern,
+                                    });
                                 }
                             }
                         } else {
                             // 处理特定通配符规则：*.domain.tld
                             // 为了支持反向后缀匹配，将域名部分反转存储
-                            let suffix = &pattern[2..]; // 移除前导*.
-                            let reversed_suffix = Self::reverse_domain_labels(suffix);
+                            let suffix = pattern.strip_prefix("*.").ok_or_else(|| {
+                                ConfigError::InvalidRouteRule(format!(
+                                    "Invalid wildcard pattern '{}': expected '*.domain.tld' or '*'",
+                                    pattern
+                                ))
+                            })?;
+                            let suffix = Self::normalize_domain_like(suffix.to_string());
+                            let normalized_pattern = format!("*.{}", suffix);
+                            let reversed_suffix = Self::reverse_domain_labels(&suffix);
 
                             // 根据动作类型存储通配符规则
                             match rule.action {
                                 RouteAction::Block => {
-                                    wildcard_block_rules.insert(reversed_suffix, target.clone());
+                                    wildcard_block_rules.insert(
+                                        reversed_suffix,
+                                        WildcardRule {
+                                            target: target.clone(),
+                                            pattern: normalized_pattern,
+                                        },
+                                    );
                                 }
                                 RouteAction::Forward => {
-                                    wildcard_forward_rules.insert(reversed_suffix, target.clone());
+                                    wildcard_forward_rules.insert(
+                                        reversed_suffix,
+                                        WildcardRule {
+                                            target: target.clone(),
+                                            pattern: normalized_pattern,
+                                        },
+                                    );
                                 }
                             }
                         }
@@ -342,15 +387,19 @@ impl Router {
         loop {
             let key = &reversed[..end];
 
-            if let Some(target) = rules.get(key) {
-                let target_str = target
+            if let Some(rule) = rules.get(key) {
+                let target_str = rule
+                    .target
                     .as_ref()
                     .map(|s| s.as_str())
                     .unwrap_or(target_default);
 
                 debug!(
                     "Rule match: Wildcard {:?} match '{}' -> Pattern: '{}', Target: {}",
-                    action, domain, key, target_str
+                    action,
+                    domain,
+                    rule.pattern.as_str(),
+                    target_str
                 );
 
                 // 记录路由匹配指标
@@ -367,9 +416,9 @@ impl Router {
                 return Some(RouteMatch {
                     domain: domain.to_string(),
                     action,
-                    target: target.as_ref().map(|arc_str| arc_str.to_string()),
+                    target: rule.target.as_ref().map(|arc_str| arc_str.to_string()),
                     rule_type: rule_type_labels::WILDCARD,
-                    pattern: key.to_string(),
+                    pattern: rule.pattern.clone(),
                 });
             }
 
@@ -427,7 +476,10 @@ impl Router {
 
                 debug!(
                     "Rule match: Regex {:?} match '{}' -> Pattern: '{}', Target: {}",
-                    action, domain, rule.pattern, target_str
+                    action,
+                    domain,
+                    rule.pattern.as_str(),
+                    target_str
                 );
 
                 // 记录路由匹配指标
@@ -461,16 +513,20 @@ impl Router {
             RouteAction::Forward => &self.global_wildcard_forward_rule,
         };
 
-        if let Some((target, pattern)) = global_rule {
+        if let Some(rule) = global_rule {
             let target_default = rule_type_labels::NO_TARGET;
-            let target_str = target
+            let target_str = rule
+                .target
                 .as_ref()
                 .map(|s| s.as_str())
                 .unwrap_or(target_default);
 
             debug!(
                 "Rule match: Global wildcard {:?} match '{}' -> Pattern: '{}', Target: {}",
-                action, domain, pattern, target_str
+                action,
+                domain,
+                rule.pattern.as_str(),
+                target_str
             );
 
             // 记录路由匹配指标
@@ -487,9 +543,9 @@ impl Router {
             return Some(RouteMatch {
                 domain: domain.to_string(),
                 action,
-                target: target.as_ref().map(|arc_str| arc_str.to_string()),
+                target: rule.target.as_ref().map(|arc_str| arc_str.to_string()),
                 rule_type: rule_type_labels::WILDCARD,
-                pattern: pattern.clone(),
+                pattern: rule.pattern.clone(),
             });
         }
 

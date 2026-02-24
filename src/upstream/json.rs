@@ -60,6 +60,19 @@ pub mod dns_section {
 
 pub struct JsonConverter;
 
+fn normalize_txt_data(raw: &str) -> String {
+    // Google DoH JSON 的 TXT data 通常是一个字符串，有时会包含外层引号，或者使用 `""` 表示拼接。
+    // 这里尽量做保守归一化：去掉首尾引号，并把相邻的双引号当作拼接符移除。
+    let mut s = raw.trim().to_string();
+    if s.len() >= 2 && s.starts_with('"') && s.ends_with('"') {
+        s = s[1..s.len() - 1].to_string();
+    }
+    while s.contains("\"\"") {
+        s = s.replace("\"\"", "");
+    }
+    s
+}
+
 impl JsonConverter {
     // 将DNS消息转换为DNS JSON格式
     // https://developers.google.com/speed/public-dns/docs/doh/json
@@ -144,11 +157,6 @@ impl JsonConverter {
             response.set_checking_disabled(cd);
         }
 
-        // 复制查询部分
-        for q in query.queries() {
-            response.add_query(q.clone());
-        }
-
         // 处理Status字段，映射到响应码
         if let Some(status) = json.get(json_fields::STATUS).and_then(|s| s.as_u64()) {
             let rcode = match status {
@@ -163,27 +171,30 @@ impl JsonConverter {
             response.set_response_code(rcode);
         }
 
-        // 如果状态不是成功，可能不需要进一步处理（但处理Question部分）
-        if response.response_code() != ResponseCode::NoError {
-            // 即使有错误，Question部分也可能存在
-            if let Some(questions) = json.get(json_fields::QUESTION).and_then(|q| q.as_array()) {
-                for question in questions {
-                    // 只处理第一个Question，因为DNS消息通常只有一个查询
-                    if let (Some(name), Some(q_type)) = (
-                        question.get(json_fields::NAME).and_then(|n| n.as_str()),
-                        question.get(json_fields::TYPE).and_then(|t| t.as_u64()),
-                    ) {
-                        // 尝试解析域名
-                        if let Ok(domain) = Name::parse(name, None) {
-                            let record_type = RecordType::from(q_type as u16);
-                            // 重新创建查询
-                            let query_record = Query::query(domain, record_type);
-                            response.add_query(query_record);
-                        }
+        // 填充 Question/Query：优先使用 JSON 响应里的 Question（如果存在且可解析），否则回退到原始 query。
+        let mut added_query = false;
+        if let Some(questions) = json.get(json_fields::QUESTION).and_then(|q| q.as_array()) {
+            for question in questions {
+                if let (Some(name), Some(q_type)) = (
+                    question.get(json_fields::NAME).and_then(|n| n.as_str()),
+                    question.get(json_fields::TYPE).and_then(|t| t.as_u64()),
+                ) {
+                    if let Ok(domain) = Name::parse(name, None) {
+                        let record_type = RecordType::from(q_type as u16);
+                        response.add_query(Query::query(domain, record_type));
+                        added_query = true;
                     }
                 }
             }
+        }
+        if !added_query {
+            for q in query.queries() {
+                response.add_query(q.clone());
+            }
+        }
 
+        // 如果状态不是成功，可能不需要进一步处理（但处理Question部分）
+        if response.response_code() != ResponseCode::NoError {
             // 如果JSON包含Comment字段，记录为调试信息
             if let Some(comment) = json.get(json_fields::COMMENT).and_then(|c| c.as_str()) {
                 debug!("DNS JSON response comment: {}", comment);
@@ -279,7 +290,7 @@ impl JsonConverter {
                 RecordType::TXT => {
                     // Google's JSON format for TXT provides a single string. We'll treat it as a single entry.
                     // For multiple strings, the format would be more complex.
-                    let txt_data = TXT::new(vec![data.to_string()]);
+                    let txt_data = TXT::new(vec![normalize_txt_data(data)]);
                     Some(Record::from_rdata(name, ttl as u32, RData::TXT(txt_data)))
                 }
                 RecordType::SRV => {

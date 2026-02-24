@@ -6,6 +6,7 @@ use hickory_proto::{
     rr::{DNSClass, RecordType},
 };
 use moka::future::Cache;
+use moka::policy::Expiry;
 use rand::{seq::SliceRandom, thread_rng};
 use std::{
     sync::Arc,
@@ -48,6 +49,42 @@ struct CacheEntry {
     _ttl: u32,
 }
 
+struct CacheEntryExpiry;
+
+impl Expiry<CacheKey, CacheEntry> for CacheEntryExpiry {
+    fn expire_after_create(
+        &self,
+        _key: &CacheKey,
+        value: &CacheEntry,
+        _created_at: Instant,
+    ) -> Option<Duration> {
+        Some(Duration::from_secs(value._ttl as u64))
+    }
+
+    fn expire_after_read(
+        &self,
+        _key: &CacheKey,
+        _value: &CacheEntry,
+        _read_at: Instant,
+        duration_until_expiry: Option<Duration>,
+        _last_modified_at: Instant,
+    ) -> Option<Duration> {
+        // 固定 TTL（非 sliding），不因为读取而延长或缩短。
+        duration_until_expiry
+    }
+
+    fn expire_after_update(
+        &self,
+        _key: &CacheKey,
+        value: &CacheEntry,
+        _updated_at: Instant,
+        _duration_until_expiry: Option<Duration>,
+    ) -> Option<Duration> {
+        // 更新条目时，以新 value 的 ttl 重新计算过期时间。
+        Some(Duration::from_secs(value._ttl as u64))
+    }
+}
+
 // DNS缓存
 pub struct DnsCache {
     // 缓存存储
@@ -74,6 +111,8 @@ impl DnsCache {
         // 创建缓存
         let cache = Cache::builder()
             .max_capacity(size as u64)
+            // 按条目 TTL 过期（由 CacheEntry._ttl 决定）。
+            .expire_after(CacheEntryExpiry)
             // 过期时间为最大可能的TTL
             .time_to_live(Duration::from_secs(cache_limits::MAX_TTL as u64))
             .build();
@@ -180,7 +219,9 @@ impl DnsCache {
         };
 
         // 计算TTL
-        let ttl = self.calculate_min_ttl(&response);
+        let ttl = self
+            .calculate_min_ttl(&response)
+            .clamp(cache_limits::MIN_TTL, cache_limits::MAX_TTL);
 
         // 记录TTL指标
         METRICS

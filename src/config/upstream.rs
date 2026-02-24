@@ -59,7 +59,7 @@ fn validate_url_scheme(url: &Url) -> Result<(), ValidationError> {
 
 // 自定义验证函数 - 验证URL主机名
 fn validate_url_host(url: &Url) -> Result<(), ValidationError> {
-    if url.host_str().is_none() || url.host_str().unwrap().is_empty() {
+    if url.host_str().is_none_or(str::is_empty) {
         return Err(ValidationError::new("missing_url_hostname"));
     }
     Ok(())

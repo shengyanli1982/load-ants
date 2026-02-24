@@ -108,24 +108,21 @@ pub fn validate_retry_config(retry: &RetryConfig) -> Result<(), ValidationError>
 }
 
 // 自定义验证函数 - 验证空闲超时
-pub fn validate_idle_timeout(idle_timeout: &Option<u64>) -> Result<(), ValidationError> {
-    if let Some(timeout) = idle_timeout {
-        if *timeout < http_client_limits::MIN_IDLE_TIMEOUT
-            || *timeout > http_client_limits::MAX_IDLE_TIMEOUT
-        {
-            return Err(ValidationError::new("invalid_idle_timeout"));
-        }
+//
+// validator 对 Option<T> 字段会在 Some(T) 时把 T（按值）传入自定义校验函数，None 会被跳过。
+pub fn validate_idle_timeout(timeout: u64) -> Result<(), ValidationError> {
+    if !(http_client_limits::MIN_IDLE_TIMEOUT..=http_client_limits::MAX_IDLE_TIMEOUT)
+        .contains(&timeout)
+    {
+        return Err(ValidationError::new("invalid_idle_timeout"));
     }
     Ok(())
 }
 
 // 自定义验证函数 - 验证Keepalive
-pub fn validate_keepalive(keepalive: &Option<u32>) -> Result<(), ValidationError> {
-    if let Some(value) = keepalive {
-        if *value < http_client_limits::MIN_KEEPALIVE || *value > http_client_limits::MAX_KEEPALIVE
-        {
-            return Err(ValidationError::new("invalid_keepalive"));
-        }
+pub fn validate_keepalive(value: u32) -> Result<(), ValidationError> {
+    if !(http_client_limits::MIN_KEEPALIVE..=http_client_limits::MAX_KEEPALIVE).contains(&value) {
+        return Err(ValidationError::new("invalid_keepalive"));
     }
     Ok(())
 }

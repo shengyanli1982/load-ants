@@ -4,6 +4,7 @@ use loadants::{
     DnsServer, MatchType, RequestHandler, Router, UpstreamManager,
 };
 use mimalloc::MiMalloc;
+use std::net::SocketAddr;
 use std::process;
 use std::sync::Arc;
 use tokio_graceful_shutdown::{IntoSubsystem, SubsystemBuilder, Toplevel};
@@ -151,10 +152,10 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
 
     // 创建管理服务器
     let admin_listen_addr = match &config.admin {
-        Some(admin_config) => admin_config.listen.parse().unwrap(),
+        Some(admin_config) => admin_config.listen.parse()?,
         None => {
             warn!("Admin server configuration not provided, using default address 127.0.0.1:8080");
-            "127.0.0.1:8080".parse().unwrap()
+            SocketAddr::from(([127, 0, 0, 1], 8080))
         }
     };
     let admin_server = AdminServer::new(admin_listen_addr).with_cache(Arc::clone(&cache));
@@ -303,13 +304,13 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
         udp_bind_addr: config.server.listen_udp.parse()?,
         tcp_bind_addr: config.server.listen_tcp.parse()?,
         tcp_timeout: config.server.tcp_timeout,
+        // DNS 服务器当前并不依赖 HTTP 监听地址；若未配置，则使用一个占位地址避免 panic。
         http_bind_addr: config
             .server
             .listen_http
-            .as_ref()
-            .expect("HTTP bind address is required")
-            .parse()
-            .unwrap(),
+            .as_deref()
+            .unwrap_or("127.0.0.1:0")
+            .parse()?,
         http_timeout: config.server.http_timeout,
     };
 
@@ -324,7 +325,7 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
         );
         // 创建 DoH 服务器
         Some(DoHServer::new(
-            listen_http.parse().unwrap(),
+            listen_http.parse()?,
             config.server.http_timeout,
             handler,
         ))
