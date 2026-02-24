@@ -46,6 +46,7 @@ upstream_groups:
 | `content_type` | 字符串 | (可选) DoH 请求的内容类型。可选值为 `message` (对应 `application/dns-message`) 或 `json` (对应 `application/dns-json`)。注意：如果设为 `json`，`method` 必须为 `get`。 | `"message"` | 否       |
 | `auth`         | 对象   | (可选) 访问此特定服务器所需的认证配置。详见下方的 `auth` 参数详解。                                                                                                    | -           | 否       |
 
+<a id="auth-认证-参数详解"></a>
 ### `auth` (认证) 参数详解
 
 | 参数       | 类型   | 描述                                                                       | 默认值 | 是否必填                       |
@@ -57,6 +58,7 @@ upstream_groups:
 
 ---
 
+<a id="全局重试策略-retry"></a>
 ### `retry`（上游组级别重试策略）
 
 `retry` 位于**上游组内部**（与 `servers`、`proxy` 同级），用于控制向该组上游发起请求失败时的重试行为。

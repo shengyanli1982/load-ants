@@ -25,3 +25,6 @@ design/
 .idea/
 .DS_Store
 *.dat
+
+# MkDocs build output
+site/
