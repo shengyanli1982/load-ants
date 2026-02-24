@@ -29,9 +29,9 @@ pub struct Args {
 
     // 测试配置
     #[arg(
-        short = 't', 
-        long = "test", 
-        action = ArgAction::SetTrue, 
+        short = 't',
+        long = "test",
+        action = ArgAction::SetTrue,
         help = "Test configuration file for validity and exit"
     )]
     pub test_config: bool,

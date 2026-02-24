@@ -8,19 +8,20 @@
     </a>
 </div>
 
-<p align>
-    <!-- 徽章将放在这里。可以添加构建状态、许可证等相关徽章。 -->
+<p align="center">
+    <!-- 徽章：许可证、DeepWiki -->
     <a href="https://github.com/shengyanli1982/load-ants/blob/main/LICENSE"><img src="https://img.shields.io/github/license/shengyanli1982/load-ants" alt="license"></a>
+    <a href="https://deepwiki.com/shengyanli1982/load-ants"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
 </p>
 
 **Load Ants** 是一款专为提升网络隐私、安全与灵活性而生的高性能、多功能 DNS 代理服务。
 
 ### 核心功能
 
--   🔄 **协议转换**: 无缝将标准 DNS 查询转换为 DNS-over-HTTPS (DoH)。
--   🧠 **智能路由**: 根据域名模式（精确、通配符、正则）路由 DNS 查询。
--   ⚡ **高性能缓存**: 内置缓存机制，显著降低延迟。
--   🌐 **灵活上游管理**: 可将 DoH 服务器分组并配置多种负载均衡策略。
+- 🔄 **协议转换**: 无缝将标准 DNS 查询转换为 DNS-over-HTTPS (DoH)。
+- 🧠 **智能路由**: 根据域名模式（精确、通配符、正则）路由 DNS 查询。
+- ⚡ **高性能缓存**: 内置缓存机制，显著降低延迟。
+- 🌐 **灵活上游管理**: 可将 DoH 服务器分组并配置多种负载均衡策略。
 
 ### 📚 阅读完整文档！
 

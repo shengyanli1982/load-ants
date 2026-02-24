@@ -165,31 +165,28 @@ impl RemoteRuleLoader {
         // 将解析后的规则转换为RouteRuleConfig
         let mut route_rules = Vec::new();
 
-        // 根据匹配类型分组规则
-        let mut exact_patterns = Vec::new();
-        let mut wildcard_patterns = Vec::new();
-        let mut regex_patterns = Vec::new();
-
-        // 计数器，用于记录各类型规则数量
+        // 先计数再预分配容量，避免按 parsed_rules.len() 三倍预分配造成不必要的内存峰值。
         let mut exact_count = 0;
         let mut wildcard_count = 0;
         let mut regex_count = 0;
-
-        // 遍历解析后的规则，按类型分组
-        for (pattern, match_type) in &parsed_rules {
+        for (_, match_type) in &parsed_rules {
             match match_type {
-                MatchType::Exact => {
-                    exact_patterns.push(pattern.clone());
-                    exact_count += 1;
-                }
-                MatchType::Wildcard => {
-                    wildcard_patterns.push(pattern.clone());
-                    wildcard_count += 1;
-                }
-                MatchType::Regex => {
-                    regex_patterns.push(pattern.clone());
-                    regex_count += 1;
-                }
+                MatchType::Exact => exact_count += 1,
+                MatchType::Wildcard => wildcard_count += 1,
+                MatchType::Regex => regex_count += 1,
+            }
+        }
+
+        // 根据匹配类型分组规则（直接 move pattern，避免 clone）
+        let mut exact_patterns = Vec::with_capacity(exact_count);
+        let mut wildcard_patterns = Vec::with_capacity(wildcard_count);
+        let mut regex_patterns = Vec::with_capacity(regex_count);
+
+        for (pattern, match_type) in parsed_rules {
+            match match_type {
+                MatchType::Exact => exact_patterns.push(pattern),
+                MatchType::Wildcard => wildcard_patterns.push(pattern),
+                MatchType::Regex => regex_patterns.push(pattern),
             }
         }
 
@@ -231,7 +228,7 @@ impl RemoteRuleLoader {
 
         info!(
             "Loaded {} domains from {:?} ({}): {} exact, {} wildcard, {} regex",
-            parsed_rules.len(),
+            exact_count + wildcard_count + regex_count,
             self.config.url,
             action_label,
             exact_count,
