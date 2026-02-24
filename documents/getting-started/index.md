@@ -4,9 +4,9 @@
 
 ### 环境要求
 
--   一台计算机（Windows、Linux 或 macOS）。
--   能够访问互联网。
--   一个文本编辑器（如 VS Code、Notepad++、Vim 等）。
+- 一台计算机（Windows、Linux 或 macOS）。
+- 能够访问互联网。
+- 一个文本编辑器（如 VS Code、Notepad++、Vim 等）。
 
 ---
 
@@ -16,14 +16,14 @@
 
 例如，如果你使用的是 64 位的 Linux 系统，你应该下载名为 `load-ants-linux-amd64` 的文件。
 
-下载后，建议将文件重命名为 `load-ants` (Windows 用户可以重命名为 `load-ants.exe`)，并将其放置在一个专属的文件夹中，方便管理。
+下载后，建议将可执行文件重命名为 `loadants`（Windows 为 `loadants.exe`），并将其放置在一个专属的文件夹中，方便管理。
 
 ### 第二步：创建配置文件
 
 这是让 Load Ants 运行起来的关键。最简单的方式是**从默认配置开始**。
 
 1.  **获取 `config.default.yaml`**:
-    在项目的 [GitHub 仓库](https://github.com/shengyanli1982/load-ants) 中找到 `config.default.yaml` 文件，并将其下载到与 `load-ants` 程序相同的目录下。
+    在项目的 [GitHub 仓库](https://github.com/shengyanli1982/load-ants) 中找到 `config.default.yaml` 文件，并将其下载到与 `loadants` 程序相同的目录下。
 
 2.  **重命名并编辑**:
     将 `config.default.yaml` 重命名为 `config.yaml`。
@@ -38,8 +38,8 @@
 > ✨ **提示**: 默认的 `config.yaml` 文件已经为你配置好了：
 >
 > 1.  让 Load Ants 在本地的 `53` 端口上监听 DNS 请求。
-> 2.  定义了一个名为 `google_public` 的上游组，其中包含两个 Google DoH 服务器。
-> 3.  设置了一条默认规则，将所有收到的请求都转发给 `google_public` 组处理。
+> 2.  定义了多个上游组（例如 `google`、`public`），用于承载不同的上游 DoH 服务器集合。
+> 3.  提供了静态路由规则示例，并显式配置了一条默认的全局转发规则（将所有请求转发到某个上游组，例如 `public`）。
 
 ### 第三步：运行 Load Ants
 
@@ -49,20 +49,27 @@
 你可能需要先给程序添加执行权限：
 
 ```bash
-chmod +x ./load-ants
+chmod +x ./loadants
 ```
 
-然后，使用 `sudo`（因为需要绑定特权端口 53）运行程序：
+建议先验证配置（校验通过后直接退出）：
 
 ```bash
-sudo ./load-ants -c ./config.yaml
+./loadants --test -c ./config.yaml
+```
+
+然后，使用 `sudo`（因为需要绑定特权端口 53）启动程序：
+
+```bash
+sudo ./loadants -c ./config.yaml
 ```
 
 **对于 Windows 用户**:
 请**以管理员身份**打开命令提示符或 PowerShell，然后运行：
 
 ```powershell
-.\load-ants.exe -c .\config.yaml
+.\loadants.exe --test -c .\config.yaml
+.\loadants.exe -c .\config.yaml
 ```
 
 如果一切顺利，你将不会在终端看到任何错误信息，程序会在前台运行，并输出日志。
@@ -127,6 +134,6 @@ example.com.		172800	IN	A	93.184.216.34
 
 ### 下一步
 
--   [➡️ 使用 Docker 部署](./docker.md)
--   [➡️ 从源码构建](./build-from-source.md)
--   [➡️ 了解核心概念](../concepts/index.md)
+- [➡️ 使用 Docker 部署](./docker.md)
+- [➡️ 从源码构建](./build-from-source.md)
+- [➡️ 了解核心概念](../concepts/index.md)

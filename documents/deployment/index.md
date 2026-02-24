@@ -4,10 +4,10 @@
 
 在这里，你将学到：
 
--   **作为系统服务运行**: 如何将 Load Ants 设置为在后台持续运行的系统服务，确保其稳定性和开机自启。
--   **使用 Docker Compose**: 如何通过 `docker-compose` 编排 Load Ants 与其他应用（如 Web 服务、监控组件）的部署，实现高效的多容器管理。
--   **安全最佳实践**: 学习如何加固你的 Load Ants 实例，包括保护配置文件、管理敏感信息以及安全地暴露管理接口。
--   **监控与告警**: 如何接入 `Prometheus` 监控系统，实时观测性能指标，并为潜在问题设置告警。
+- **作为系统服务运行**: 如何将 Load Ants 设置为在后台持续运行的系统服务，确保其稳定性和开机自启。
+- **使用 Docker Compose**: 如何通过 `docker-compose` 编排 Load Ants 与其他应用（如 Web 服务、监控组件）的部署，实现高效的多容器管理。
+- **安全最佳实践**: 学习如何加固你的 Load Ants 实例，包括保护配置文件、管理敏感信息以及安全地暴露管理接口。
+- **监控与告警**: 如何接入 `Prometheus` 监控系统，实时观测性能指标，并为潜在问题设置告警。
 
 无论你是希望将 Load Ants 用于企业内部 DNS 解析、搭建高可用的 DNS 服务，还是仅仅想让你的个人项目更加专业，本章都将为你提供坚实的技术指导。
 
@@ -15,6 +15,6 @@
 
 ### 下一步
 
--   [➡️ 使用 Docker Compose 部署](./docker-compose.md)
--   [➡️ 部署为系统服务](./system-service.md)
--   [➡️ 在 Kubernetes 中部署](./kubernetes.md)
+- [➡️ 使用 Docker Compose 部署](./docker-compose.md)
+- [➡️ 部署为系统服务](./system-service.md)
+- [➡️ 在 Kubernetes 中部署](./kubernetes.md)

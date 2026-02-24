@@ -31,6 +31,14 @@ static_rules:
 | `action`   | 字符串 | 当匹配成功时执行的动作。可选值为 `block` (拦截) 或 `forward` (转发)。                                                | -      | **是**                            |
 | `target`   | 字符串 | 目标上游组的名称。仅在 `action` 为 `forward` 时需要。此名称必须与 `upstream_groups` 中定义的某个组的 `name` 相对应。 | -      | **是** (若 `action` 为 `forward`) |
 
+#### `patterns` 格式与校验规则（重要）
+
+- `patterns` 必须为非空列表（至少包含 1 个模式）。
+- 当 `match: "exact"`：每个模式是一个完整域名字符串；匹配时不区分大小写；允许末尾带 `.`（会被归一化处理）。
+- 当 `match: "wildcard"`：每个模式必须是 `*` 或 `*.domain.tld` 的形式；同样允许末尾带 `.`。
+- 当 `match: "regex"`：每个模式必须是一个合法的正则表达式（非法正则会导致加载配置失败）。
+- 当 `action: "forward"`：必须提供 `target`，且该值必须引用一个已存在的 `upstream_groups[].name`；另外，上游组名称必须唯一。
+
 ---
 
 ### `remote_rules` (远程规则)
@@ -63,6 +71,11 @@ remote_rules:
 | `auth`     | 对象   | (可选) 访问此规则文件 URL 所需的认证配置。结构与[上游组的 `auth` 配置](./upstream-groups.md#auth-认证-参数详解)相同。              | -                 | 否                                |
 | `retry`    | 对象   | (可选) 获取此规则文件时的网络重试策略。结构与[全局重试策略](./upstream-groups.md#全局重试策略-retry)相同，但此为该规则独享的配置。 | -                 | 否                                |
 | `max_size` | 整数   | (可选) 允许下载的远程规则文件的最大体积（字节）。                                                                                  | `10485760` (10MB) | 否                                |
+
+> **提示**：
+>
+> - `max_size` 的有效范围为 `1024`（1KB）到 `52428800`（50MB）。
+> - `remote_rules` 的下载会复用全局 `http_client` 的超时/连接池配置，但其 `proxy`/`auth`/`retry` 为规则源独享配置。
 
 > ✨ **专家提示**:
 >
@@ -140,6 +153,6 @@ static_rules:
 
 ### 下一步
 
--   [➡️ 回顾智能路由的核心概念](../concepts/routing.md)
--   [➡️ 了解上游组配置](./upstream-groups.md)
--   [➡️ 返回配置总览](./index.md)
+- [➡️ 回顾智能路由的核心概念](../concepts/routing.md)
+- [➡️ 了解上游组配置](./upstream-groups.md)
+- [➡️ 返回配置总览](./index.md)

@@ -4,8 +4,8 @@
 
 ### 目标
 
--   将对自定义本地域名（`.lan` 后缀）的 DNS 查询，转发给一个专门的本地 DNS 服务器进行解析。
--   所有其他正常的互联网域名查询，则通过 Load Ants 转发给常规的上游 DoH 服务器。
+- 将对自定义本地域名（`.lan` 后缀）的 DNS 查询，转发给一个专门的本地 DNS 服务器进行解析。
+- 所有其他正常的互联网域名查询，则通过 Load Ants 转发给常规的上游 DoH 服务器。
 
 ### 架构变更解释
 
@@ -91,6 +91,6 @@ static_rules:
 
 ### 下一步
 
--   [➡️ 学习广告拦截配方](./ad-blocking.md)
--   [➡️ 回顾路由规则配置](../configuration/routing-rules.md)
--   [➡️ 返回实例总览](./index.md)
+- [➡️ 学习广告拦截配方](./ad-blocking.md)
+- [➡️ 回顾路由规则配置](../configuration/routing-rules.md)
+- [➡️ 返回实例总览](./index.md)

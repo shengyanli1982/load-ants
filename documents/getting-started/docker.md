@@ -51,14 +51,14 @@ docker run -d \
 
 **命令解释**:
 
--   `-d`: 在后台（detached mode）运行容器。
--   `--name load-ants`: 为容器指定一个易于记忆的名称。
--   `-p 53:53/udp -p 53:53/tcp`: 将主机的 53 端口（DNS 标准端口）的 UDP 和 TCP 流量映射到容器的 53 端口。
--   `-p 9000:9000/tcp`: 将主机的 9000 端口映射到容器的 `admin` 服务端口。
--   `-v $(pwd)/load-ants-config:/app/config`: **非常重要**。将当前目录下的 `load-ants-config` 目录挂载到容器内的 `/app/config` 目录。这使得容器可以读取到你的配置文件。
--   `--restart unless-stopped`: 配置容器在退出时总是自动重启，除非它被手动停止。这对于保证服务的持续运行很有用。
--   `ghcr.io/shengyanli1982/load-ants-<arch>:latest`: 要使用的 Docker 镜像。推荐使用官方提供的最新镜像。
--   `-c /app/config/config.yaml`: 指定容器内配置文件的路径。
+- `-d`: 在后台（detached mode）运行容器。
+- `--name load-ants`: 为容器指定一个易于记忆的名称。
+- `-p 53:53/udp -p 53:53/tcp`: 将主机的 53 端口（DNS 标准端口）的 UDP 和 TCP 流量映射到容器的 53 端口。
+- `-p 9000:9000/tcp`: 将主机的 9000 端口映射到容器的 `admin` 服务端口。
+- `-v $(pwd)/load-ants-config:/app/config`: **非常重要**。将当前目录下的 `load-ants-config` 目录挂载到容器内的 `/app/config` 目录。这使得容器可以读取到你的配置文件。
+- `--restart unless-stopped`: 配置容器在退出时总是自动重启，除非它被手动停止。这对于保证服务的持续运行很有用。
+- `ghcr.io/shengyanli1982/load-ants-<arch>:latest`: 要使用的 Docker 镜像。推荐使用官方提供的最新镜像。
+- `-c /app/config/config.yaml`: 指定容器内配置文件的路径。
 
 ### 步骤四：验证服务
 
@@ -85,15 +85,15 @@ docker run -d \
 
 ### 停止和管理容器
 
--   **停止容器**:
+- **停止容器**:
     ```bash
     docker stop load-ants
     ```
--   **重新启动容器**:
+- **重新启动容器**:
     ```bash
     docker start load-ants
     ```
--   **移除容器**:
+- **移除容器**:
     ```bash
     # 必须先停止容器才能移除
     docker stop load-ants
@@ -104,6 +104,6 @@ docker run -d \
 
 ### 下一步
 
--   [➡️ 尝试用 Docker Compose 部署](../deployment/docker-compose.md)
--   [➡️ 学习核心概念](../concepts/index.md)
--   [➡️ 查阅所有配置选项](../configuration/index.md)
+- [➡️ 尝试用 Docker Compose 部署](../deployment/docker-compose.md)
+- [➡️ 学习核心概念](../concepts/index.md)
+- [➡️ 查阅所有配置选项](../configuration/index.md)

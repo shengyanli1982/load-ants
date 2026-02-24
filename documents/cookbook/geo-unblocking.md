@@ -4,9 +4,9 @@
 
 ### 目标
 
--   创建两个上游组：一个用于常规流量（直连），另一个用于需要特殊处理的流量（通过代理）。
--   使用正则表达式 (`regex`) 匹配来精确识别目标服务的域名。
--   将匹配到的 DNS 查询路由到"代理组"，其他所有查询路由到"直连组"。
+- 创建两个上游组：一个用于常规流量（直连），另一个用于需要特殊处理的流量（通过代理）。
+- 使用正则表达式 (`regex`) 匹配来精确识别目标服务的域名。
+- 将匹配到的 DNS 查询路由到"代理组"，其他所有查询路由到"直连组"。
 
 ### 先决条件
 
@@ -74,14 +74,13 @@ static_rules:
 **配置逻辑解读**:
 
 1.  **`upstream_groups`**:
-
-    -   `direct_group`: 一个标准的上游组，不走任何代理。
-    -   `streaming_proxy_group`: 这个组的特殊之处在于它配置了 `proxy` 字段。所有通过这个组转发的 DNS 查询，其网络流量都会经过 `http://proxy.example.com:8888`。
+    - `direct_group`: 一个标准的上游组，不走任何代理。
+    - `streaming_proxy_group`: 这个组的特殊之处在于它配置了 `proxy` 字段。所有通过这个组转发的 DNS 查询，其网络流量都会经过 `http://proxy.example.com:8888`。
 
 2.  **`static_rules`**:
-    -   Load Ants 会按照规则在列表中的顺序进行匹配。然而，更重要的是**匹配类型的优先级**：`exact` > `regex` > `wildcard`。
-    -   **规则 A 和 B**: 我们使用 `regex` 来捕获目标服务的域名。例如，`^(.*\\.)?netflix\\.com$` 可以匹配 `netflix.com`, `www.netflix.com`, `movies.prod.netflix.com` 等所有子域名。当 DNS 查询匹配到这些模式时，Load Ants 会执行 `forward` 动作，并把查询交给 `target` 指定的 `streaming_proxy_group`。
-    -   **规则 C**: `wildcard` 类型的 `"*"` 匹配所有域名，但它的优先级最低。因此，只有当一个查询**没有**匹配到任何 `regex` 规则时，它才会落到这个"全匹配"规则上，并被转发到 `direct_group`。
+    - Load Ants 的路由遵循“拦截优先（block first）”与“分层匹配”的原则：在 `block` 与 `forward` 两个阶段内部，匹配优先级为 `exact` > `wildcard` > `regex` > `*`（全局通配符）。
+    - **规则 A 和 B**: 我们使用 `regex` 来捕获目标服务的域名。例如，`^(.*\\.)?netflix\\.com$` 可以匹配 `netflix.com`, `www.netflix.com`, `movies.prod.netflix.com` 等所有子域名。当 DNS 查询匹配到这些模式时，Load Ants 会执行 `forward` 动作，并把查询交给 `target` 指定的 `streaming_proxy_group`。
+    - **规则 C**: `wildcard` 类型的 `"*"` 匹配所有域名，但它的优先级最低。因此，只有当一个查询**没有**匹配到任何 `regex` 规则时，它才会落到这个"全匹配"规则上，并被转发到 `direct_group`。
 
 ### 步骤二：启动和验证
 
@@ -89,13 +88,12 @@ static_rules:
     使用你偏好的方式启动 Load Ants（直接运行二进制文件，或通过 Docker/systemd）。
 
     ```bash
-    ./load-ants -c /path/to/your/config.yaml
+    ./loadants -c /path/to/your/config.yaml
     ```
 
 2.  **验证**:
     使用 `dig` 或 `nslookup`。
-
-    -   **测试一个常规域名**:
+    - **测试一个常规域名**:
 
         ```bash
         dig @localhost www.github.com
@@ -103,7 +101,7 @@ static_rules:
 
         你应该能看到一个正常的解析结果。在 Load Ants 的 `debug` 日志中，你会看到它被转发到了 `direct_group`。
 
-    -   **测试一个目标服务域名**:
+    - **测试一个目标服务域名**:
         ```bash
         dig @localhost www.netflix.com
         ```
@@ -117,6 +115,6 @@ static_rules:
 
 ### 下一步
 
--   [➡️ 回顾路由规则配置](../configuration/routing-rules.md)
--   [➡️ 尝试其他实例](./ad-blocking.md)
--   [➡️ 返回实例总览](./index.md)
+- [➡️ 回顾路由规则配置](../configuration/routing-rules.md)
+- [➡️ 尝试其他实例](./ad-blocking.md)
+- [➡️ 返回实例总览](./index.md)
