@@ -19,7 +19,7 @@ sudo chown root:root /etc/load-ants/config.yaml
 sudo chmod 600 /etc/load-ants/config.yaml
 ```
 
-### 2. 使用环境变量管理密钥
+### 2. 使用部署系统管理密钥（避免写入 `config.yaml`）
 
 你的配置文件中可能需要定义一些密钥信息，例如：
 
@@ -29,10 +29,9 @@ sudo chmod 600 /etc/load-ants/config.yaml
 
 将这些信息以纯文本形式存储在 `config.yaml` 中存在安全风险。一旦配置文件泄露，这些密钥也会随之暴露。
 
-Load Ants 支持使用环境变量来替代配置文件中的值，这是管理密钥信息的推荐方式。
-
-**工作原理**:
-你可以在 `config.yaml` 的值部分使用 `${VAR_NAME}` 或 `$VAR_NAME` 的语法，Load Ants 在启动时会自动用名为 `VAR_NAME` 的环境变量的值来替换它。
+> **重要**：当前版本的 Load Ants 不会在启动时自动展开 `config.yaml` 中的 `${VAR_NAME}` / `$VAR_NAME` 环境变量占位符。
+>
+> 推荐做法是：由部署系统在启动前渲染配置文件（模板 -> 实际 `config.yaml`），或使用 Secret/凭据管理能力注入运行环境。
 
 #### 示例
 
@@ -48,9 +47,9 @@ upstream_groups:
                 token: "MySuperSecretToken123" # 密钥硬编码
 ```
 
-**推荐的配置**:
+**推荐的配置（配置模板渲染）**:
 
-1.  **修改 `config.yaml`**:
+1.  **创建 `config.yaml.tpl`（模板文件）**:
 
     ```yaml
     upstream_groups:
@@ -62,30 +61,28 @@ upstream_groups:
                     token: "${DOH_TOKEN}" # 使用环境变量占位符
     ```
 
-2.  **设置环境变量**:
-    - **直接运行**:
+2.  **在启动前渲染模板**（示例使用 `envsubst`）：
+    - **直接运行（本机）**:
+
         ```bash
         export DOH_TOKEN="MySuperSecretToken123"
-        ./loadants -c config.yaml
+        envsubst < ./config.yaml.tpl > ./config.yaml
+        ./loadants -c ./config.yaml
         ```
-    - **对于 `systemd` 服务**:
-      在你的 `/etc/systemd/system/load-ants.service` 文件中的 `[Service]` 部分，使用 `Environment` 指令或 `EnvironmentFile` 指令。
+
+    - **对于 `systemd` 服务**：用 `EnvironmentFile` 管理密钥，并在启动前渲染配置：
+
         ```ini
         [Service]
-        # ...
-        Environment="DOH_TOKEN=MySuperSecretToken123"
+        EnvironmentFile=/etc/load-ants/load-ants.env
+        ExecStartPre=/bin/sh -lc 'envsubst < /etc/load-ants/config.yaml.tpl > /etc/load-ants/config.yaml'
         ExecStart=/usr/local/bin/load-ants/loadants -c /etc/load-ants/config.yaml
-        # ...
         ```
-        修改后记得运行 `sudo systemctl daemon-reload` 和 `sudo systemctl restart load-ants`。
-    - **对于 `docker-compose`**:
-      在 `docker-compose.yml` 文件中为 `load-ants` 服务添加 `environment` 部分。
-        ```yaml
-        services:
-            load-ants:
-                # ...
-                environment:
-                    - DOH_TOKEN=MySuperSecretToken123
+
+        然后在 `/etc/load-ants/load-ants.env` 中写入（注意权限控制）：
+
+        ```bash
+        DOH_TOKEN=MySuperSecretToken123
         ```
 
 ### 3. 保护 Admin API
@@ -97,7 +94,7 @@ Load Ants 的 `admin` 服务提供了运维端点（例如 `/health`、`/metrics
 - **仅在本地监听**: 确保 `admin` 的 `listen` 地址绑定到本地回环地址 (`127.0.0.1` 或 `localhost`)。这是默认行为，但你需要确保没有错误地将其配置为 `0.0.0.0`。
     ```yaml
     admin:
-        listen: "127.0.0.1:8080"
+        listen: "127.0.0.1:9000"
     ```
 - **使用防火墙**: 如果你必须从另一台机器访问 Admin API，请使用防火墙（如 `ufw`, `iptables`）来限制只有特定的、可信的 IP 地址才能访问该端口。
     ```bash

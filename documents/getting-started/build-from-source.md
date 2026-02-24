@@ -11,9 +11,10 @@
 在开始之前，请确保你的系统满足以下条件：
 
 - **Git**: 用于克隆项目源代码。
-- **Rust 工具链**: 这是构建项目的核心。根据 `README` 文件，项目推荐使用：
-    - Rust `1.84.1` 或更高版本。
-    - GCC `14.2.0` 或更高版本。
+- **Rust 工具链**: 这是构建项目的核心。建议使用与项目 CI 构建一致的版本：
+    - Rust `1.93.1` 或更高版本。
+
+- **系统编译环境**: 需要可用的 C/C++ 工具链（例如 Linux 的 `gcc/clang`、Windows 的 MinGW/MSVC、macOS 的 Xcode Command Line Tools）。若遇到 `openssl-sys` 相关编译/链接错误，请按平台安装 OpenSSL 与 `pkg-config`（或参考项目 CI 的构建脚本）。
 
     如果你尚未安装 Rust，我们强烈建议通过 [rustup](https://rustup.rs/) 官方安装脚本来安装和管理你的 Rust 版本。`rustup` 会自动处理好编译器、包管理器 (`cargo`) 和标准库。
 

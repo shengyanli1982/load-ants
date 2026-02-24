@@ -14,7 +14,9 @@
 
 访问项目的 [GitHub 发布页面](https://github.com/shengyanli1982/load-ants/releases)，根据你的操作系统下载最新的二进制文件。
 
-例如，如果你使用的是 64 位的 Linux 系统，你应该下载名为 `load-ants-linux-amd64` 的文件。
+发布包通常以 `.zip` 形式提供。请下载与你的平台匹配的压缩包并解压获得可执行文件。
+
+例如，如果你使用的是 64 位的 Linux 系统，你通常会下载类似 `loadants-Linux-x64-<version>.zip` 的文件；解压后可得到 `loadants-linux-x64`。
 
 下载后，建议将可执行文件重命名为 `loadants`（Windows 为 `loadants.exe`），并将其放置在一个专属的文件夹中，方便管理。
 
