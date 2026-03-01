@@ -30,12 +30,14 @@
 upstream_groups:
     # 1. 直连组：用于所有常规流量
     - name: "direct_group"
+      scheme: "doh"
       strategy: "random"
       servers:
           - url: "https://dns.google/dns-query" # 你可以选择任何喜欢的公共DNS
 
     # 2. 代理组：用于流媒体服务
     - name: "streaming_proxy_group"
+      scheme: "doh"
       strategy: "random"
       # 关键：为此组配置代理
       proxy: "http://proxy.example.com:8888"
@@ -76,6 +78,8 @@ static_rules:
 1.  **`upstream_groups`**:
     - `direct_group`: 一个标准的上游组，不走任何代理。
     - `streaming_proxy_group`: 这个组的特殊之处在于它配置了 `proxy` 字段。所有通过这个组转发的 DNS 查询，其网络流量都会经过 `http://proxy.example.com:8888`。
+
+    > 提示：`proxy` 仅适用于 `scheme: doh` 的上游组；传统 DNS 上游（`scheme: dns`）不支持代理。
 
 2.  **`static_rules`**:
     - Load Ants 的路由遵循“拦截优先（block first）”与“分层匹配”的原则：在 `block` 与 `forward` 两个阶段内部，匹配优先级为 `exact` > `wildcard` > `regex` > `*`（全局通配符）。

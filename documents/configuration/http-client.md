@@ -5,6 +5,8 @@
 - 上游组（`upstream_groups`）发出的 DoH (DNS-over-HTTPS) 请求
 - 远程规则（`remote_rules`）下载规则文件时的 HTTP 请求
 
+> 如果你使用了传统 DNS 上游（`upstream_groups[].scheme: dns`），其 UDP/TCP 行为由 [`dns_client`](./dns-client.md) 单独控制，不受 `http_client` 影响。
+
 精细地调整这些参数，可以帮助你优化网络连接的性能和可靠性。
 
 ### 示例

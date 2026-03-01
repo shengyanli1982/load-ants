@@ -73,7 +73,11 @@ cache:
 http_client:
     # ...
 
-# 上游 DoH 服务器组 (必选)
+# DNS 客户端设置 (全局) (可选，仅 scheme=dns 上游使用)
+dns_client:
+    # ...
+
+# 上游服务器组 (条件必选：只要存在任何 forward 规则就必须配置)
 upstream_groups:
     # ...
 
@@ -91,8 +95,9 @@ remote_rules:
 - [`server`](./server.md): 配置 DNS 服务的监听地址和参数。
 - [`admin`](./server.md#admin-管理服务器): 配置健康检查与管理 API 的监听地址。
 - [`cache`](./cache.md): 配置内置 DNS 缓存的行为。
-- [`http_client`](./http-client.md): 定义全局 HTTP 客户端的行为，影响所有出站请求。
-- [`upstream_groups`](./upstream-groups.md): 定义所有可用的上游 DoH 服务器组。
+- [`http_client`](./http-client.md): 定义全局 HTTP 客户端的行为，影响 DoH 上游与规则下载。
+- [`dns_client`](./dns-client.md): 定义全局 DNS 客户端的行为，影响 `scheme: dns` 的传统 DNS 上游。
+- [`upstream_groups`](./upstream-groups.md): 定义所有可用的上游组（`scheme: doh|dns`）。
 - [`static_rules` & `remote_rules`](./routing-rules.md): 定义静态及远程加载的路由规则。
 
 ---
@@ -103,3 +108,4 @@ remote_rules:
 - [➡️ 配置上游组](./upstream-groups.md)
 - [➡️ 配置路由规则](./routing-rules.md)
 - [➡️ 配置缓存](./cache.md)
+- [➡️ 配置 DNS 客户端（传统上游）](./dns-client.md)

@@ -2,7 +2,7 @@
 
 <div align="center">
     <h1>LOAD ANTS</h1>
-    <h4>🐜🐜🐜 Lightweight DNS Splitter and Forwarder: Seamless Conversion from UDP/TCP Queries to DoH, Supports DoH Proxy Forwarding</h4></br></br>
+    <h4>🐜🐜🐜 Lightweight DNS splitter & forwarder: UDP/TCP/DoH inbound, upstream supports DoH and classic DNS (UDP/TCP)</h4></br></br>
     <a href="https://shengyanli1982.github.io/load-ants/">
         <img src="./images/logo.png" alt="logo" width="600">
     </a>
@@ -18,10 +18,11 @@
 
 ### Core Features
 
-- 🔄 **Protocol Conversion**: Seamlessly converts standard DNS queries to DNS-over-HTTPS (DoH).
+- 🔄 **Multi-protocol Inbound**: Supports UDP/53, TCP/53, and DoH inbound traffic.
+- 🌐 **Multiple Upstream Schemes**: Supports DoH and classic DNS (UDP/TCP) upstreams.
 - 🧠 **Intelligent Routing**: Route DNS queries based on domain patterns (exact, wildcard, regex).
 - ⚡ **High-Performance Caching**: Built-in caching to reduce latency.
-- 🌐 **Flexible Upstream Management**: Group DoH servers with multiple load-balancing strategies.
+- ⚖️ **Flexible Upstream Management**: Group upstream servers with load-balancing strategies (round-robin/weighted/random).
 
 ### 📚 Get the Full Picture!
 

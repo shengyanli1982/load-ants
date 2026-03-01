@@ -2,7 +2,7 @@
 
 <div align="center">
     <h1>LOAD ANTS</h1>
-    <h4>🐜🐜🐜 轻量级 DNS 分流转发器，实现 UDP/TCP 查询到 DoH 的无缝转换，支持 DoH 代理转发</h4></br></br>
+    <h4>🐜🐜🐜 轻量级 DNS 分流转发器：支持 UDP/TCP/DoH 入站，上游支持 DoH 与传统 DNS（UDP/TCP）</h4></br></br>
     <a href="https://shengyanli1982.github.io/load-ants/">
         <img src="./images/logo.png" alt="logo" width="600">
     </a>
@@ -18,10 +18,11 @@
 
 ### 核心功能
 
-- 🔄 **协议转换**: 无缝将标准 DNS 查询转换为 DNS-over-HTTPS (DoH)。
+- 🔄 **多协议入站**: 支持 UDP/53、TCP/53 与 DoH 入站。
+- 🌐 **多上游协议**: 上游支持 DoH 与传统 DNS（UDP/TCP）。
 - 🧠 **智能路由**: 根据域名模式（精确、通配符、正则）路由 DNS 查询。
 - ⚡ **高性能缓存**: 内置缓存机制，显著降低延迟。
-- 🌐 **灵活上游管理**: 可将 DoH 服务器分组并配置多种负载均衡策略。
+- ⚖️ **灵活上游管理**: 上游分组 + 多种负载均衡策略（轮询/加权/随机）。
 
 ### 📚 阅读完整文档！
 

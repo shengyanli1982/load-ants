@@ -1,5 +1,7 @@
 site_name: "Load Ants"
-site_url: "https://github.com/shengyanli1982/load-ants"
+site_url: "https://shengyanli1982.github.io/load-ants/"
+repo_url: "https://github.com/shengyanli1982/load-ants"
+repo_name: "shengyanli1982/load-ants"
 docs_dir: "documents"
 
 theme:
@@ -48,7 +50,8 @@ nav:
       - "总览": "configuration/index.md"
       - "服务端配置": "configuration/server.md"
       - "缓存配置": "configuration/cache.md"
-      - "客户端配置": "configuration/http-client.md"
+      - "HTTP 客户端配置": "configuration/http-client.md"
+      - "DNS 客户端配置": "configuration/dns-client.md"
       - "上游组配置": "configuration/upstream-groups.md"
       - "路由规则配置": "configuration/routing-rules.md"
   - "部署指南":
