@@ -8,13 +8,13 @@
       
       
       
-        <link rel="canonical" href="https://shengyanli1982.github.io/load-ants/concepts/upstream/">
+        <link rel="canonical" href="https://shengyanli1982.github.io/load-ants/configuration/dns-client/">
       
       
-        <link rel="prev" href="../routing/">
+        <link rel="prev" href="../http-client/">
       
       
-        <link rel="next" href="../caching/">
+        <link rel="next" href="../upstream-groups/">
       
       
         
@@ -25,7 +25,7 @@
     
     
       
-        <title>上游服务器管理 - Load Ants</title>
+        <title>DNS 客户端配置 - Load Ants</title>
       
     
     
@@ -76,7 +76,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#_1" class="md-skip">
+        <a href="#dns" class="md-skip">
           跳转至
         </a>
       
@@ -110,7 +110,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              上游服务器管理
+              DNS 客户端配置
             
           </span>
         </div>
@@ -260,13 +260,11 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../../concepts/" class="md-tabs__link">
           
   
   
@@ -301,11 +299,13 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
-        <a href="../../configuration/" class="md-tabs__link">
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
           
   
   
@@ -595,31 +595,26 @@
       
   
   
-    
   
   
-  
     
     
     
     
-      
-        
-        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
         
           
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
             
   
   
@@ -637,7 +632,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             
@@ -655,7 +650,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../" class="md-nav__link">
+      <a href="../../concepts/" class="md-nav__link">
         
   
   
@@ -683,7 +678,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../doh/" class="md-nav__link">
+      <a href="../../concepts/doh/" class="md-nav__link">
         
   
   
@@ -711,7 +706,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../routing/" class="md-nav__link">
+      <a href="../../concepts/routing/" class="md-nav__link">
         
   
   
@@ -736,37 +731,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    上游服务器管理
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../concepts/upstream/" class="md-nav__link">
         
   
   
@@ -782,92 +750,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="目录">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      目录
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#_2" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        一个类比：分配任务的"工作小组"
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#strategy" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        负载均衡策略 (strategy)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#_3" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        连接到私有服务：认证支持
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#_4" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        资源优化：共享的连接池
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#_5" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        配置示例
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#_6" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        下一步
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -880,7 +762,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../caching/" class="md-nav__link">
+      <a href="../../concepts/caching/" class="md-nav__link">
         
   
   
@@ -939,26 +821,31 @@
       
   
   
+    
   
   
+  
     
     
     
     
+      
+        
+        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
         
           
-          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
             
   
   
@@ -976,7 +863,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             
@@ -994,7 +881,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/" class="md-nav__link">
+      <a href="../" class="md-nav__link">
         
   
   
@@ -1022,7 +909,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/server/" class="md-nav__link">
+      <a href="../server/" class="md-nav__link">
         
   
   
@@ -1050,7 +937,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/cache/" class="md-nav__link">
+      <a href="../cache/" class="md-nav__link">
         
   
   
@@ -1078,7 +965,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/http-client/" class="md-nav__link">
+      <a href="../http-client/" class="md-nav__link">
         
   
   
@@ -1103,10 +990,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../configuration/dns-client/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DNS 客户端配置
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -1122,6 +1036,70 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="目录">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      目录
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        示例
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        参数详解
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#upstream_groupsscheme-dns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        行为说明（与 upstream_groups[].scheme: dns 的关系）
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        下一步
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1134,7 +1112,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/upstream-groups/" class="md-nav__link">
+      <a href="../upstream-groups/" class="md-nav__link">
         
   
   
@@ -1162,7 +1140,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/routing-rules/" class="md-nav__link">
+      <a href="../routing-rules/" class="md-nav__link">
         
   
   
@@ -1642,10 +1620,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#_2" class="md-nav__link">
+  <a href="#_1" class="md-nav__link">
     <span class="md-ellipsis">
       
-        一个类比：分配任务的"工作小组"
+        示例
       
     </span>
   </a>
@@ -1653,10 +1631,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#strategy" class="md-nav__link">
+  <a href="#_2" class="md-nav__link">
     <span class="md-ellipsis">
       
-        负载均衡策略 (strategy)
+        参数详解
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#upstream_groupsscheme-dns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        行为说明（与 upstream_groups[].scheme: dns 的关系）
       
     </span>
   </a>
@@ -1665,39 +1654,6 @@
       
         <li class="md-nav__item">
   <a href="#_3" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        连接到私有服务：认证支持
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#_4" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        资源优化：共享的连接池
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#_5" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        配置示例
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#_6" class="md-nav__link">
     <span class="md-ellipsis">
       
         下一步
@@ -1727,129 +1683,83 @@
   
 
 
-<h1 id="_1">上游服务器管理<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
-<p>上游 (Upstream) 是你的 DNS 查询在经过 Load Ants 加密和路由决策后的最终目的地。合理地配置上游，是保证 DNS 解析服务高可用和高性能的关键。</p>
-<h3 id="_2">一个类比：分配任务的"工作小组"<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h3>
-<p>你可以将 Load Ants 的上游管理机制想象成一个办公室里的项目管理场景：</p>
-<ul>
-<li><strong>上游服务器 (<code>servers</code>)</strong>: 就像是办公室里的一个个"组员"。组员可以是 DoH（URL）或传统 DNS（<code>IP:端口</code>）。</li>
-<li><strong>上游组 (<code>upstream_groups</code>)</strong>: 就像是为了完成特定目标而建立的"工作小组"。你可以创建多个小组，例如"谷歌组"、"阿里组"、"抗污染专用组"等。</li>
-<li><strong>负载均衡策略 (<code>strategy</code>)</strong>: 就像是"小组组长"分配任务的方式。组长需要决定下一个进来的任务（DNS 查询）应该交给哪个组员来处理。</li>
-</ul>
-<p>Load Ants 就是这位高效的"管理者"，它根据你设定的策略，智能地将查询分发给组内的各个服务器。</p>
-<h3 id="strategy">负载均衡策略 (<code>strategy</code>)<a class="headerlink" href="#strategy" title="Permanent link">&para;</a></h3>
-<p>为每个上游组选择合适的策略，可以帮助你实现不同的目标，如性能、隐私或故障转移。</p>
+<h1 id="dns">DNS 客户端配置<a class="headerlink" href="#dns" title="Permanent link">&para;</a></h1>
+<p><code>dns_client</code> 配置块用于定义 <strong>传统 DNS 上游（UDP/TCP，端口 53）</strong> 的全局客户端行为。</p>
+<p>它仅在你的某个上游组设置了 <code>scheme: dns</code> 时生效；DoH 上游与规则下载仍由 <a href="../http-client/"><code>http_client</code></a> 控制。</p>
+<hr />
+<h3 id="_1">示例<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nt">dns_client</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">connect_timeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span><span class="w"> </span><span class="c1"># TCP 建连超时（秒）</span>
+<span class="w">    </span><span class="nt">request_timeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span><span class="w"> </span><span class="c1"># 单次 DNS 请求超时（秒）</span>
+<span class="w">    </span><span class="nt">prefer_tcp</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w"> </span><span class="c1"># 是否默认使用上游 TCP</span>
+<span class="w">    </span><span class="nt">tcp_reconnect</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w"> </span><span class="c1"># TCP 请求失败后下次重连</span>
+</code></pre></div>
+<hr />
+<h3 id="_2">参数详解<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
 <tr>
-<th style="text-align: left;">策略名称</th>
-<th style="text-align: left;">工作方式</th>
-<th style="text-align: left;">最佳适用场景</th>
+<th style="text-align: left;">参数</th>
+<th style="text-align: left;">类型</th>
+<th style="text-align: left;">描述</th>
+<th style="text-align: left;">默认值（未配置时）</th>
+<th style="text-align: left;">是否必填</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td style="text-align: left;"><strong><code>roundrobin</code></strong></td>
-<td style="text-align: left;"><strong>轮询</strong>：像发牌一样，按顺序将请求依次分配给组里的每个服务器。1 号发完发 2 号，2 号发完发 3 号，一轮结束后再从 1 号开始。</td>
-<td style="text-align: left;">当组内所有服务器性能相近时，用它来平均分配负载是最公平、最简单的。</td>
+<td style="text-align: left;"><code>connect_timeout</code></td>
+<td style="text-align: left;">整数</td>
+<td style="text-align: left;">TCP 建立连接的超时时间（秒），有效范围 <code>1-120</code>。仅对 TCP 生效。</td>
+<td style="text-align: left;"><code>2</code></td>
+<td style="text-align: left;"><strong>是</strong>（若 <code>dns_client</code> 块存在）</td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong><code>weighted</code></strong></td>
-<td style="text-align: left;"><strong>加权轮询</strong>：根据你为每个服务器设定的"权重"(<code>weight</code>)来分配请求。权重越高的服务器，接到的请求就越多。</td>
-<td style="text-align: left;">当组内服务器性能或可靠性不同时。例如，你可以让一台高性能的主服务器承担 80% 的流量，另一台备用服务器承担 20%。</td>
+<td style="text-align: left;"><code>request_timeout</code></td>
+<td style="text-align: left;">整数</td>
+<td style="text-align: left;">单次上游请求等待超时时间（秒），有效范围 <code>1-1200</code>。当触发 UDP→TCP 重试时，UDP 与 TCP 各自独立计时。</td>
+<td style="text-align: left;"><code>3</code></td>
+<td style="text-align: left;"><strong>是</strong>（若 <code>dns_client</code> 块存在）</td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong><code>random</code></strong></td>
-<td style="text-align: left;"><strong>随机</strong>：完全随机地从组里挑选一个服务器来处理请求，没有任何固定顺序。</td>
-<td style="text-align: left;">当你希望增强隐私性时。随机选择可以打乱查询模式，让外部更难追踪你的 DNS 行为。</td>
+<td style="text-align: left;"><code>prefer_tcp</code></td>
+<td style="text-align: left;">布尔</td>
+<td style="text-align: left;"><code>true</code>：始终使用上游 TCP；<code>false</code>：优先 UDP，若 UDP 响应 <code>TC=1</code>（截断）则使用 TCP 重新发送同一请求并返回 TCP 响应。</td>
+<td style="text-align: left;"><code>false</code></td>
+<td style="text-align: left;">否</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>tcp_reconnect</code></td>
+<td style="text-align: left;">布尔</td>
+<td style="text-align: left;">当一次 TCP 请求失败时，是否丢弃该上游服务器的 TCP 连接并在下一次请求重新建立连接。</td>
+<td style="text-align: left;"><code>true</code></td>
+<td style="text-align: left;">否</td>
 </tr>
 </tbody>
 </table>
-<h3 id="_3">连接到私有服务：认证支持<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h3>
-<p>除了连接到公共 DoH 服务器，Load Ants 还支持与需要认证的私有 DoH 提供商安全通信。这对于企业内部或个人搭建的私有 DNS 服务非常有用。</p>
-<ul>
-<li><strong>支持的认证方式</strong>:<ul>
-<li><strong>HTTP 基本认证 (<code>Basic Auth</code>)</strong>: 使用用户名和密码进行验证。</li>
-<li><strong>Bearer 令牌认证 (<code>Bearer Token</code>)</strong>: 使用一个访问令牌进行验证。</li>
-</ul>
-</li>
-</ul>
-<blockquote>
-<p>说明：认证仅适用于 <code>scheme: doh</code> 的上游服务器条目（传统 DNS 上游不涉及 HTTP 认证）。</p>
-</blockquote>
-<p>你可以在<a href="../../configuration/upstream-groups/">上游组配置</a>中为特定的 DoH 服务器条目轻松添加认证信息。</p>
-<h3 id="_4">资源优化：共享的连接池<a class="headerlink" href="#_4" title="Permanent link">&para;</a></h3>
-<p>为了最大化性能并减少资源消耗，Load Ants 会按上游类型复用连接资源：</p>
-<ul>
-<li>对于 <code>scheme: doh</code>：内部维护一个<strong>共享的 HTTP 客户端连接池</strong>，高效复用与上游服务器的 TCP/TLS 连接。</li>
-<li>对于 <code>scheme: dns</code>：内部会复用与上游服务器的 TCP 连接，并支持在 TCP 请求失败后按需重连（见 <code>dns_client.tcp_reconnect</code>）。</li>
-</ul>
-<p>这意味着，即使你配置了数十个不同的上游服务器，Load Ants 也会智能地复用底层连接资源（DoH 为 TCP/TLS 连接，传统 DNS 为 TCP 连接）。这带来了几个好处：</p>
-<ul>
-<li><strong>减少延迟</strong>：避免了为每个新请求都重新进行 TCP 和 TLS 握手的开销。</li>
-<li><strong>降低 CPU 和内存使用</strong>：更少的连接数意味着更少的系统资源占用。</li>
-<li><strong>提升吞吐量</strong>：连接复用是实现高并发 DoH 请求的关键。</li>
-</ul>
-<p>这个优化过程是自动且透明的，无需任何额外配置。</p>
 <hr />
-<h3 id="_5">配置示例<a class="headerlink" href="#_5" title="Permanent link">&para;</a></h3>
-<p>让我们看一个包含多个上游组和不同策略的配置：</p>
+<h3 id="upstream_groupsscheme-dns">行为说明（与 <code>upstream_groups[].scheme: dns</code> 的关系）<a class="headerlink" href="#upstream_groupsscheme-dns" title="Permanent link">&para;</a></h3>
+<p>要启用传统 DNS 上游，请在上游组中设置 <code>scheme: dns</code>，并在 <code>servers</code> 中使用 <code>addr</code>：</p>
 <div class="highlight"><pre><span></span><code><span class="nt">upstream_groups</span><span class="p">:</span>
-<span class="w">    </span><span class="c1"># 上游组 1: 公共 DoH，用于日常使用</span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;public_doh&quot;</span>
-<span class="w">      </span><span class="nt">scheme</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;doh&quot;</span>
-<span class="w">      </span><span class="c1"># 策略: 轮询，平均分配请求</span>
-<span class="w">      </span><span class="nt">strategy</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;roundrobin&quot;</span>
-<span class="w">      </span><span class="nt">servers</span><span class="p">:</span>
-<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;https://223.5.5.5/dns-query&quot;</span><span class="w"> </span><span class="c1"># 阿里 DNS</span>
-<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;https://1.12.12.12/dns-query&quot;</span><span class="w"> </span><span class="c1"># 腾讯 DNS</span>
-
-<span class="w">    </span><span class="c1"># 上游组 2: 高性能服务器组，主备模式</span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;high_performance&quot;</span>
-<span class="w">      </span><span class="nt">scheme</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;doh&quot;</span>
-<span class="w">      </span><span class="c1"># 策略: 加权，让 server_1 处理大部分请求</span>
-<span class="w">      </span><span class="nt">strategy</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;weighted&quot;</span>
-<span class="w">      </span><span class="nt">servers</span><span class="p">:</span>
-<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;https://main-server.com/dns-query&quot;</span>
-<span class="w">            </span><span class="nt">weight</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">80</span><span class="w"> </span><span class="c1"># 主服务器，权重 80</span>
-<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;https://backup-server.com/dns-query&quot;</span>
-<span class="w">            </span><span class="nt">weight</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20</span><span class="w"> </span><span class="c1"># 备用服务器，权重 20</span>
-
-<span class="w">    </span><span class="c1"># 上游组 3: 注重隐私的服务器组</span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;private_dns&quot;</span>
-<span class="w">      </span><span class="nt">scheme</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;doh&quot;</span>
-<span class="w">      </span><span class="c1"># 策略: 随机选择，打乱查询模式</span>
-<span class="w">      </span><span class="nt">strategy</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;random&quot;</span>
-<span class="w">      </span><span class="nt">servers</span><span class="p">:</span>
-<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;https://dns.google/dns-query&quot;</span>
-<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;https://cloudflare-dns.com/dns-query&quot;</span>
-
-<span class="w">    </span><span class="c1"># 上游组 4: 传统 DNS（UDP/TCP）上游，用于局域网/自建 DNS</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;lan_dns&quot;</span>
 <span class="w">      </span><span class="nt">scheme</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;dns&quot;</span>
 <span class="w">      </span><span class="nt">strategy</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;roundrobin&quot;</span>
 <span class="w">      </span><span class="nt">servers</span><span class="p">:</span>
 <span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">addr</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">192.168.1.53:53</span>
-
-<span class="c1"># 在路由规则中，你可以根据需要将不同的域名指向这些不同的上游组</span>
-<span class="nt">static_rules</span><span class="p">:</span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">match</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;wildcard&quot;</span>
-<span class="w">      </span><span class="nt">patterns</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;*.internal.corp&quot;</span><span class="p p-Indicator">]</span>
-<span class="w">      </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;forward&quot;</span>
-<span class="w">      </span><span class="nt">target</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;high_performance&quot;</span><span class="w"> </span><span class="c1"># 内部服务使用高性能组</span>
-
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">match</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;wildcard&quot;</span>
-<span class="w">      </span><span class="nt">patterns</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;*&quot;</span><span class="p p-Indicator">]</span>
-<span class="w">      </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;forward&quot;</span>
-<span class="w">      </span><span class="nt">target</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;public_doh&quot;</span><span class="w"> </span><span class="c1"># 其他所有查询使用公共 DoH 组</span>
 </code></pre></div>
-<p>通过将服务器分组并应用不同策略，你可以构建一个高度定制化、既可靠又高效的 DNS 解析系统。</p>
-<hr />
-<h3 id="_6">下一步<a class="headerlink" href="#_6" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p>说明：</p>
 <ul>
-<li><a href="../../configuration/upstream-groups/">➡️ 学习如何配置上游组</a></li>
-<li><a href="../doh/">➡️ 了解什么是 DNS over HTTPS (DoH)</a></li>
-<li><a href="../">➡️ 返回核心概念概览</a></li>
+<li><code>scheme: dns</code> 的上游组 <strong>不支持</strong> <code>proxy</code> 与 <code>retry</code>（会触发配置校验错误）。</li>
+<li>UDP 的超时/IO 错误 <strong>不会</strong> 自动触发 TCP 重试；只有在收到 UDP 响应且 <code>TC=1</code> 时才会触发 UDP→TCP 回退（或你显式设置 <code>prefer_tcp=true</code>）。</li>
+</ul>
+</blockquote>
+<hr />
+<h3 id="_3">下一步<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h3>
+<ul>
+<li><a href="../upstream-groups/">➡️ 了解上游组配置（scheme=doh|dns）</a></li>
+<li><a href="../http-client/">➡️ 回顾 HTTP 客户端配置（DoH 与规则下载）</a></li>
+<li><a href="../">➡️ 返回配置总览</a></li>
 </ul>
 
 

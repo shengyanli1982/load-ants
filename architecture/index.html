@@ -8,7 +8,7 @@
       
       
       
-        <link rel="canonical" href="https://github.com/shengyanli1982/load-ants/architecture/">
+        <link rel="canonical" href="https://shengyanli1982.github.io/load-ants/architecture/">
       
       
         <link rel="prev" href="../concepts/caching/">
@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.2">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
     
     
       
@@ -190,6 +190,18 @@
 </div>
       
     
+    
+      <div class="md-header__source">
+        <a href="https://github.com/shengyanli1982/load-ants" title="前往仓库" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    shengyanli1982/load-ants
+  </div>
+</a>
+      </div>
     
   </nav>
   
@@ -394,6 +406,18 @@
     </a>
     Load Ants
   </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/shengyanli1982/load-ants" title="前往仓库" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    shengyanli1982/load-ants
+  </div>
+</a>
+    </div>
   
   <ul class="md-nav__list" data-md-scrollfix>
     
@@ -1018,7 +1042,35 @@
   <span class="md-ellipsis">
     
   
-    客户端配置
+    HTTP 客户端配置
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/dns-client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DNS 客户端配置
   
 
     
@@ -1590,9 +1642,12 @@
                   
 
 
+  
+  
+
 
 <h1 id="_1">架构设计<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
-<p>Load Ants 的设计哲学是<strong>高性能、模块化和高可扩展性</strong>。它作为一个高效的 DNS 代理，核心任务是接收传统的 DNS 请求，并通过一系列内部处理流程，将其安全、可靠地转发到现代的 DoH (DNS-over-HTTPS) 服务器。</p>
+<p>Load Ants 的设计哲学是<strong>高性能、模块化和高可扩展性</strong>。它作为一个高效的 DNS 代理，核心任务是接收 DNS 请求，并通过一系列内部处理流程，将其安全、可靠地转发到上游解析器（DoH 或传统 DNS）。</p>
 <p>下图描绘了 Load Ants 的核心组件及其交互流程：</p>
 <p><img alt="architecture" src="../images/architecture.png" /></p>
 <h2 id="_2">核心处理流程<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h2>
@@ -1625,23 +1680,22 @@
 <p><strong>上游管理 (Upstream Groups)</strong>:</p>
 <ul>
 <li>如果路由决策是 <code>forward</code>，请求将被发送到规则指定的<strong>上游组</strong>。</li>
-<li>上游组是一系列 DoH 服务器的逻辑集合。你可以为不同的上游组配置不同的负载均衡策略（如轮询、加权轮询、随机）和认证方式（如 Bearer Token）。</li>
-<li>这种分组机制使得用户可以灵活地将不同类型的流量导向不同的 DoH 提供商（例如，国内流量走国内 DoH，国外流量走国外 DoH）。</li>
+<li>上游组是上游服务器的逻辑集合。每个组通过 <code>scheme</code> 指定上游类型：<code>doh</code>（DoH）或 <code>dns</code>（传统 DNS，UDP/TCP）。</li>
+<li>你可以为不同的上游组配置不同的负载均衡策略（如轮询、加权轮询、随机）。对于 DoH 组，还可以配置认证与代理等能力。</li>
+<li>这种分组机制使得用户可以灵活地将不同类型的流量导向不同的上游路径（例如，外网域名走 DoH，内网域名走局域网 DNS）。</li>
 </ul>
 </li>
 <li>
-<p><strong>HTTP/DoH 客户端 (HTTP/DoH Client)</strong>:</p>
+<p><strong>上游客户端 (Upstream Client)</strong>:</p>
 <ul>
-<li>一旦选定了上游 DoH 服务器，HTTP 客户端就会介入。</li>
-<li>它负责将标准的 DNS 查询报文打包成一个符合 DoH 规范的 HTTPS 请求。这包括设置正确的 HTTP 头（如 <code>Content-Type: application/dns-message</code>）和将 DNS 查询作为 HTTP Body 发送。</li>
-<li>客户端内置了连接池，可以高效复用与上游服务器的 TCP/TLS 连接，减少握手延迟。</li>
-<li>它还根据全局配置的重试策略执行重试。如果对某个 DoH 服务器的请求失败或超时，它会根据该策略进行重试，或尝试组内的下一个服务器。</li>
+<li><strong>对于 DoH 上游（<code>scheme: doh</code>）</strong>：HTTP/DoH 客户端负责把 DNS 报文封装为符合 DoH 规范的 HTTPS 请求（如 <code>Content-Type: application/dns-message</code>），并复用连接池以减少握手延迟；如配置了重试策略，将按策略执行重试。</li>
+<li><strong>对于传统 DNS 上游（<code>scheme: dns</code>）</strong>：DNS 客户端负责与上游的 <code>IP:端口</code> 进行 UDP/TCP 通信；默认优先 UDP，在收到 UDP 响应且 <code>TC=1</code>（截断）时会自动回退到 TCP 重试（或你可通过 <code>dns_client.prefer_tcp=true</code> 直接使用 TCP）。TCP 连接可复用，并可在失败后按需重连（<code>dns_client.tcp_reconnect</code>）。</li>
 </ul>
 </li>
 <li>
 <p><strong>响应处理与缓存更新 (Response Handling &amp; Cache Update)</strong>:</p>
 <ul>
-<li>当 DoH 服务器返回 HTTPS 响应后，HTTP 客户端会解析出其中的 DNS 响应数据。</li>
+<li>当上游返回响应后，Load Ants 会得到完整的 DNS 响应报文（无论该上游是 DoH 还是传统 DNS）。</li>
 <li>该响应首先会被送往缓存模块进行<strong>更新</strong> (<code>cache update</code>)，以便下一次相同的查询可以直接命中缓存。</li>
 <li>最后，响应被打包成标准的 DNS UDP/TCP 数据包或者 DoH 响应，通过最初的监听器连接返回给客户端。</li>
 </ul>

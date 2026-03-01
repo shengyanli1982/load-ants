@@ -8,7 +8,7 @@
       
       
       
-        <link rel="canonical" href="https://github.com/shengyanli1982/load-ants/cookbook/homelab-dns/">
+        <link rel="canonical" href="https://shengyanli1982.github.io/load-ants/cookbook/homelab-dns/">
       
       
         <link rel="prev" href="../geo-unblocking/">
@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.2">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
     
     
       
@@ -190,6 +190,18 @@
 </div>
       
     
+    
+      <div class="md-header__source">
+        <a href="https://github.com/shengyanli1982/load-ants" title="前往仓库" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    shengyanli1982/load-ants
+  </div>
+</a>
+      </div>
     
   </nav>
   
@@ -394,6 +406,18 @@
     </a>
     Load Ants
   </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/shengyanli1982/load-ants" title="前往仓库" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    shengyanli1982/load-ants
+  </div>
+</a>
+    </div>
   
   <ul class="md-nav__list" data-md-scrollfix>
     
@@ -943,7 +967,35 @@
   <span class="md-ellipsis">
     
   
-    客户端配置
+    HTTP 客户端配置
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/dns-client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DNS 客户端配置
   
 
     
@@ -1671,17 +1723,25 @@
                   
 
 
+  
+  
+
 
 <h1 id="dns">家庭实验室 DNS<a class="headerlink" href="#dns" title="Permanent link">&para;</a></h1>
 <p>对于拥有家庭实验室 (Homelab) 或小型本地网络的用户来说，记住一堆 IP 地址（例如 <code>192.168.1.10</code> 用于 NAS，<code>192.168.1.20</code> 用于 Plex）是一件很麻烦的事。本配方将向你展示如何利用 Load Ants 的路由功能，结合一个轻量级的本地 DNS 服务器，为你本地网络上的设备赋予友好的、易于记忆的域名（如 <code>nas.lan</code>, <code>plex.lan</code>）。</p>
 <h3 id="_1">目标<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h3>
 <ul>
 <li>将对自定义本地域名（<code>.lan</code> 后缀）的 DNS 查询，转发给一个专门的本地 DNS 服务器进行解析。</li>
-<li>所有其他正常的互联网域名查询，则通过 Load Ants 转发给常规的上游 DoH 服务器。</li>
+<li>所有其他正常的互联网域名查询，则通过 Load Ants 转发给常规上游（推荐 DoH，也可按需使用传统 DNS）。</li>
 </ul>
 <h3 id="_2">架构变更解释<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h3>
-<p>Load Ants 的核心功能是 <strong>DNS-over-HTTPS (DoH) 代理</strong>，它本身不直接从 IP 地址生成 DNS 响应。它的 <code>static_rules</code> 只能决定将查询 <code>forward</code> (转发) 到哪个上游组，或直接 <code>block</code> (拦截)。</p>
+<p>Load Ants 本身不直接“生成”DNS 响应，它的 <code>static_rules</code> 只能决定将查询 <code>forward</code> (转发) 到哪个上游组，或直接 <code>block</code> (拦截)。</p>
 <p>因此，为了实现本地域名解析，我们需要一个能够处理这种请求的"上游"。最简单的方法就是在你的网络中运行一个传统的 DNS 服务器（如 <code>dnsmasq</code>, <code>CoreDNS</code>, 或路由器自带的 DNS 服务），并让 Load Ants 将特定查询指向它。</p>
+<p>从功能上看，这就是把“内网域名解析”与“外网域名解析”拆成两条上游路径：</p>
+<ul>
+<li>内网域名（如 <code>nas.lan</code>）→ <code>scheme: dns</code> → 直连你的局域网 DNS（UDP/TCP，端口 53）</li>
+<li>其他域名 → <code>scheme: doh</code>（推荐）→ 公共 DoH</li>
+</ul>
 <h3 id="_3">先决条件<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h3>
 <ol>
 <li>一台可以运行 Load Ants 的主机。</li>
@@ -1696,25 +1756,28 @@
 <span class="c1"># ----------------------------------</span>
 
 <span class="c1"># ----------------------------------</span>
+<span class="c1"># DNS 客户端（传统上游）(可选)</span>
+<span class="c1"># ----------------------------------</span>
+<span class="nt">dns_client</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">prefer_tcp</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w"> </span><span class="c1"># 默认 UDP，遇到 TC=1 再自动回退 TCP</span>
+
+<span class="c1"># ----------------------------------</span>
 <span class="c1"># 上游服务器组</span>
 <span class="c1"># ----------------------------------</span>
 <span class="nt">upstream_groups</span><span class="p">:</span>
 <span class="w">    </span><span class="c1"># 1. 公共 DNS 组：用于所有常规的互联网查询</span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;public_dns&quot;</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;public_doh&quot;</span>
+<span class="w">      </span><span class="nt">scheme</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;doh&quot;</span>
 <span class="w">      </span><span class="nt">strategy</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;random&quot;</span>
 <span class="w">      </span><span class="nt">servers</span><span class="p">:</span>
 <span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;https://dns.google/dns-query&quot;</span>
 
 <span class="w">    </span><span class="c1"># 2. 本地 DNS 组：专门用于解析内部域名</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;local_dns&quot;</span>
+<span class="w">      </span><span class="nt">scheme</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;dns&quot;</span>
 <span class="w">      </span><span class="nt">strategy</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;roundrobin&quot;</span>
-<span class="w">      </span><span class="c1"># 重要：这里的 URL 指向你的本地传统 DNS 服务器的 DoH 封装</span>
-<span class="w">      </span><span class="c1"># 如果你的本地 DNS 不支持 DoH，你需要一个转换器，</span>
-<span class="w">      </span><span class="c1"># 或者使用支持直接转发到 UDP/TCP 的 DNS 代理。</span>
-<span class="w">      </span><span class="c1"># 注意：当前版本的 Load Ants 只支持 DoH 上游。</span>
-<span class="w">      </span><span class="c1"># 这里的示例是一个假设性的 DoH 转换器地址。</span>
 <span class="w">      </span><span class="nt">servers</span><span class="p">:</span>
-<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;http://192.168.1.53:8053/dns-query&quot;</span><span class="w"> </span><span class="c1"># 假设你有一个 DoH 转换器</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">addr</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">192.168.1.53:53</span>
 
 <span class="c1"># ----------------------------------</span>
 <span class="c1"># 路由规则</span>
@@ -1728,11 +1791,11 @@
 <span class="w">      </span><span class="nt">target</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;local_dns&quot;</span>
 
 <span class="w">    </span><span class="c1"># --- 默认规则 ---</span>
-<span class="w">    </span><span class="c1"># 其他所有查询都转发到公共 DNS</span>
+<span class="w">    </span><span class="c1"># 其他所有查询都转发到公共 DoH</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">match</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;wildcard&quot;</span>
 <span class="w">      </span><span class="nt">patterns</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;*&quot;</span><span class="p p-Indicator">]</span>
 <span class="w">      </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;forward&quot;</span>
-<span class="w">      </span><span class="nt">target</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;public_dns&quot;</span>
+<span class="w">      </span><span class="nt">target</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;public_doh&quot;</span>
 </code></pre></div>
 <h3 id="_4">步骤二：配置你的网络<a class="headerlink" href="#_4" title="Permanent link">&para;</a></h3>
 <p>将你的设备或路由器的 DNS 设置指向运行 Load Ants 的主机。</p>
@@ -1740,14 +1803,17 @@
 <ol>
 <li>当一个对 <code>nas.lan</code> 的查询到达 Load Ants 时，它会匹配第一条 <code>static_rules</code> 规则（正则表达式匹配）。</li>
 <li>该规则的 <code>action</code> 是 <code>forward</code>，<code>target</code> 是 <code>local_dns</code> 上游组。</li>
-<li>Load Ants 随即将该查询通过 DoH 转发给你配置的本地 DNS 服务 (<code>http://192.168.1.53:8053/dns-query</code>)。</li>
+<li>Load Ants 随即将该查询通过传统 DNS（UDP/TCP）转发给你配置的本地 DNS 服务（<code>192.168.1.53:53</code>）。</li>
 <li>你的本地 DNS 服务解析 <code>nas.lan</code> 到 <code>192.168.1.10</code> 并返回结果。</li>
-<li>当一个对 <code>www.google.com</code> 的查询到达时，它无法匹配第一条规则，于是匹配了第二条 <code>wildcard</code> 规则，被转发到 <code>public_dns</code> 组，并由谷歌的 DoH 服务器解析。</li>
+<li>当一个对 <code>www.google.com</code> 的查询到达时，它无法匹配第一条规则，于是匹配了第二条 <code>wildcard</code> 规则，被转发到 <code>public_doh</code> 组，并由谷歌的 DoH 服务器解析。</li>
 </ol>
 <p>这个方法虽然比想象中复杂，但它正确地利用了 Load Ants 的核心能力，并实现了稳定、可扩展的本地网络 DNS 管理。</p>
 <blockquote>
-<p><strong>注意：关于 DoH 转换器</strong></p>
-<p>当前版本的 Load Ants <strong>只支持 DoH 上游</strong>。如果你的本地 DNS 服务器（如 dnsmasq）只提供传统的 UDP/53 端口，你将需要一个额外的软件（如 <code>dns-over-https/doh-server</code>）来将传统 DNS 查询封装成 DoH。上述配置示例假设了这样一个转换器正在运行。在未来的版本中，Load Ants 可能会支持直接转发到 UDP/TCP 上游，从而简化此配置。</p>
+<p><strong>注意：关于 <code>scheme: dns</code> 的限制</strong></p>
+<ul>
+<li><code>scheme: dns</code> 的上游组不支持 <code>proxy</code> 与 <code>retry</code>。</li>
+<li>UDP 的超时/IO 错误不会自动触发 TCP 回退；只有在收到 UDP 响应且 <code>TC=1</code>（截断）时才会回退 TCP（或你显式设置 <code>dns_client.prefer_tcp=true</code> 直接走 TCP）。</li>
+</ul>
 </blockquote>
 <hr />
 <h3 id="_5">下一步<a class="headerlink" href="#_5" title="Permanent link">&para;</a></h3>

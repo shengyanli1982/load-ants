@@ -8,10 +8,10 @@
       
       
       
-        <link rel="canonical" href="https://github.com/shengyanli1982/load-ants/configuration/upstream-groups/">
+        <link rel="canonical" href="https://shengyanli1982.github.io/load-ants/configuration/upstream-groups/">
       
       
-        <link rel="prev" href="../http-client/">
+        <link rel="prev" href="../dns-client/">
       
       
         <link rel="next" href="../routing-rules/">
@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.2">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
     
     
       
@@ -190,6 +190,18 @@
 </div>
       
     
+    
+      <div class="md-header__source">
+        <a href="https://github.com/shengyanli1982/load-ants" title="前往仓库" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    shengyanli1982/load-ants
+  </div>
+</a>
+      </div>
     
   </nav>
   
@@ -394,6 +406,18 @@
     </a>
     Load Ants
   </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/shengyanli1982/load-ants" title="前往仓库" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    shengyanli1982/load-ants
+  </div>
+</a>
+    </div>
   
   <ul class="md-nav__list" data-md-scrollfix>
     
@@ -948,7 +972,35 @@
   <span class="md-ellipsis">
     
   
-    客户端配置
+    HTTP 客户端配置
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dns-client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DNS 客户端配置
   
 
     
@@ -1076,6 +1128,34 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="servers 参数详解">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scheme-dohdoh" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        scheme: doh（DoH 服务器条目）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scheme-dns-dns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        scheme: dns（传统 DNS 服务器条目）
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1139,6 +1219,17 @@
     <span class="md-ellipsis">
       
         场景三：连接需要认证和代理的私有 DoH 服务
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dns-udptcp-53" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        场景四：转发到传统 DNS 上游（UDP/TCP，端口 53）
       
     </span>
   </a>
@@ -1704,6 +1795,34 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="servers 参数详解">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scheme-dohdoh" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        scheme: doh（DoH 服务器条目）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scheme-dns-dns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        scheme: dns（传统 DNS 服务器条目）
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1773,6 +1892,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#dns-udptcp-53" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        场景四：转发到传统 DNS 上游（UDP/TCP，端口 53）
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1805,15 +1935,19 @@
                   
 
 
+  
+  
+
 
 <h1 id="_1">上游组配置<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
-<p><code>upstream_groups</code> 是 Load Ants 配置中至关重要的一环。它定义了你的 DNS 查询最终将被发送到哪些 DoH 服务器，以及如何在高可用、高性能和高隐私之间取得平衡。</p>
+<p><code>upstream_groups</code> 是 Load Ants 配置中至关重要的一环。它定义了你的 DNS 查询最终将被发送到哪些上游解析器（<strong>DoH</strong> 或 <strong>传统 DNS（UDP/TCP）</strong>），以及如何在高可用、高性能和高隐私之间取得平衡。</p>
 <p>本配置项是一个<strong>列表</strong>，这意味着你可以定义多个独立配置的"上游组"。</p>
 <p>想要深入了解上游管理和负载均衡策略背后的理念吗？请阅读 <a href="../../concepts/upstream/"><strong>核心概念：上游服务器管理</strong></a>。</p>
 <h3 id="_2">顶级参数 (上游组级别)<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h3>
 <h4 id="_3">示例<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h4>
 <div class="highlight"><pre><span></span><code><span class="nt">upstream_groups</span><span class="p">:</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;google_public&quot;</span>
+<span class="w">      </span><span class="nt">scheme</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;doh&quot;</span>
 <span class="w">      </span><span class="nt">strategy</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;random&quot;</span>
 <span class="w">      </span><span class="nt">servers</span><span class="p">:</span>
 <span class="w">          </span><span class="c1"># ... server 列表在这里定义 ...</span>
@@ -1842,6 +1976,13 @@
 <td style="text-align: left;"><strong>是</strong></td>
 </tr>
 <tr>
+<td style="text-align: left;"><code>scheme</code></td>
+<td style="text-align: left;">字符串</td>
+<td style="text-align: left;">上游组类型。可选值：<code>doh</code>（DoH 上游）或 <code>dns</code>（传统 DNS 上游，UDP/TCP）。为兼容旧配置，也支持别名字段 <code>protocol</code>。</td>
+<td style="text-align: left;"><code>doh</code></td>
+<td style="text-align: left;">否</td>
+</tr>
+<tr>
 <td style="text-align: left;"><code>strategy</code></td>
 <td style="text-align: left;">字符串</td>
 <td style="text-align: left;">定义该组内服务器的负载均衡策略。可选值为：<code>roundrobin</code> (轮询), <code>weighted</code> (加权轮询), <code>random</code> (随机)。</td>
@@ -1851,21 +1992,21 @@
 <tr>
 <td style="text-align: left;"><code>servers</code></td>
 <td style="text-align: left;">列表</td>
-<td style="text-align: left;">定义本组包含的一个或多个 DoH 服务器。详见下方的 <code>servers</code> 参数详解。</td>
+<td style="text-align: left;">定义本组包含的一个或多个上游服务器。其条目结构取决于 <code>scheme</code>（DoH 使用 <code>url</code>，DNS 使用 <code>addr</code>）。详见下方的 <code>servers</code> 参数详解。</td>
 <td style="text-align: left;">-</td>
 <td style="text-align: left;"><strong>是</strong></td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>retry</code></td>
 <td style="text-align: left;">对象</td>
-<td style="text-align: left;">(可选) 本组上游请求的重试策略。详见下方 <code>retry</code> 参数详解。</td>
+<td style="text-align: left;">(可选，仅 <code>scheme: doh</code>) 本组上游请求的重试策略。详见下方 <code>retry</code> 参数详解。</td>
 <td style="text-align: left;">-</td>
 <td style="text-align: left;">否</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>proxy</code></td>
 <td style="text-align: left;">字符串</td>
-<td style="text-align: left;">(可选) 为<strong>整个组</strong>的服务器指定一个出站代理。所有发往该组内服务器的 DoH 请求都将通过此代理。支持 <code>http</code>, <code>https</code> 和 <code>socks5</code> 协议。例如: <code>http://user:pass@host:port</code> 或 <code>socks5://host:port</code>。</td>
+<td style="text-align: left;">(可选，仅 <code>scheme: doh</code>) 为<strong>整个组</strong>的服务器指定一个出站代理。所有发往该组内服务器的 DoH 请求都将通过此代理。支持 <code>http</code>, <code>https</code> 和 <code>socks5</code> 协议。例如: <code>http://user:pass@host:port</code> 或 <code>socks5://host:port</code>。</td>
 <td style="text-align: left;">-</td>
 <td style="text-align: left;">否</td>
 </tr>
@@ -1873,7 +2014,19 @@
 </table>
 <hr />
 <h3 id="servers"><code>servers</code> 参数详解<a class="headerlink" href="#servers" title="Permanent link">&para;</a></h3>
-<p><code>servers</code> 是一个列表，列表中的每个对象都代表一个 DoH 服务器。</p>
+<p><code>servers</code> 是一个列表，列表中的每个对象都代表一个上游服务器。其条目结构由 <code>scheme</code> 决定：</p>
+<ul>
+<li><code>scheme: doh</code>：条目使用 <code>url</code>（DoH 服务器 URL）。</li>
+<li><code>scheme: dns</code>：条目使用 <code>addr</code>（传统 DNS 的 <code>IP:端口</code>，通常为 <code>:53</code>）。</li>
+</ul>
+<blockquote>
+<p>说明：</p>
+<ul>
+<li>如果你不填写 <code>scheme</code>，默认按 <code>doh</code> 处理（与旧版本行为一致）。</li>
+<li>若 <code>scheme: dns</code>，该组不支持 <code>proxy</code> 与 <code>retry</code>（会触发配置校验错误）。</li>
+</ul>
+</blockquote>
+<h4 id="scheme-dohdoh"><code>scheme: doh</code>（DoH 服务器条目）<a class="headerlink" href="#scheme-dohdoh" title="Permanent link">&para;</a></h4>
 <table>
 <thead>
 <tr>
@@ -1918,6 +2071,34 @@
 <td style="text-align: left;">对象</td>
 <td style="text-align: left;">(可选) 访问此特定服务器所需的认证配置。详见下方的 <code>auth</code> 参数详解。</td>
 <td style="text-align: left;">-</td>
+<td style="text-align: left;">否</td>
+</tr>
+</tbody>
+</table>
+<h4 id="scheme-dns-dns"><code>scheme: dns</code>（传统 DNS 服务器条目）<a class="headerlink" href="#scheme-dns-dns" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">参数</th>
+<th style="text-align: left;">类型</th>
+<th style="text-align: left;">描述</th>
+<th style="text-align: left;">默认值</th>
+<th style="text-align: left;">是否必填</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>addr</code></td>
+<td style="text-align: left;">字符串</td>
+<td style="text-align: left;">DNS 服务器地址，格式为 <code>IP:端口</code>（例如 <code>223.5.5.5:53</code> 或 <code>192.168.1.53:53</code>）。</td>
+<td style="text-align: left;">-</td>
+<td style="text-align: left;"><strong>是</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>weight</code></td>
+<td style="text-align: left;">整数</td>
+<td style="text-align: left;">(可选) 服务器的权重，仅在组的 <code>strategy</code> 为 <code>weighted</code> 时生效。</td>
+<td style="text-align: left;"><code>1</code></td>
 <td style="text-align: left;">否</td>
 </tr>
 </tbody>
@@ -2014,6 +2195,7 @@
 <p><strong>目标</strong>：使用多个公共 DoH 解析服务，通过随机策略增强隐私性。</p>
 <div class="highlight"><pre><span></span><code><span class="nt">upstream_groups</span><span class="p">:</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;privacy_first&quot;</span>
+<span class="w">      </span><span class="nt">scheme</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;doh&quot;</span>
 <span class="w">      </span><span class="nt">strategy</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;random&quot;</span>
 <span class="w">      </span><span class="nt">servers</span><span class="p">:</span>
 <span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;https://cloudflare-dns.com/dns-query&quot;</span>
@@ -2025,6 +2207,7 @@
 <p><strong>目标</strong>：主要使用一个高性能的服务器，当它不可用时，自动切换到备用服务器。</p>
 <div class="highlight"><pre><span></span><code><span class="nt">upstream_groups</span><span class="p">:</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;high_perf&quot;</span>
+<span class="w">      </span><span class="nt">scheme</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;doh&quot;</span>
 <span class="w">      </span><span class="nt">strategy</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;weighted&quot;</span>
 <span class="w">      </span><span class="nt">servers</span><span class="p">:</span>
 <span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;https://fast-doh.com/dns-query&quot;</span>
@@ -2036,6 +2219,7 @@
 <p><strong>目标</strong>：连接到类似 NextDNS 这样的私有 DoH 服务，它可能需要认证，并且你希望通过代理访问它。</p>
 <div class="highlight"><pre><span></span><code><span class="nt">upstream_groups</span><span class="p">:</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;private_nextdns&quot;</span>
+<span class="w">      </span><span class="nt">scheme</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;doh&quot;</span>
 <span class="w">      </span><span class="nt">strategy</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;roundrobin&quot;</span><span class="w"> </span><span class="c1"># 如果只有一个服务器，策略无所谓</span>
 <span class="w">      </span><span class="c1"># 为整个组配置代理</span>
 <span class="w">      </span><span class="nt">proxy</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;socks5://127.0.0.1:1080&quot;</span>
@@ -2045,6 +2229,19 @@
 <span class="w">            </span><span class="c1"># auth:</span>
 <span class="w">            </span><span class="c1">#   type: &quot;bearer&quot;</span>
 <span class="w">            </span><span class="c1">#   token: &quot;YOUR_API_KEY&quot;</span>
+</code></pre></div>
+<h4 id="dns-udptcp-53">场景四：转发到传统 DNS 上游（UDP/TCP，端口 53）<a class="headerlink" href="#dns-udptcp-53" title="Permanent link">&para;</a></h4>
+<p><strong>目标</strong>：将特定流量转发到局域网 DNS（如 <code>dnsmasq</code>/路由器 DNS/CoreDNS）或公共传统 DNS，避免额外的 DoH 封装。</p>
+<div class="highlight"><pre><span></span><code><span class="nt">dns_client</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">prefer_tcp</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w"> </span><span class="c1"># 默认 UDP，遇到 TC=1 再回退 TCP</span>
+
+<span class="nt">upstream_groups</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;lan_dns&quot;</span>
+<span class="w">      </span><span class="nt">scheme</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;dns&quot;</span>
+<span class="w">      </span><span class="nt">strategy</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;roundrobin&quot;</span>
+<span class="w">      </span><span class="nt">servers</span><span class="p">:</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">addr</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">192.168.1.53:53</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">addr</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">192.168.1.1:53</span>
 </code></pre></div>
 <hr />
 <h3 id="_8">下一步<a class="headerlink" href="#_8" title="Permanent link">&para;</a></h3>

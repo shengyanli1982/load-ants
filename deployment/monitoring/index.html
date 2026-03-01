@@ -8,7 +8,7 @@
       
       
       
-        <link rel="canonical" href="https://github.com/shengyanli1982/load-ants/deployment/monitoring/">
+        <link rel="canonical" href="https://shengyanli1982.github.io/load-ants/deployment/monitoring/">
       
       
         <link rel="prev" href="../security/">
@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.2">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
     
     
       
@@ -190,6 +190,18 @@
 </div>
       
     
+    
+      <div class="md-header__source">
+        <a href="https://github.com/shengyanli1982/load-ants" title="前往仓库" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    shengyanli1982/load-ants
+  </div>
+</a>
+      </div>
     
   </nav>
   
@@ -394,6 +406,18 @@
     </a>
     Load Ants
   </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/shengyanli1982/load-ants" title="前往仓库" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    shengyanli1982/load-ants
+  </div>
+</a>
+    </div>
   
   <ul class="md-nav__list" data-md-scrollfix>
     
@@ -943,7 +967,35 @@
   <span class="md-ellipsis">
     
   
-    客户端配置
+    HTTP 客户端配置
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/dns-client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DNS 客户端配置
   
 
     
@@ -1761,6 +1813,9 @@
                   
 
 
+  
+  
+
 
 <h1 id="prometheus">Prometheus 监控<a class="headerlink" href="#prometheus" title="Permanent link">&para;</a></h1>
 <p>在生产环境中，对应用进行有效的监控是确保服务质量和快速排查问题的关键。Load Ants 通过标准的 <code>Prometheus</code> 指标为你提供了强大的可观测性能力。</p>
@@ -1821,19 +1876,49 @@
 </li>
 </ul>
 <h5 id="3">3. 上游解析器<a class="headerlink" href="#3" title="Permanent link">&para;</a></h5>
+<blockquote>
+<p><strong>指标升级说明（Breaking Change）</strong><br />
+新版本已将 <code>loadants_upstream_*</code> 系列指标从“仅 DoH”升级为“DoH + DNS(UDP/TCP)”通用指标，并新增了两个标签维度：</p>
 <ul>
-<li><strong><code>loadants_upstream_requests_total</code></strong>: 发送到上游 DoH 解析器的请求总数。<ul>
-<li><em>标签</em>: <code>group</code>, <code>server</code> (服务器 Host)</li>
+<li><code>upstream_protocol</code>: <code>doh|dns</code></li>
+<li><code>upstream_transport</code>: <code>http|udp|tcp</code><br />
+  因此如果你之前在 Grafana/PromQL 中只按 <code>group/server</code> 聚合或过滤，需要把新标签纳入查询（或用 <code>sum by (...)</code> 忽略它们）。</li>
+</ul>
+</blockquote>
+<ul>
+<li><strong><code>loadants_upstream_requests_total</code></strong>: 发送到上游解析器的请求总数。<ul>
+<li><em>标签</em>: <code>upstream_protocol</code>, <code>upstream_transport</code>, <code>group</code>, <code>server</code></li>
+<li><em>说明</em>:<ul>
+<li><code>doh/http</code>：DoH 上游（<code>server</code> 通常为 Host）。</li>
+<li><code>dns/udp|dns/tcp</code>：传统 DNS 上游（<code>server</code> 通常为 IP 字符串）。</li>
+<li>当 <code>dns_client.prefer_tcp=false</code> 且 UDP 响应 <code>TC=1</code> 触发回退时：<strong>同一条逻辑请求可能会分别产生一条 <code>dns/udp</code> 与一条 <code>dns/tcp</code> 的请求计数</strong>（按“尝试次数”计数，这是预期行为）。</li>
 </ul>
 </li>
-<li><strong><code>loadants_upstream_errors_total</code></strong>: 上游 DoH 解析器错误总数。<ul>
-<li><em>标签</em>: <code>error_type</code>, <code>group</code>, <code>server</code> (服务器 Host)</li>
+</ul>
+</li>
+<li><strong><code>loadants_upstream_errors_total</code></strong>: 上游解析器错误总数。<ul>
+<li><em>标签</em>: <code>upstream_protocol</code>, <code>upstream_transport</code>, <code>error_type</code>, <code>group</code>, <code>server</code></li>
 <li><em>用途</em>: 快速定位出问题的上游服务器或组，并设置告警。</li>
 </ul>
 </li>
-<li><strong><code>loadants_upstream_duration_seconds</code></strong>: 上游 DoH 查询时长的直方图。<ul>
-<li><em>标签</em>: <code>group</code>, <code>server</code> (服务器 Host)</li>
-<li><em>用途</em>: 评估不同上游解析器的性能。</li>
+<li><strong><code>loadants_upstream_duration_seconds</code></strong>: 上游查询时长的直方图。<ul>
+<li><em>标签</em>: <code>upstream_protocol</code>, <code>upstream_transport</code>, <code>group</code>, <code>server</code></li>
+<li><em>用途</em>: 评估不同上游解析器的性能；对 <code>dns</code> 上游可以分别观察 <code>udp</code> 与 <code>tcp</code> 的延迟分布。</li>
+</ul>
+</li>
+</ul>
+<p><strong>PromQL 迁移示例</strong></p>
+<ul>
+<li>旧：只看某个组的上游请求速率（旧版无新标签）<ul>
+<li><code>rate(loadants_upstream_requests_total{group="public"}[5m])</code></li>
+</ul>
+</li>
+<li>新：保留新标签，分别看不同上游协议/传输<ul>
+<li><code>rate(loadants_upstream_requests_total{group="public"}[5m])</code></li>
+</ul>
+</li>
+<li>新：忽略 <code>upstream_protocol/upstream_transport</code>，得到与旧版更接近的聚合口径<ul>
+<li><code>sum by (group, server) (rate(loadants_upstream_requests_total[5m]))</code></li>
 </ul>
 </li>
 </ul>
