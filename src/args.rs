@@ -17,20 +17,23 @@ use std::path::PathBuf;
   \/_____/   \/_____/   \/_/\/_/   \/____/   \/_/\/_/   \/_/ \/_/     \/_/   \/_____/ 
           
 
-An lightweight DNS forwarder converting UDP/TCP queries or DoH requests to DoHServer
+A lightweight DNS splitter & forwarder.
 
 Key Features:
-- Protocol Conversion: UDP/53 and TCP/53 DNS requests to DNS-over-HTTPS (RFC 8484)
-- Intelligent Routing: Exact domain matching, Wildcard domain matching, Regex pattern matching
-- Upstream Management: Server grouping, Multiple load balancing strategies (RR, WRR, Random)
-- Authentication Support: HTTP Basic Auth and Bearer Token for upstream DoH servers
-- Performance Optimization: Built-in DNS caching, Reusable HTTP connection pool
-- Reliability: Automatic retry mechanism for failed DoH requests
-- Usability: Simple YAML configuration, Configuration validation, Command-line interfacen
+- Multi-protocol Inbound: UDP/53, TCP/53, and DoH (RFC 8484)
+- Multiple Upstream Schemes: DoH and classic DNS (UDP/TCP) via `upstream_groups[].scheme` (doh|dns)
+- Classic DNS Client: UDP by default, fallback to TCP when UDP response is truncated (TC=1), or `prefer_tcp=true`
+- Intelligent Routing: exact / wildcard / regex
+- Load Balancing: round-robin / weighted / random
+- Performance: built-in positive/negative cache, reusable connection pools
+- Observability: Prometheus metrics (`/metrics` on admin server)
+- Usability: YAML config, startup validation, `--test` mode
+
+Docs: https://shengyanli1982.github.io/load-ants/
 
 Author: shengyanli1982
 Email: shengyanlee36@gmail.com
-GitHub: https://github.com/shengyanli1982
+GitHub: https://github.com/shengyanli1982/load-ants
 "#
 )]
 pub struct Args {
