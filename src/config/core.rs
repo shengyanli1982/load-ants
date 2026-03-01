@@ -1,7 +1,54 @@
 use crate::config::{validate_idle_timeout, validate_keepalive, validate_socket_addr};
-use crate::r#const::{cache_limits, http_client_limits, server_defaults, timeout_limits};
+use crate::r#const::{
+    cache_limits, dns_client_limits, http_client_limits, server_defaults, timeout_limits,
+};
 use serde::{Deserialize, Serialize};
 use validator::{Validate, ValidationError};
+
+// DNS Client 配置（传统 UDP/TCP 上游）
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Validate)]
+#[serde(rename_all = "lowercase")]
+pub struct DnsClientConfig {
+    // TCP 连接超时（秒）
+    #[validate(range(
+        min = dns_client_limits::MIN_CONNECT_TIMEOUT,
+        max = dns_client_limits::MAX_CONNECT_TIMEOUT,
+        message = "Connection timeout must be between {} and {} seconds"
+    ))]
+    pub connect_timeout: u64,
+    // 请求超时（秒）
+    #[validate(range(
+        min = dns_client_limits::MIN_REQUEST_TIMEOUT,
+        max = dns_client_limits::MAX_REQUEST_TIMEOUT,
+        message = "Request timeout must be between {} and {} seconds"
+    ))]
+    pub request_timeout: u64,
+    // 是否优先使用 TCP
+    #[serde(default = "default_dns_client_prefer_tcp")]
+    pub prefer_tcp: bool,
+    // TCP 请求失败后是否丢弃连接并在下一次请求重连
+    #[serde(default = "default_dns_client_tcp_reconnect")]
+    pub tcp_reconnect: bool,
+}
+
+fn default_dns_client_prefer_tcp() -> bool {
+    dns_client_limits::DEFAULT_PREFER_TCP
+}
+
+fn default_dns_client_tcp_reconnect() -> bool {
+    dns_client_limits::DEFAULT_TCP_RECONNECT
+}
+
+impl Default for DnsClientConfig {
+    fn default() -> Self {
+        Self {
+            connect_timeout: dns_client_limits::DEFAULT_CONNECT_TIMEOUT,
+            request_timeout: dns_client_limits::DEFAULT_REQUEST_TIMEOUT,
+            prefer_tcp: default_dns_client_prefer_tcp(),
+            tcp_reconnect: default_dns_client_tcp_reconnect(),
+        }
+    }
+}
 
 // HTTP客户端配置
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Validate)]

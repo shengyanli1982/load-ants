@@ -28,7 +28,7 @@ pub struct DnsMetrics {
     dns_query_type_total: IntCounterVec,
     dns_response_codes_total: IntCounterVec,
 
-    // 4. 上游 DoH 解析器指标
+    // 4. 上游解析器指标（DoH / DNS）
     upstream_requests_total: IntCounterVec,
     upstream_errors_total: IntCounterVec,
     upstream_duration_seconds: HistogramVec,
@@ -156,32 +156,38 @@ impl DnsMetrics {
         )
         .unwrap();
 
-        // 4. 上游 DoH 解析器指标
+        // 4. 上游解析器指标（DoH / DNS）
         let upstream_requests_total = IntCounterVec::new(
             opts!(
                 "loadants_upstream_requests_total",
-                "Total requests sent to upstream DoH resolvers, classified by group and server"
+                "Total requests sent to upstream resolvers, classified by protocol, transport, group and server"
             ),
-            &["group", "server"],
+            &["upstream_protocol", "upstream_transport", "group", "server"],
         )
         .unwrap();
 
         let upstream_errors_total = IntCounterVec::new(
             opts!(
                 "loadants_upstream_errors_total",
-                "Total upstream DoH resolver errors, classified by error type, group and server"
+                "Total upstream resolver errors, classified by protocol, transport, error type, group and server"
             ),
-            &["error_type", "group", "server"],
+            &[
+                "upstream_protocol",
+                "upstream_transport",
+                "error_type",
+                "group",
+                "server",
+            ],
         )
         .unwrap();
 
         let upstream_duration_seconds = HistogramVec::new(
             prometheus::histogram_opts!(
                 "loadants_upstream_duration_seconds",
-                "Upstream DoH query duration in seconds, classified by group and server",
+                "Upstream query duration in seconds, classified by protocol, transport, group and server",
                 vec![0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0]
             ),
-            &["group", "server"],
+            &["upstream_protocol", "upstream_transport", "group", "server"],
         )
         .unwrap();
 

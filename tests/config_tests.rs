@@ -1,5 +1,6 @@
-use loadants::config::Config;
+use loadants::config::{Config, UpstreamServerConfig};
 use std::io::Write;
+use std::path::PathBuf;
 use tempfile::NamedTempFile;
 
 // 辅助函数：创建临时配置文件
@@ -8,6 +9,21 @@ fn create_temp_config_file(content: &str) -> NamedTempFile {
     file.write_all(content.as_bytes()).unwrap();
     file.flush().unwrap();
     file
+}
+
+#[test]
+fn test_repo_config_files_loading() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    for file in ["config.example.yaml", "config.default.yaml"] {
+        let path = root.join(file);
+        let result = Config::from_file(&path);
+        assert!(
+            result.is_ok(),
+            "Failed to load {:?}: {:?}",
+            path,
+            result.err()
+        );
+    }
 }
 
 #[test]
@@ -429,7 +445,10 @@ upstream_groups:
     // 但我们可以检查配置是否正确加载
     if result.is_ok() {
         let config = result.unwrap();
-        let auth = &config.upstream_groups.as_ref().unwrap()[0].servers[0].auth;
+        let auth = match &config.upstream_groups.as_ref().unwrap()[0].servers[0] {
+            UpstreamServerConfig::Doh(server) => &server.auth,
+            UpstreamServerConfig::Dns(_) => panic!("Expected DoH upstream server config"),
+        };
         assert!(auth.is_some());
         let auth = auth.as_ref().unwrap();
         assert!(auth.username.is_none() || auth.username.as_ref().unwrap().is_empty());
@@ -458,7 +477,10 @@ upstream_groups:
     // 同样，根据代码，这可能不会导致错误
     if result.is_ok() {
         let config = result.unwrap();
-        let auth = &config.upstream_groups.as_ref().unwrap()[0].servers[0].auth;
+        let auth = match &config.upstream_groups.as_ref().unwrap()[0].servers[0] {
+            UpstreamServerConfig::Doh(server) => &server.auth,
+            UpstreamServerConfig::Dns(_) => panic!("Expected DoH upstream server config"),
+        };
         assert!(auth.is_some());
         let auth = auth.as_ref().unwrap();
         assert!(auth.token.is_none() || auth.token.as_ref().unwrap().is_empty());

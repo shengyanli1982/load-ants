@@ -36,6 +36,6 @@ pub use r#const::{
 
 // 重导出常用配置类型
 pub use config::{
-    AdminConfig, CacheConfig, HttpClientConfig, MatchType, RemoteRuleConfig, RouteAction,
-    RouteRuleConfig, ServerConfig, UpstreamGroupConfig,
+    AdminConfig, CacheConfig, DnsClientConfig, HttpClientConfig, MatchType, RemoteRuleConfig,
+    RouteAction, RouteRuleConfig, ServerConfig, UpstreamGroupConfig,
 };

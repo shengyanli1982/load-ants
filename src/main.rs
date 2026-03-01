@@ -171,11 +171,14 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
 
     // 准备HTTP客户端配置
     let http_client_config = config.http_client.clone().unwrap_or_default();
+    // 准备 DNS 客户端配置
+    let dns_client_config = config.dns_client.clone().unwrap_or_default();
 
     // 创建上游管理器 - 避免不必要的克隆
     let upstream = match UpstreamManager::new(
         config.upstream_groups.clone().unwrap_or_default(),
         http_client_config.clone(),
+        dns_client_config.clone(),
     )
     .await
     {

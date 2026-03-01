@@ -1,4 +1,5 @@
 // 声明子模块
+mod dns_client;
 mod doh;
 mod http_client;
 mod json;
