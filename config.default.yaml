@@ -28,9 +28,17 @@ http_client:
   keepalive: 60 # 可选：TCP Keepalive（秒）(有效范围: 5-600)
   agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" # 可选：HTTP 用户代理
 
+# 所有上游请求共享的 DNS 客户端设置
+dns_client:
+  connect_timeout: 2 # TCP 连接超时（秒）(有效范围: 1-120)
+  request_timeout: 3 # DNS 请求超时（秒）(有效范围: 1-1200)
+  prefer_tcp: false # true=默认使用上游 TCP；false=默认使用上游 UDP，收到 TC=1 时切换 TCP 重试
+  tcp_reconnect: true # TCP 请求失败后丢弃连接，下次请求重连
+
 # 上游 DoH 服务器组
 upstream_groups:
   - name: "google"
+    scheme: "doh"
     strategy: "random"
     servers:
       - url: "https://8.8.8.8/resolve" #
@@ -42,6 +50,7 @@ upstream_groups:
     proxy: "http://127.0.0.1:7890"
 
   - name: "public"
+    scheme: "doh"
     strategy: "roundrobin"
     servers:
       - url: "https://223.5.5.5/dns-query"
@@ -56,6 +65,13 @@ upstream_groups:
       - url: "https://120.53.53.53/dns-query"
         method: "get"
         content_type: "message" # 使用 application/dns-message 内容类型
+
+  - name: "public_dns"
+    scheme: "dns"
+    strategy: "roundrobin"
+    servers:
+      - addr: 223.5.5.5:53
+      - addr: 223.6.6.6:53
 
 # 路由规则（静态配置）
 static_rules:

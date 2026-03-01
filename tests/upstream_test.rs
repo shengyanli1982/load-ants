@@ -2,14 +2,16 @@ use hickory_proto::op::{Message, OpCode, Query, ResponseCode};
 use hickory_proto::rr::rdata::A;
 use hickory_proto::rr::{Name, RData, Record, RecordType};
 use loadants::config::{
-    AuthConfig, AuthType, DoHContentType, DoHMethod, HttpClientConfig, LoadBalancingStrategy,
-    RetryConfig, UpstreamGroupConfig, UpstreamServerConfig,
+    AuthConfig, AuthType, DnsClientConfig, DnsUpstreamServerConfig, DoHContentType, DoHMethod,
+    DoHUpstreamServerConfig, HttpClientConfig, LoadBalancingStrategy, RetryConfig,
+    UpstreamGroupConfig, UpstreamScheme, UpstreamServerConfig,
 };
 use loadants::error::AppError;
 use loadants::upstream::UpstreamManager;
 use reqwest::Url;
-use std::net::Ipv4Addr;
+use std::net::{Ipv4Addr, SocketAddr};
 use std::str::FromStr;
+use tokio::net::UdpSocket;
 use wiremock::{
     matchers::{header, method, path},
     Mock, MockServer, ResponseTemplate,
@@ -100,6 +102,58 @@ fn create_test_error_json_response() -> String {
     .to_string()
 }
 
+#[tokio::test]
+async fn test_dns_scheme_forward_via_udp() {
+    let udp_socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+    let server_addr = udp_socket.local_addr().unwrap();
+
+    tokio::spawn(async move {
+        let mut buf = [0u8; 2048];
+        let (len, peer) = udp_socket.recv_from(&mut buf).await.unwrap();
+
+        let query = Message::from_vec(&buf[..len]).unwrap();
+        let mut response = Message::new();
+        response.set_id(query.id());
+        response.set_recursion_desired(query.recursion_desired());
+        response.set_recursion_available(true);
+        response.set_op_code(query.op_code());
+        response.set_response_code(ResponseCode::NoError);
+        if let Some(q) = query.queries().first() {
+            response.add_query(q.clone());
+        }
+
+        let bytes = response.to_vec().unwrap();
+        let _ = udp_socket.send_to(&bytes, peer).await;
+    });
+
+    let groups = vec![UpstreamGroupConfig {
+        name: "dns_group".to_string(),
+        scheme: UpstreamScheme::Dns,
+        strategy: LoadBalancingStrategy::RoundRobin,
+        servers: vec![UpstreamServerConfig::Dns(DnsUpstreamServerConfig {
+            addr: SocketAddr::from(server_addr),
+            weight: 1,
+        })],
+        retry: None,
+        proxy: None,
+    }];
+
+    let http_config = HttpClientConfig::default();
+    let dns_config = DnsClientConfig {
+        connect_timeout: 1,
+        request_timeout: 2,
+        prefer_tcp: false,
+        tcp_reconnect: true,
+    };
+    let manager = UpstreamManager::new(groups, http_config, dns_config)
+        .await
+        .unwrap();
+
+    let query = create_test_dns_query("example.com", RecordType::A);
+    let response = manager.forward(&query, "dns_group").await.unwrap();
+    assert_eq!(response.response_code(), ResponseCode::NoError);
+}
+
 // 创建TXT记录JSON响应辅助函数 - 处理带引号的TXT记录
 fn create_test_txt_json_response() -> String {
     r#"{
@@ -149,44 +203,46 @@ async fn test_upstream_manager_creation() {
     let groups = vec![
         UpstreamGroupConfig {
             name: "round_robin_group".to_string(),
+            scheme: UpstreamScheme::Doh,
             strategy: LoadBalancingStrategy::RoundRobin,
             servers: vec![
-                UpstreamServerConfig {
+                UpstreamServerConfig::Doh(DoHUpstreamServerConfig {
                     url: Url::parse("https://example.com/dns-query").unwrap(),
                     weight: 1,
                     method: DoHMethod::Get,
                     content_type: DoHContentType::Message,
                     auth: None,
-                },
-                UpstreamServerConfig {
+                }),
+                UpstreamServerConfig::Doh(DoHUpstreamServerConfig {
                     url: Url::parse("https://example.org/dns-query").unwrap(),
                     weight: 1,
                     method: DoHMethod::Get,
                     content_type: DoHContentType::Message,
                     auth: None,
-                },
+                }),
             ],
             retry: None,
             proxy: None,
         },
         UpstreamGroupConfig {
             name: "weighted_group".to_string(),
+            scheme: UpstreamScheme::Doh,
             strategy: LoadBalancingStrategy::Weighted,
             servers: vec![
-                UpstreamServerConfig {
+                UpstreamServerConfig::Doh(DoHUpstreamServerConfig {
                     url: Url::parse("https://example.com/dns-query").unwrap(),
                     weight: 2,
                     method: DoHMethod::Post,
                     content_type: DoHContentType::Message,
                     auth: None,
-                },
-                UpstreamServerConfig {
+                }),
+                UpstreamServerConfig::Doh(DoHUpstreamServerConfig {
                     url: Url::parse("https://example.org/dns-query").unwrap(),
                     weight: 1,
                     method: DoHMethod::Post,
                     content_type: DoHContentType::Message,
                     auth: None,
-                },
+                }),
             ],
             retry: None,
             proxy: None,
@@ -194,7 +250,7 @@ async fn test_upstream_manager_creation() {
     ];
 
     // 创建上游管理器
-    let manager = UpstreamManager::new(groups, http_config).await;
+    let manager = UpstreamManager::new(groups, http_config, DnsClientConfig::default()).await;
     assert!(manager.is_ok());
 }
 
@@ -209,14 +265,15 @@ async fn test_upstream_doh_get_message() {
     // 创建上游组配置 - GET请求，Message内容类型
     let groups = vec![UpstreamGroupConfig {
         name: "test_group".to_string(),
+        scheme: UpstreamScheme::Doh,
         strategy: LoadBalancingStrategy::RoundRobin,
-        servers: vec![UpstreamServerConfig {
+        servers: vec![UpstreamServerConfig::Doh(DoHUpstreamServerConfig {
             url: Url::parse(&format!("{}/dns-query", mock_server.uri())).unwrap(),
             weight: 1,
             method: DoHMethod::Get,
             content_type: DoHContentType::Message,
             auth: None,
-        }],
+        })],
         retry: None,
         proxy: None,
     }];
@@ -233,7 +290,9 @@ async fn test_upstream_doh_get_message() {
         .await;
 
     // 创建上游管理器
-    let manager = UpstreamManager::new(groups, http_config).await.unwrap();
+    let manager = UpstreamManager::new(groups, http_config, DnsClientConfig::default())
+        .await
+        .unwrap();
 
     // 创建DNS查询
     let query = create_test_dns_query("example.com", RecordType::A);
@@ -275,14 +334,15 @@ async fn test_upstream_doh_post_message() {
     // 创建上游组配置 - POST请求，Message内容类型
     let groups = vec![UpstreamGroupConfig {
         name: "test_group".to_string(),
+        scheme: UpstreamScheme::Doh,
         strategy: LoadBalancingStrategy::RoundRobin,
-        servers: vec![UpstreamServerConfig {
+        servers: vec![UpstreamServerConfig::Doh(DoHUpstreamServerConfig {
             url: Url::parse(&format!("{}/dns-query", mock_server.uri())).unwrap(),
             weight: 1,
             method: DoHMethod::Post,
             content_type: DoHContentType::Message,
             auth: None,
-        }],
+        })],
         retry: None,
         proxy: None,
     }];
@@ -300,7 +360,9 @@ async fn test_upstream_doh_post_message() {
         .await;
 
     // 创建上游管理器
-    let manager = UpstreamManager::new(groups, http_config).await.unwrap();
+    let manager = UpstreamManager::new(groups, http_config, DnsClientConfig::default())
+        .await
+        .unwrap();
 
     // 创建DNS查询
     let query = create_test_dns_query("example.com", RecordType::A);
@@ -329,14 +391,15 @@ async fn test_upstream_doh_get_json() {
     // 创建上游组配置 - GET请求，JSON内容类型
     let groups = vec![UpstreamGroupConfig {
         name: "test_group".to_string(),
+        scheme: UpstreamScheme::Doh,
         strategy: LoadBalancingStrategy::RoundRobin,
-        servers: vec![UpstreamServerConfig {
+        servers: vec![UpstreamServerConfig::Doh(DoHUpstreamServerConfig {
             url: Url::parse(&format!("{}/resolve", mock_server.uri())).unwrap(),
             weight: 1,
             method: DoHMethod::Get,
             content_type: DoHContentType::Json,
             auth: None,
-        }],
+        })],
         retry: None,
         proxy: None,
     }];
@@ -356,7 +419,9 @@ async fn test_upstream_doh_get_json() {
     println!("Mock response body: {}", create_test_json_response());
 
     // 创建上游管理器
-    let manager = UpstreamManager::new(groups, http_config).await.unwrap();
+    let manager = UpstreamManager::new(groups, http_config, DnsClientConfig::default())
+        .await
+        .unwrap();
 
     // 创建DNS查询
     let query = create_test_dns_query("example.com", RecordType::A);
@@ -386,20 +451,23 @@ async fn test_upstream_doh_post_json_fails() {
     // 创建上游组配置 - POST请求，JSON内容类型（这是不合规的组合）
     let groups = vec![UpstreamGroupConfig {
         name: "test_group".to_string(),
+        scheme: UpstreamScheme::Doh,
         strategy: LoadBalancingStrategy::RoundRobin,
-        servers: vec![UpstreamServerConfig {
+        servers: vec![UpstreamServerConfig::Doh(DoHUpstreamServerConfig {
             url: Url::parse(&format!("{}/resolve", mock_server.uri())).unwrap(),
             weight: 1,
             method: DoHMethod::Post,
             content_type: DoHContentType::Json,
             auth: None,
-        }],
+        })],
         retry: None,
         proxy: None,
     }];
 
     // 创建上游管理器 - 不应该验证配置，因为这里我们直接创建了不合规的配置
-    let manager = UpstreamManager::new(groups, http_config).await.unwrap();
+    let manager = UpstreamManager::new(groups, http_config, DnsClientConfig::default())
+        .await
+        .unwrap();
 
     // 创建DNS查询
     let query = create_test_dns_query("example.com", RecordType::A);
@@ -433,8 +501,9 @@ async fn test_upstream_with_auth() {
     // 创建带有Bearer认证的上游组配置
     let groups = vec![UpstreamGroupConfig {
         name: "auth_group".to_string(),
+        scheme: UpstreamScheme::Doh,
         strategy: LoadBalancingStrategy::RoundRobin,
-        servers: vec![UpstreamServerConfig {
+        servers: vec![UpstreamServerConfig::Doh(DoHUpstreamServerConfig {
             url: Url::parse(&format!("{}/dns-query", mock_server.uri())).unwrap(),
             weight: 1,
             method: DoHMethod::Get,
@@ -445,7 +514,7 @@ async fn test_upstream_with_auth() {
                 password: None,
                 token: Some("test-token".to_string()),
             }),
-        }],
+        })],
         retry: None,
         proxy: None,
     }];
@@ -463,7 +532,9 @@ async fn test_upstream_with_auth() {
         .await;
 
     // 创建上游管理器
-    let manager = UpstreamManager::new(groups, http_config).await.unwrap();
+    let manager = UpstreamManager::new(groups, http_config, DnsClientConfig::default())
+        .await
+        .unwrap();
 
     // 创建DNS查询
     let query = create_test_dns_query("example.com", RecordType::A);
@@ -489,8 +560,9 @@ async fn test_basic_auth() {
     // 创建带有Basic认证的上游组配置
     let groups = vec![UpstreamGroupConfig {
         name: "basic_auth_group".to_string(),
+        scheme: UpstreamScheme::Doh,
         strategy: LoadBalancingStrategy::RoundRobin,
-        servers: vec![UpstreamServerConfig {
+        servers: vec![UpstreamServerConfig::Doh(DoHUpstreamServerConfig {
             url: Url::parse(&format!("{}/dns-query", mock_server.uri())).unwrap(),
             weight: 1,
             method: DoHMethod::Get,
@@ -501,7 +573,7 @@ async fn test_basic_auth() {
                 password: Some("testpass".to_string()),
                 token: None,
             }),
-        }],
+        })],
         retry: None,
         proxy: None,
     }];
@@ -519,7 +591,9 @@ async fn test_basic_auth() {
         .await;
 
     // 创建上游管理器
-    let manager = UpstreamManager::new(groups, http_config).await.unwrap();
+    let manager = UpstreamManager::new(groups, http_config, DnsClientConfig::default())
+        .await
+        .unwrap();
 
     // 创建DNS查询
     let query = create_test_dns_query("example.com", RecordType::A);
@@ -545,22 +619,23 @@ async fn test_load_balancing_round_robin() {
     // 创建上游组配置 - 轮询负载均衡
     let groups = vec![UpstreamGroupConfig {
         name: "round_robin_group".to_string(),
+        scheme: UpstreamScheme::Doh,
         strategy: LoadBalancingStrategy::RoundRobin,
         servers: vec![
-            UpstreamServerConfig {
+            UpstreamServerConfig::Doh(DoHUpstreamServerConfig {
                 url: Url::parse(&format!("{}/dns-query1", mock_server.uri())).unwrap(),
                 weight: 1,
                 method: DoHMethod::Get,
                 content_type: DoHContentType::Message,
                 auth: None,
-            },
-            UpstreamServerConfig {
+            }),
+            UpstreamServerConfig::Doh(DoHUpstreamServerConfig {
                 url: Url::parse(&format!("{}/dns-query2", mock_server.uri())).unwrap(),
                 weight: 1,
                 method: DoHMethod::Get,
                 content_type: DoHContentType::Message,
                 auth: None,
-            },
+            }),
         ],
         retry: None,
         proxy: None,
@@ -589,7 +664,9 @@ async fn test_load_balancing_round_robin() {
         .await;
 
     // 创建上游管理器
-    let manager = UpstreamManager::new(groups, http_config).await.unwrap();
+    let manager = UpstreamManager::new(groups, http_config, DnsClientConfig::default())
+        .await
+        .unwrap();
 
     // 创建DNS查询
     let query = create_test_dns_query("example.com", RecordType::A);
@@ -620,14 +697,15 @@ async fn test_error_handling() {
     // 创建上游组配置 - 使用不存在的组名
     let groups = vec![UpstreamGroupConfig {
         name: "test_group".to_string(),
+        scheme: UpstreamScheme::Doh,
         strategy: LoadBalancingStrategy::RoundRobin,
-        servers: vec![UpstreamServerConfig {
+        servers: vec![UpstreamServerConfig::Doh(DoHUpstreamServerConfig {
             url: Url::parse(&format!("{}/dns-query", mock_server.uri())).unwrap(),
             weight: 1,
             method: DoHMethod::Get,
             content_type: DoHContentType::Message,
             auth: None,
-        }],
+        })],
         retry: None,
         proxy: None,
     }];
@@ -640,7 +718,9 @@ async fn test_error_handling() {
         .await;
 
     // 创建上游管理器
-    let manager = UpstreamManager::new(groups, http_config).await.unwrap();
+    let manager = UpstreamManager::new(groups, http_config, DnsClientConfig::default())
+        .await
+        .unwrap();
 
     // 创建DNS查询
     let query = create_test_dns_query("example.com", RecordType::A);
@@ -665,14 +745,15 @@ async fn test_retry_config() {
     // 创建上游组配置 - 带重试配置
     let groups = vec![UpstreamGroupConfig {
         name: "retry_group".to_string(),
+        scheme: UpstreamScheme::Doh,
         strategy: LoadBalancingStrategy::RoundRobin,
-        servers: vec![UpstreamServerConfig {
+        servers: vec![UpstreamServerConfig::Doh(DoHUpstreamServerConfig {
             url: Url::parse(&format!("{}/dns-query", mock_server.uri())).unwrap(),
             weight: 1,
             method: DoHMethod::Get,
             content_type: DoHContentType::Message,
             auth: None,
-        }],
+        })],
         retry: Some(RetryConfig {
             attempts: 3,
             delay: 1,
@@ -681,7 +762,9 @@ async fn test_retry_config() {
     }];
 
     // 创建上游管理器
-    let manager = UpstreamManager::new(groups, http_config).await.unwrap();
+    let manager = UpstreamManager::new(groups, http_config, DnsClientConfig::default())
+        .await
+        .unwrap();
 
     // 验证成功创建
     assert!(manager
@@ -704,14 +787,15 @@ async fn test_json_response_parsing() {
     // 创建上游组配置
     let groups = vec![UpstreamGroupConfig {
         name: "json_group".to_string(),
+        scheme: UpstreamScheme::Doh,
         strategy: LoadBalancingStrategy::RoundRobin,
-        servers: vec![UpstreamServerConfig {
+        servers: vec![UpstreamServerConfig::Doh(DoHUpstreamServerConfig {
             url: Url::parse(&format!("{}/dns-query", mock_server.uri())).unwrap(),
             weight: 1,
             method: DoHMethod::Get,
             content_type: DoHContentType::Json,
             auth: None,
-        }],
+        })],
         retry: None,
         proxy: None,
     }];
@@ -799,7 +883,9 @@ async fn test_json_response_parsing() {
         .await;
 
     // 创建上游管理器
-    let manager = UpstreamManager::new(groups, http_config).await.unwrap();
+    let manager = UpstreamManager::new(groups, http_config, DnsClientConfig::default())
+        .await
+        .unwrap();
 
     // 创建DNS查询
     let query = create_test_dns_query("example.com", RecordType::A);
@@ -841,14 +927,15 @@ async fn test_json_error_response() {
     // 创建上游组配置
     let groups = vec![UpstreamGroupConfig {
         name: "error_group".to_string(),
+        scheme: UpstreamScheme::Doh,
         strategy: LoadBalancingStrategy::RoundRobin,
-        servers: vec![UpstreamServerConfig {
+        servers: vec![UpstreamServerConfig::Doh(DoHUpstreamServerConfig {
             url: Url::parse(&format!("{}/dns-query", mock_server.uri())).unwrap(),
             weight: 1,
             method: DoHMethod::Get,
             content_type: DoHContentType::Json,
             auth: None,
-        }],
+        })],
         retry: None,
         proxy: None,
     }];
@@ -865,7 +952,9 @@ async fn test_json_error_response() {
         .await;
 
     // 创建上游管理器
-    let manager = UpstreamManager::new(groups, http_config).await.unwrap();
+    let manager = UpstreamManager::new(groups, http_config, DnsClientConfig::default())
+        .await
+        .unwrap();
 
     // 创建DNS查询
     let query = create_test_dns_query("dnssec-failed.org", RecordType::A);
@@ -905,14 +994,15 @@ async fn test_json_txt_response() {
     // 创建上游组配置
     let groups = vec![UpstreamGroupConfig {
         name: "txt_group".to_string(),
+        scheme: UpstreamScheme::Doh,
         strategy: LoadBalancingStrategy::RoundRobin,
-        servers: vec![UpstreamServerConfig {
+        servers: vec![UpstreamServerConfig::Doh(DoHUpstreamServerConfig {
             url: Url::parse(&format!("{}/dns-query", mock_server.uri())).unwrap(),
             weight: 1,
             method: DoHMethod::Get,
             content_type: DoHContentType::Json,
             auth: None,
-        }],
+        })],
         retry: None,
         proxy: None,
     }];
@@ -929,7 +1019,9 @@ async fn test_json_txt_response() {
         .await;
 
     // 创建上游管理器
-    let manager = UpstreamManager::new(groups, http_config).await.unwrap();
+    let manager = UpstreamManager::new(groups, http_config, DnsClientConfig::default())
+        .await
+        .unwrap();
 
     // 创建DNS查询
     let query = create_test_dns_query("example.com", RecordType::TXT);
@@ -972,14 +1064,15 @@ async fn test_json_edns_client_subnet() {
     // 创建上游组配置，使用EDNS Client Subnet参数
     let groups = vec![UpstreamGroupConfig {
         name: "edns_group".to_string(),
+        scheme: UpstreamScheme::Doh,
         strategy: LoadBalancingStrategy::RoundRobin,
-        servers: vec![UpstreamServerConfig {
+        servers: vec![UpstreamServerConfig::Doh(DoHUpstreamServerConfig {
             url: Url::parse(&format!("{}/dns-query", mock_server.uri())).unwrap(),
             weight: 1,
             method: DoHMethod::Get,
             content_type: DoHContentType::Json,
             auth: None,
-        }],
+        })],
         retry: None,
         proxy: None,
     }];
@@ -997,7 +1090,9 @@ async fn test_json_edns_client_subnet() {
         .await;
 
     // 创建上游管理器
-    let manager = UpstreamManager::new(groups, http_config).await.unwrap();
+    let manager = UpstreamManager::new(groups, http_config, DnsClientConfig::default())
+        .await
+        .unwrap();
 
     // 创建DNS查询
     let query = create_test_dns_query("example.com", RecordType::A);

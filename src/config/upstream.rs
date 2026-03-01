@@ -4,7 +4,9 @@ use serde::{
     de::{self, Deserializer},
     Deserialize, Serialize,
 };
-use validator::{Validate, ValidationError};
+use std::borrow::Cow;
+use std::net::SocketAddr;
+use validator::{Validate, ValidationError, ValidationErrors};
 
 use super::common::{AuthConfig, RetryConfig};
 
@@ -18,6 +20,18 @@ pub enum LoadBalancingStrategy {
     Weighted,
     // 随机策略
     Random,
+}
+
+// 上游组 scheme
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum UpstreamScheme {
+    Doh,
+    Dns,
+}
+
+fn default_upstream_scheme() -> UpstreamScheme {
+    UpstreamScheme::Doh
 }
 
 // DoH请求方法枚举
@@ -81,10 +95,25 @@ fn validate_weight(weight: u32) -> Result<(), ValidationError> {
     Ok(())
 }
 
-// 上游服务器配置
+// 默认的DoH方法为POST
+fn default_doh_method() -> DoHMethod {
+    DoHMethod::Post
+}
+
+// 默认的内容类型为DNS消息格式
+fn default_content_type() -> DoHContentType {
+    DoHContentType::Message
+}
+
+// 默认的权重为1
+fn default_us_weight() -> u32 {
+    1
+}
+
+// DoH 上游服务器配置
 #[derive(Debug, Serialize, Deserialize, Validate)]
-#[serde(rename_all = "lowercase")]
-pub struct UpstreamServerConfig {
+#[serde(rename_all = "lowercase", deny_unknown_fields)]
+pub struct DoHUpstreamServerConfig {
     // DoH服务器URL
     #[serde(deserialize_with = "deserialize_url")]
     #[validate(custom(
@@ -122,7 +151,7 @@ pub struct UpstreamServerConfig {
     pub auth: Option<AuthConfig>,
 }
 
-impl Clone for UpstreamServerConfig {
+impl Clone for DoHUpstreamServerConfig {
     fn clone(&self) -> Self {
         Self {
             url: self.url.clone(),
@@ -134,7 +163,7 @@ impl Clone for UpstreamServerConfig {
     }
 }
 
-impl PartialEq for UpstreamServerConfig {
+impl PartialEq for DoHUpstreamServerConfig {
     fn eq(&self, other: &Self) -> bool {
         self.url.as_str() == other.url.as_str()
             && self.weight == other.weight
@@ -144,21 +173,59 @@ impl PartialEq for UpstreamServerConfig {
     }
 }
 
-impl Eq for UpstreamServerConfig {}
+impl Eq for DoHUpstreamServerConfig {}
 
-// 默认的DoH方法为POST
-fn default_doh_method() -> DoHMethod {
-    DoHMethod::Post
+// DNS（UDP/TCP）上游服务器配置
+#[derive(Debug, Serialize, Deserialize, Validate, Clone, PartialEq, Eq)]
+#[serde(rename_all = "lowercase", deny_unknown_fields)]
+pub struct DnsUpstreamServerConfig {
+    pub addr: SocketAddr,
+
+    #[serde(default = "default_us_weight")]
+    #[validate(custom(
+        function = "validate_weight",
+        message = "Weight must be between 1-65535"
+    ))]
+    pub weight: u32,
 }
 
-// 默认的内容类型为DNS消息格式
-fn default_content_type() -> DoHContentType {
-    DoHContentType::Message
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum UpstreamServerConfig {
+    Doh(DoHUpstreamServerConfig),
+    Dns(DnsUpstreamServerConfig),
 }
 
-// 默认的权重为1
-fn default_us_weight() -> u32 {
-    1
+impl UpstreamServerConfig {
+    pub fn weight(&self) -> u32 {
+        match self {
+            Self::Doh(s) => s.weight,
+            Self::Dns(s) => s.weight,
+        }
+    }
+
+    pub fn as_doh(&self) -> Option<&DoHUpstreamServerConfig> {
+        match self {
+            Self::Doh(s) => Some(s),
+            Self::Dns(_) => None,
+        }
+    }
+
+    pub fn as_dns(&self) -> Option<&DnsUpstreamServerConfig> {
+        match self {
+            Self::Doh(_) => None,
+            Self::Dns(s) => Some(s),
+        }
+    }
+}
+
+impl Validate for UpstreamServerConfig {
+    fn validate(&self) -> Result<(), ValidationErrors> {
+        match self {
+            Self::Doh(s) => s.validate(),
+            Self::Dns(s) => s.validate(),
+        }
+    }
 }
 
 // 自定义验证函数 - 验证上游组服务器非空
@@ -169,13 +236,66 @@ fn validate_servers_not_empty(servers: &[UpstreamServerConfig]) -> Result<(), Va
     Ok(())
 }
 
+fn validate_group_scheme(group: &UpstreamGroupConfig) -> Result<(), ValidationError> {
+    match group.scheme {
+        UpstreamScheme::Doh => {
+            for server in &group.servers {
+                if server.as_doh().is_none() {
+                    let mut err = ValidationError::new("invalid_server_variant_for_scheme");
+                    err.message = Some(Cow::from(
+                        "Upstream group scheme 'doh' requires servers to use 'url' entries"
+                            .to_string(),
+                    ));
+                    return Err(err);
+                }
+            }
+            Ok(())
+        }
+        UpstreamScheme::Dns => {
+            if group.retry.is_some() {
+                let mut err = ValidationError::new("dns_group_retry_not_supported");
+                err.message = Some(Cow::from(
+                    "Upstream group scheme 'dns' does not support 'retry'".to_string(),
+                ));
+                return Err(err);
+            }
+            if group.proxy.is_some() {
+                let mut err = ValidationError::new("dns_group_proxy_not_supported");
+                err.message = Some(Cow::from(
+                    "Upstream group scheme 'dns' does not support 'proxy'".to_string(),
+                ));
+                return Err(err);
+            }
+            for server in &group.servers {
+                if server.as_dns().is_none() {
+                    let mut err = ValidationError::new("invalid_server_variant_for_scheme");
+                    err.message = Some(Cow::from(
+                        "Upstream group scheme 'dns' requires servers to use 'addr' entries"
+                            .to_string(),
+                    ));
+                    return Err(err);
+                }
+            }
+            Ok(())
+        }
+    }
+}
+
 // 上游组配置
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Validate)]
+#[validate(schema(
+    function = "validate_group_scheme",
+    message = "Upstream group scheme validation failed"
+))]
 #[serde(rename_all = "lowercase")]
 pub struct UpstreamGroupConfig {
     // 组名称
     #[validate(length(min = 1, message = "Group name cannot be empty"))]
     pub name: String,
+
+    // 上游组 scheme（doh|dns），缺省为 doh（兼容旧配置）
+    #[serde(default = "default_upstream_scheme", alias = "protocol")]
+    pub scheme: UpstreamScheme,
 
     // 负载均衡策略
     pub strategy: LoadBalancingStrategy,

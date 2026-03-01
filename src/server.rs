@@ -2,7 +2,8 @@ use crate::error::AppError;
 use crate::handler::RequestHandler as DnsRequestHandler;
 use crate::metrics::METRICS;
 use crate::r#const::{error_labels, protocol_labels};
-use hickory_proto::op::{Header, Message, MessageType, OpCode, Query, ResponseCode};
+use hickory_proto::op::{Header, Message, MessageType, OpCode, ResponseCode};
+use hickory_proto::serialize::binary::{BinEncodable, BinEncoder};
 use hickory_server::authority::MessageResponseBuilder;
 use hickory_server::server::{Request, RequestHandler, ResponseHandler, ResponseInfo};
 use std::net::SocketAddr;
@@ -17,6 +18,16 @@ use tracing::{debug, error, info, warn};
 pub struct HandlerAdapter {
     // 内部请求处理器
     handler: Arc<DnsRequestHandler>,
+}
+
+#[doc(hidden)]
+pub fn parse_request_message(request: &Request) -> Result<Message, AppError> {
+    let mut buffer = Vec::with_capacity(512);
+    {
+        let mut encoder = BinEncoder::new(&mut buffer);
+        request.emit(&mut encoder)?;
+    }
+    Ok(Message::from_vec(&buffer)?)
 }
 
 impl HandlerAdapter {
@@ -114,21 +125,40 @@ impl RequestHandler for HandlerAdapter {
             request.src()
         );
 
-        // 创建一个消息用于内部处理
-        let mut message = Message::new();
-        message.set_id(request.id());
-        message.set_op_code(request.op_code());
-        message.set_message_type(MessageType::Query);
-        message.set_recursion_desired(request.recursion_desired());
+        let message = match parse_request_message(request) {
+            Ok(message) => message,
+            Err(e) => {
+                error!("Failed to parse request message: {}", e);
 
-        // 添加查询
-        // 创建一个新的 Query 对象，因为 request.query() 返回的是 LowerQuery
-        let mut temp_query = Query::new();
-        temp_query
-            .set_name(query.name().clone().into())
-            .set_query_type(query.query_type())
-            .set_query_class(query.query_class());
-        message.add_query(temp_query);
+                METRICS
+                    .dns_request_errors_total()
+                    .with_label_values(&[error_labels::REQUEST_ERROR])
+                    .inc();
+
+                let mut header = Header::new();
+                header.set_id(request.id());
+                header.set_op_code(request.op_code());
+                header.set_response_code(ResponseCode::ServFail);
+
+                let builder = MessageResponseBuilder::from_message_request(request);
+                let response = builder.error_msg(&header, ResponseCode::ServFail);
+
+                // 记录处理时间
+                let duration = start_time.elapsed();
+                METRICS
+                    .dns_request_duration_seconds()
+                    .with_label_values(&[protocol, query_type.to_string().as_str()])
+                    .observe(duration.as_secs_f64());
+
+                return response_handler
+                    .send_response(response)
+                    .await
+                    .unwrap_or_else(|e| {
+                        error!("Error sending response: {}", e);
+                        ResponseInfo::from(header)
+                    });
+            }
+        };
 
         // 异步处理请求
         match self.handler.handle_request(&message).await {

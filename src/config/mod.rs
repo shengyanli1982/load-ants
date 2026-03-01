@@ -186,6 +186,10 @@ pub struct Config {
     #[serde(default)]
     #[validate(nested)]
     pub http_client: Option<HttpClientConfig>,
+    // DNS Client 配置（可选）
+    #[serde(default)]
+    #[validate(nested)]
+    pub dns_client: Option<DnsClientConfig>,
     // 上游组配置（可选）
     #[serde(default)]
     #[validate(nested)]
@@ -315,16 +319,18 @@ impl Default for Config {
             admin: Some(AdminConfig::default()),
             cache: Some(CacheConfig::default()),
             http_client: Some(HttpClientConfig::default()),
+            dns_client: Some(DnsClientConfig::default()),
             upstream_groups: Some(vec![UpstreamGroupConfig {
                 name: upstream_defaults::DEFAULT_GROUP_NAME.to_string(),
+                scheme: UpstreamScheme::Doh,
                 strategy: LoadBalancingStrategy::RoundRobin,
-                servers: vec![UpstreamServerConfig {
+                servers: vec![UpstreamServerConfig::Doh(DoHUpstreamServerConfig {
                     url: DEFAULT_DOH_URL.clone(),
                     weight: upstream_defaults::DEFAULT_WEIGHT,
                     method: DoHMethod::Post,
                     content_type: DoHContentType::Message,
                     auth: None,
-                }],
+                })],
                 retry: Some(RetryConfig {
                     attempts: retry_limits::DEFAULT_ATTEMPTS,
                     delay: retry_limits::DEFAULT_DELAY,

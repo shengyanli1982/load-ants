@@ -62,7 +62,7 @@ impl WeightedBalancer {
     // 创建新的加权轮询负载均衡器
     pub fn new(servers: Vec<UpstreamServerConfig>) -> Self {
         // 计算权重总和
-        let total_weight = servers.iter().map(|s| s.weight as usize).sum();
+        let total_weight = servers.iter().map(|s| s.weight() as usize).sum();
 
         // 初始化当前权重为0
         let current_weights = servers.iter().map(|_| AtomicUsize::new(0)).collect();
@@ -89,7 +89,7 @@ impl LoadBalancer for WeightedBalancer {
         // 第一步：为每个服务器增加当前权重并选择最大的
         for (i, weight_atomic) in self.current_weights.iter().enumerate() {
             // 增加当前权重
-            let weight = self.servers[i].weight as usize;
+            let weight = self.servers[i].weight() as usize;
             let current = weight_atomic.fetch_add(weight, Ordering::SeqCst) + weight;
 
             // 查找当前最大权重的服务器

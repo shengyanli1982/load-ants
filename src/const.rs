@@ -58,6 +58,26 @@ pub mod http_client_limits {
     pub const MAX_KEEPALIVE: u32 = 600;
 }
 
+// DNS Client（传统 UDP/TCP 上游）配置限制
+pub mod dns_client_limits {
+    // 默认连接超时（秒）
+    pub const DEFAULT_CONNECT_TIMEOUT: u64 = 2;
+    // 最小连接超时（秒）
+    pub const MIN_CONNECT_TIMEOUT: u64 = 1;
+    // 最大连接超时（秒）
+    pub const MAX_CONNECT_TIMEOUT: u64 = 120;
+    // 默认请求超时（秒）
+    pub const DEFAULT_REQUEST_TIMEOUT: u64 = 3;
+    // 最小请求超时（秒）
+    pub const MIN_REQUEST_TIMEOUT: u64 = 1;
+    // 最大请求超时（秒）
+    pub const MAX_REQUEST_TIMEOUT: u64 = 1200;
+    // 默认 prefer_tcp
+    pub const DEFAULT_PREFER_TCP: bool = false;
+    // 默认 tcp_reconnect
+    pub const DEFAULT_TCP_RECONNECT: bool = true;
+}
+
 // 重试配置限制
 pub mod retry_limits {
     // 默认重试次数
@@ -199,6 +219,28 @@ pub mod upstream_labels {
     // 重试
     #[allow(dead_code)]
     pub const RETRY: &str = "retry";
+}
+
+// 上游协议标签
+pub mod upstream_protocol_labels {
+    // DoH 上游
+    pub const DOH: &str = "doh";
+    // DNS（UDP/TCP）上游
+    pub const DNS: &str = "dns";
+    // 未知上游
+    pub const UNKNOWN: &str = "unknown";
+}
+
+// 上游传输标签
+pub mod upstream_transport_labels {
+    // DoH 使用 HTTP
+    pub const HTTP: &str = "http";
+    // DNS 使用 UDP
+    pub const UDP: &str = "udp";
+    // DNS 使用 TCP
+    pub const TCP: &str = "tcp";
+    // 未知传输
+    pub const UNKNOWN: &str = "unknown";
 }
 
 // 路由规则类型标签

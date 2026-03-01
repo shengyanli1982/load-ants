@@ -1,6 +1,6 @@
 # 上游组配置
 
-`upstream_groups` 是 Load Ants 配置中至关重要的一环。它定义了你的 DNS 查询最终将被发送到哪些 DoH 服务器，以及如何在高可用、高性能和高隐私之间取得平衡。
+`upstream_groups` 是 Load Ants 配置中至关重要的一环。它定义了你的 DNS 查询最终将被发送到哪些上游解析器（**DoH** 或 **传统 DNS（UDP/TCP）**），以及如何在高可用、高性能和高隐私之间取得平衡。
 
 本配置项是一个**列表**，这意味着你可以定义多个独立配置的"上游组"。
 
@@ -13,6 +13,7 @@
 ```yaml
 upstream_groups:
     - name: "google_public"
+      scheme: "doh"
       strategy: "random"
       servers:
           # ... server 列表在这里定义 ...
@@ -27,16 +28,27 @@ upstream_groups:
 | 参数       | 类型   | 描述                                                                                                                                                                                            | 默认值 | 是否必填 |
 | :--------- | :----- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----- | :------- |
 | `name`     | 字符串 | 为这个上游组指定一个唯一的名称。这个名称将在路由规则 (`static_rules` 或 `remote_rules`) 的 `target` 字段中被引用。                                                                              | -      | **是**   |
+| `scheme`   | 字符串 | 上游组类型。可选值：`doh`（DoH 上游）或 `dns`（传统 DNS 上游，UDP/TCP）。为兼容旧配置，也支持别名字段 `protocol`。                                                                              | `doh`  | 否       |
 | `strategy` | 字符串 | 定义该组内服务器的负载均衡策略。可选值为：`roundrobin` (轮询), `weighted` (加权轮询), `random` (随机)。                                                                                         | -      | **是**   |
-| `servers`  | 列表   | 定义本组包含的一个或多个 DoH 服务器。详见下方的 `servers` 参数详解。                                                                                                                            | -      | **是**   |
-| `retry`    | 对象   | (可选) 本组上游请求的重试策略。详见下方 `retry` 参数详解。                                                                                                                                      | -      | 否       |
-| `proxy`    | 字符串 | (可选) 为**整个组**的服务器指定一个出站代理。所有发往该组内服务器的 DoH 请求都将通过此代理。支持 `http`, `https` 和 `socks5` 协议。例如: `http://user:pass@host:port` 或 `socks5://host:port`。 | -      | 否       |
+| `servers`  | 列表   | 定义本组包含的一个或多个上游服务器。其条目结构取决于 `scheme`（DoH 使用 `url`，DNS 使用 `addr`）。详见下方的 `servers` 参数详解。                                                              | -      | **是**   |
+| `retry`    | 对象   | (可选，仅 `scheme: doh`) 本组上游请求的重试策略。详见下方 `retry` 参数详解。                                                                                                                    | -      | 否       |
+| `proxy`    | 字符串 | (可选，仅 `scheme: doh`) 为**整个组**的服务器指定一个出站代理。所有发往该组内服务器的 DoH 请求都将通过此代理。支持 `http`, `https` 和 `socks5` 协议。例如: `http://user:pass@host:port` 或 `socks5://host:port`。 | -      | 否       |
 
 ---
 
 ### `servers` 参数详解
 
-`servers` 是一个列表，列表中的每个对象都代表一个 DoH 服务器。
+`servers` 是一个列表，列表中的每个对象都代表一个上游服务器。其条目结构由 `scheme` 决定：
+
+- `scheme: doh`：条目使用 `url`（DoH 服务器 URL）。
+- `scheme: dns`：条目使用 `addr`（传统 DNS 的 `IP:端口`，通常为 `:53`）。
+
+> 说明：
+>
+> - 如果你不填写 `scheme`，默认按 `doh` 处理（与旧版本行为一致）。
+> - 若 `scheme: dns`，该组不支持 `proxy` 与 `retry`（会触发配置校验错误）。
+
+#### `scheme: doh`（DoH 服务器条目）
 
 | 参数           | 类型   | 描述                                                                                                                                                                   | 默认值      | 是否必填 |
 | :------------- | :----- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :---------- | :------- |
@@ -45,6 +57,13 @@ upstream_groups:
 | `method`       | 字符串 | (可选) 与该服务器通信时使用的 HTTP 方法。可选值为 `get` 或 `post`。                                                                                                    | `"post"`    | 否       |
 | `content_type` | 字符串 | (可选) DoH 请求的内容类型。可选值为 `message` (对应 `application/dns-message`) 或 `json` (对应 `application/dns-json`)。注意：如果设为 `json`，`method` 必须为 `get`。 | `"message"` | 否       |
 | `auth`         | 对象   | (可选) 访问此特定服务器所需的认证配置。详见下方的 `auth` 参数详解。                                                                                                    | -           | 否       |
+
+#### `scheme: dns`（传统 DNS 服务器条目）
+
+| 参数     | 类型   | 描述                                                                                          | 默认值 | 是否必填 |
+| :------- | :----- | :-------------------------------------------------------------------------------------------- | :----- | :------- |
+| `addr`   | 字符串 | DNS 服务器地址，格式为 `IP:端口`（例如 `223.5.5.5:53` 或 `192.168.1.53:53`）。                | -      | **是**   |
+| `weight` | 整数   | (可选) 服务器的权重，仅在组的 `strategy` 为 `weighted` 时生效。                               | `1`    | 否       |
 
 <a id="auth-认证-参数详解"></a>
 ### `auth` (认证) 参数详解
@@ -92,6 +111,7 @@ upstream_groups:
 ```yaml
 upstream_groups:
     - name: "privacy_first"
+      scheme: "doh"
       strategy: "random"
       servers:
           - url: "https://cloudflare-dns.com/dns-query"
@@ -107,6 +127,7 @@ upstream_groups:
 ```yaml
 upstream_groups:
     - name: "high_perf"
+      scheme: "doh"
       strategy: "weighted"
       servers:
           - url: "https://fast-doh.com/dns-query"
@@ -122,6 +143,7 @@ upstream_groups:
 ```yaml
 upstream_groups:
     - name: "private_nextdns"
+      scheme: "doh"
       strategy: "roundrobin" # 如果只有一个服务器，策略无所谓
       # 为整个组配置代理
       proxy: "socks5://127.0.0.1:1080"
@@ -131,6 +153,23 @@ upstream_groups:
             # auth:
             #   type: "bearer"
             #   token: "YOUR_API_KEY"
+```
+
+#### 场景四：转发到传统 DNS 上游（UDP/TCP，端口 53）
+
+**目标**：将特定流量转发到局域网 DNS（如 `dnsmasq`/路由器 DNS/CoreDNS）或公共传统 DNS，避免额外的 DoH 封装。
+
+```yaml
+dns_client:
+    prefer_tcp: false # 默认 UDP，遇到 TC=1 再回退 TCP
+
+upstream_groups:
+    - name: "lan_dns"
+      scheme: "dns"
+      strategy: "roundrobin"
+      servers:
+          - addr: 192.168.1.53:53
+          - addr: 192.168.1.1:53
 ```
 
 ---

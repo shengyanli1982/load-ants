@@ -1,6 +1,6 @@
 # 架构设计
 
-Load Ants 的设计哲学是**高性能、模块化和高可扩展性**。它作为一个高效的 DNS 代理，核心任务是接收传统的 DNS 请求，并通过一系列内部处理流程，将其安全、可靠地转发到现代的 DoH (DNS-over-HTTPS) 服务器。
+Load Ants 的设计哲学是**高性能、模块化和高可扩展性**。它作为一个高效的 DNS 代理，核心任务是接收 DNS 请求，并通过一系列内部处理流程，将其安全、可靠地转发到上游解析器（DoH 或传统 DNS）。
 
 下图描绘了 Load Ants 的核心组件及其交互流程：
 
@@ -25,17 +25,16 @@ Load Ants 的设计哲学是**高性能、模块化和高可扩展性**。它作
 
 4.  **上游管理 (Upstream Groups)**:
     - 如果路由决策是 `forward`，请求将被发送到规则指定的**上游组**。
-    - 上游组是一系列 DoH 服务器的逻辑集合。你可以为不同的上游组配置不同的负载均衡策略（如轮询、加权轮询、随机）和认证方式（如 Bearer Token）。
-    - 这种分组机制使得用户可以灵活地将不同类型的流量导向不同的 DoH 提供商（例如，国内流量走国内 DoH，国外流量走国外 DoH）。
+    - 上游组是上游服务器的逻辑集合。每个组通过 `scheme` 指定上游类型：`doh`（DoH）或 `dns`（传统 DNS，UDP/TCP）。
+    - 你可以为不同的上游组配置不同的负载均衡策略（如轮询、加权轮询、随机）。对于 DoH 组，还可以配置认证与代理等能力。
+    - 这种分组机制使得用户可以灵活地将不同类型的流量导向不同的上游路径（例如，外网域名走 DoH，内网域名走局域网 DNS）。
 
-5.  **HTTP/DoH 客户端 (HTTP/DoH Client)**:
-    - 一旦选定了上游 DoH 服务器，HTTP 客户端就会介入。
-    - 它负责将标准的 DNS 查询报文打包成一个符合 DoH 规范的 HTTPS 请求。这包括设置正确的 HTTP 头（如 `Content-Type: application/dns-message`）和将 DNS 查询作为 HTTP Body 发送。
-    - 客户端内置了连接池，可以高效复用与上游服务器的 TCP/TLS 连接，减少握手延迟。
-    - 它还根据全局配置的重试策略执行重试。如果对某个 DoH 服务器的请求失败或超时，它会根据该策略进行重试，或尝试组内的下一个服务器。
+5.  **上游客户端 (Upstream Client)**:
+    - **对于 DoH 上游（`scheme: doh`）**：HTTP/DoH 客户端负责把 DNS 报文封装为符合 DoH 规范的 HTTPS 请求（如 `Content-Type: application/dns-message`），并复用连接池以减少握手延迟；如配置了重试策略，将按策略执行重试。
+    - **对于传统 DNS 上游（`scheme: dns`）**：DNS 客户端负责与上游的 `IP:端口` 进行 UDP/TCP 通信；默认优先 UDP，在收到 UDP 响应且 `TC=1`（截断）时会自动回退到 TCP 重试（或你可通过 `dns_client.prefer_tcp=true` 直接使用 TCP）。TCP 连接可复用，并可在失败后按需重连（`dns_client.tcp_reconnect`）。
 
 6.  **响应处理与缓存更新 (Response Handling & Cache Update)**:
-    - 当 DoH 服务器返回 HTTPS 响应后，HTTP 客户端会解析出其中的 DNS 响应数据。
+    - 当上游返回响应后，Load Ants 会得到完整的 DNS 响应报文（无论该上游是 DoH 还是传统 DNS）。
     - 该响应首先会被送往缓存模块进行**更新** (`cache update`)，以便下一次相同的查询可以直接命中缓存。
     - 最后，响应被打包成标准的 DNS UDP/TCP 数据包或者 DoH 响应，通过最初的监听器连接返回给客户端。
 
