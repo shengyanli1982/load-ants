@@ -1,8 +1,5 @@
 use crate::{
-    balancer::LoadBalancer,
-    config::BootstrapDnsConfig,
-    error::AppError,
-    metrics::METRICS,
+    balancer::LoadBalancer, config::BootstrapDnsConfig, error::AppError, metrics::METRICS,
 };
 use dashmap::DashMap;
 use hickory_proto::{
@@ -208,7 +205,10 @@ impl BootstrapDnsResolver {
 
         if results.is_empty() {
             return Err(last_error.unwrap_or_else(|| {
-                AppError::Upstream(format!("bootstrap dns returned no A/AAAA records for {}", host))
+                AppError::Upstream(format!(
+                    "bootstrap dns returned no A/AAAA records for {}",
+                    host
+                ))
             }));
         }
 

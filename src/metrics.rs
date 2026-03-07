@@ -13,6 +13,7 @@ pub struct DnsMetrics {
     // 1. 请求处理和性能指标
     dns_requests_total: IntCounterVec,
     dns_request_duration_seconds: HistogramVec,
+    dns_handler_duration_seconds: HistogramVec,
     dns_request_errors_total: IntCounterVec,
     http_requests_total: IntCounterVec,
     http_request_duration_seconds: HistogramVec,
@@ -69,6 +70,16 @@ impl DnsMetrics {
                 vec![0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0]
             ),
             &["protocol", "query_type"],
+        )
+        .unwrap();
+
+        let dns_handler_duration_seconds = HistogramVec::new(
+            prometheus::histogram_opts!(
+                "loadants_dns_handler_duration_seconds",
+                "DNS request handler duration in seconds, classified by stage (cached/resolved) and query type",
+                vec![0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0]
+            ),
+            &["stage", "query_type"],
         )
         .unwrap();
 
@@ -248,6 +259,7 @@ impl DnsMetrics {
             registry,
             dns_requests_total,
             dns_request_duration_seconds,
+            dns_handler_duration_seconds,
             dns_request_errors_total,
             http_requests_total,
             http_request_duration_seconds,
@@ -282,6 +294,9 @@ impl DnsMetrics {
             .unwrap();
         self.registry
             .register(Box::new(self.dns_request_duration_seconds.clone()))
+            .unwrap();
+        self.registry
+            .register(Box::new(self.dns_handler_duration_seconds.clone()))
             .unwrap();
         self.registry
             .register(Box::new(self.dns_request_errors_total.clone()))
@@ -371,6 +386,10 @@ impl DnsMetrics {
 
     pub fn dns_request_duration_seconds(&self) -> &HistogramVec {
         &self.dns_request_duration_seconds
+    }
+
+    pub fn dns_handler_duration_seconds(&self) -> &HistogramVec {
+        &self.dns_handler_duration_seconds
     }
 
     pub fn dns_request_errors_total(&self) -> &IntCounterVec {

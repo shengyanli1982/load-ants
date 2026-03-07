@@ -137,6 +137,12 @@ pub async fn handle_doh_get(
             .await
             .map_err(|(status, err_type)| (status, err_type, query_type.clone()))?;
 
+        // 记录响应码指标（DoH 入口）
+        METRICS
+            .dns_response_codes_total()
+            .with_label_values(&[response.response_code().to_string().as_str()])
+            .inc();
+
         // 编码 DNS 响应消息
         let response_bytes = response.to_vec().map_err(|_| {
             (
@@ -225,6 +231,12 @@ pub async fn handle_doh_post(
         let response = process_dns_message(&state, &dns_message)
             .await
             .map_err(|(status, err_type)| (status, err_type, query_type.clone()))?;
+
+        // 记录响应码指标（DoH 入口）
+        METRICS
+            .dns_response_codes_total()
+            .with_label_values(&[response.response_code().to_string().as_str()])
+            .inc();
 
         // 编码 DNS 响应消息
         let response_bytes = response.to_vec().map_err(|_| {
@@ -345,6 +357,12 @@ pub async fn handle_json_get(
         let response = process_dns_message(&state, &query)
             .await
             .map_err(|(status, err_type)| (status, err_type, query_type.clone()))?;
+
+        // 记录响应码指标（DoH 入口）
+        METRICS
+            .dns_response_codes_total()
+            .with_label_values(&[response.response_code().to_string().as_str()])
+            .inc();
 
         // 构建 HTTP 响应
         let mut headers = HeaderMap::new();

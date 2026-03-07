@@ -81,7 +81,7 @@ impl RequestHandler {
         // 记录请求处理时间
         let duration = start_time.elapsed();
         METRICS
-            .dns_request_duration_seconds()
+            .dns_handler_duration_seconds()
             .with_label_values(&[processing_labels::RESOLVED, query_type.to_string().as_str()])
             .observe(duration.as_secs_f64());
 
@@ -146,7 +146,7 @@ impl RequestHandler {
             // 记录请求处理时间
             let duration = start_time.elapsed();
             METRICS
-                .dns_request_duration_seconds()
+                .dns_handler_duration_seconds()
                 .with_label_values(&[processing_labels::CACHED, query_type.to_string().as_str()])
                 .observe(duration.as_secs_f64());
 
