@@ -137,8 +137,6 @@ impl RequestHandler {
 
         let cache_check_time = Instant::now();
         if let Some(cached_response) = self.cache.get(request).await {
-            info!("Cache hit: {} ({})", query_name.to_utf8(), query_type);
-
             // 设置响应ID与请求ID相匹配
             let mut response = cached_response.clone();
             response.set_id(request.id());
@@ -150,9 +148,10 @@ impl RequestHandler {
                 .with_label_values(&[processing_labels::CACHED, query_type.to_string().as_str()])
                 .observe(duration.as_secs_f64());
 
-            debug!(
-                "Cache hit: {} processed in {:?}",
+            info!(
+                "Cache hit: {} ({}) processed in {:?}",
                 query_name.to_utf8(),
+                query_type,
                 duration
             );
 
