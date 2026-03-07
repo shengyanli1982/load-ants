@@ -1,4 +1,4 @@
-use crate::config::UpstreamServerConfig;
+use crate::config::UpstreamEndpointConfig;
 use crate::error::AppError;
 use async_trait::async_trait;
 use rand::{seq::SliceRandom, thread_rng};
@@ -8,23 +8,23 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 #[async_trait]
 pub trait LoadBalancer: Send + Sync {
     // 选择一个上游服务器
-    async fn select_server(&self) -> Result<&UpstreamServerConfig, AppError>;
+    async fn select_server(&self) -> Result<&UpstreamEndpointConfig, AppError>;
 
     // 报告服务器失败
-    async fn report_failure(&self, server: &UpstreamServerConfig);
+    async fn report_failure(&self, server: &UpstreamEndpointConfig);
 }
 
 // 轮询负载均衡器
 pub struct RoundRobinBalancer {
     // 服务器列表
-    servers: Vec<UpstreamServerConfig>,
+    servers: Vec<UpstreamEndpointConfig>,
     // 当前索引（原子操作）
     current: AtomicUsize,
 }
 
 impl RoundRobinBalancer {
     // 创建新的轮询负载均衡器
-    pub fn new(servers: Vec<UpstreamServerConfig>) -> Self {
+    pub fn new(servers: Vec<UpstreamEndpointConfig>) -> Self {
         Self {
             servers,
             current: AtomicUsize::new(0),
@@ -34,7 +34,7 @@ impl RoundRobinBalancer {
 
 #[async_trait]
 impl LoadBalancer for RoundRobinBalancer {
-    async fn select_server(&self) -> Result<&UpstreamServerConfig, AppError> {
+    async fn select_server(&self) -> Result<&UpstreamEndpointConfig, AppError> {
         if self.servers.is_empty() {
             return Err(AppError::NoUpstreamAvailable);
         }
@@ -43,7 +43,7 @@ impl LoadBalancer for RoundRobinBalancer {
         Ok(&self.servers[current])
     }
 
-    async fn report_failure(&self, _server: &UpstreamServerConfig) {
+    async fn report_failure(&self, _server: &UpstreamEndpointConfig) {
         // 轮询策略下不需要特殊处理失败
     }
 }
@@ -51,7 +51,7 @@ impl LoadBalancer for RoundRobinBalancer {
 // 加权轮询负载均衡器
 pub struct WeightedBalancer {
     // 服务器列表
-    servers: Vec<UpstreamServerConfig>,
+    servers: Vec<UpstreamEndpointConfig>,
     // 当前权重（原子操作）
     current_weights: Vec<AtomicUsize>,
     // 总权重
@@ -60,7 +60,7 @@ pub struct WeightedBalancer {
 
 impl WeightedBalancer {
     // 创建新的加权轮询负载均衡器
-    pub fn new(servers: Vec<UpstreamServerConfig>) -> Self {
+    pub fn new(servers: Vec<UpstreamEndpointConfig>) -> Self {
         // 计算权重总和
         let total_weight = servers.iter().map(|s| s.weight() as usize).sum();
 
@@ -77,7 +77,7 @@ impl WeightedBalancer {
 
 #[async_trait]
 impl LoadBalancer for WeightedBalancer {
-    async fn select_server(&self) -> Result<&UpstreamServerConfig, AppError> {
+    async fn select_server(&self) -> Result<&UpstreamEndpointConfig, AppError> {
         if self.servers.is_empty() {
             return Err(AppError::NoUpstreamAvailable);
         }
@@ -106,7 +106,7 @@ impl LoadBalancer for WeightedBalancer {
         Ok(&self.servers[max_index])
     }
 
-    async fn report_failure(&self, _server: &UpstreamServerConfig) {
+    async fn report_failure(&self, _server: &UpstreamEndpointConfig) {
         // 加权轮询策略下不需要特殊处理失败
     }
 }
@@ -114,19 +114,19 @@ impl LoadBalancer for WeightedBalancer {
 // 随机负载均衡器
 pub struct RandomBalancer {
     // 服务器列表
-    servers: Vec<UpstreamServerConfig>,
+    servers: Vec<UpstreamEndpointConfig>,
 }
 
 impl RandomBalancer {
     // 创建新的随机负载均衡器
-    pub fn new(servers: Vec<UpstreamServerConfig>) -> Self {
+    pub fn new(servers: Vec<UpstreamEndpointConfig>) -> Self {
         Self { servers }
     }
 }
 
 #[async_trait]
 impl LoadBalancer for RandomBalancer {
-    async fn select_server(&self) -> Result<&UpstreamServerConfig, AppError> {
+    async fn select_server(&self) -> Result<&UpstreamEndpointConfig, AppError> {
         if self.servers.is_empty() {
             return Err(AppError::NoUpstreamAvailable);
         }
@@ -138,7 +138,7 @@ impl LoadBalancer for RandomBalancer {
         Ok(server)
     }
 
-    async fn report_failure(&self, _server: &UpstreamServerConfig) {
+    async fn report_failure(&self, _server: &UpstreamEndpointConfig) {
         // 随机策略下不需要特殊处理失败
     }
 }

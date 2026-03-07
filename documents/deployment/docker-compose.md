@@ -30,11 +30,12 @@ load-ants-compose/
 
 ### 步骤二：配置 `config.yaml`
 
-为了在 Docker 环境中工作，请确保你的 `config.yaml` 中 `server` 的监听地址是 `0.0.0.0`，这样它才能接受来自其他容器的连接。
+为了在 Docker 环境中工作，请确保你的 `config.yaml` 中 `listeners` 的监听地址是 `0.0.0.0`，这样它才能接受来自其他容器的连接。
 
 ```yaml
-server:
-    listen_udp: "0.0.0.0:5353" # 使用一个非特权端口，如 5353
+listeners:
+    udp: "0.0.0.0:5353" # 使用一个非特权端口，如 5353
+    tcp: "0.0.0.0:5353"
     # ... 其他配置
 # ...
 ```

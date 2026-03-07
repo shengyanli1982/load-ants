@@ -22,7 +22,7 @@ Load Ants 的路由引擎遵循一个核心原则：**拦截优先 (`block` firs
 ![路由决策流程图](../images/decision_flow.png)
 
 > ✨ **最佳实践**:
-> 强烈建议在配置的最后，始终保留一条全局通配符的转发规则 (`match: "wildcard", patterns: ["*"], action: "forward", target: "..."`) 作为默认的"最终去向"，以确保所有查询都有一个明确的处理方式。
+> 强烈建议在配置的最后，始终保留一条全局通配符的转发规则 (`match: "wildcard", patterns: ["*"], action: "forward", upstream: "..."`) 作为默认的"最终去向"，以确保所有查询都有一个明确的处理方式。
 
 ### 规则详解与场景化示例
 
@@ -32,10 +32,11 @@ Load Ants 的路由引擎遵循一个核心原则：**拦截优先 (`block` firs
 - **示例**: 拦截一个已知的广告域名。
 
 ```yaml
-static_rules:
-    - match: "exact"
-      patterns: ["ads.example.com"]
-      action: "block"
+rules:
+    static:
+        - match: "exact"
+          patterns: ["ads.example.com"]
+          action: "block"
 ```
 
 在这个例子中，只有对 `ads.example.com` 的查询会被直接拦截，而对 `www.example.com` 的查询则不受影响。
@@ -46,11 +47,12 @@ static_rules:
 - **示例**: 将所有公司内部域名转发到特定的上游组。
 
 ```yaml
-static_rules:
-    - match: "wildcard"
-      patterns: ["*.my-company.internal"]
-      action: "forward"
-      target: "internal_dns_group"
+rules:
+    static:
+        - match: "wildcard"
+          patterns: ["*.my-company.internal"]
+          action: "forward"
+          upstream: "internal_dns_group"
 ```
 
 在这个例子中，对 `dev.my-company.internal` 的查询都会被转发到 `internal_dns_group`。
@@ -61,25 +63,26 @@ static_rules:
 - **示例**: 将所有 Google 相关服务的域名都转发到指定的"谷歌公共"上游组。
 
 ```yaml
-static_rules:
-  - match: "regex"
-    patterns: ["^(.*\.)?google\.com$"]
-    action: "forward"
-    target: "google_public"
+rules:
+  static:
+    - match: "regex"
+      patterns: ["^(.*\.)?google\.com$"]
+      action: "forward"
+      upstream: "google_public"
 ```
 
 这个正则表达式 `^(.*\.)?google\.com$` 会匹配 `google.com` 以及它所有的子域名。
 
 ---
 
-### 关于远程规则 (`remote_rules`)
+### 关于远程规则 (`rules.remote`)
 
 除了在本地 `config.yaml` 中定义静态规则，Load Ants 还支持从外部 URL 加载远程规则列表。这是一种非常强大的功能，有几点需要特别说明：
 
 - **无缝整合**: 远程规则**不是**一种新的匹配类型。它们在被下载和解析后，会根据其内容的格式（精确域名、通配符域名等）被无缝地整合进上述的路由匹配引擎中，并严格遵循"拦截优先、分层匹配"的逻辑。一个来自远程列表的精确匹配 `block` 规则，其优先级会高于本地配置的通配符 `forward` 规则。
 
 - **当前支持的格式**:
-    - `type`: 目前仅支持 `url`，表示规则来源是一个 URL。
+    - `type`: 目前仅支持 `http`，表示规则来源是一个 HTTP URL。
     - `format`: 目前仅支持 `v2ray` 格式的规则列表（例如 `reject-list.txt`, `proxy-list.txt`）。
 
 - **未来计划**: 未来可能会增加对更多流行规则格式（如 `clash`）的支持，以进一步增强灵活性和兼容性。
@@ -87,11 +90,12 @@ static_rules:
 一个远程规则的配置示例如下：
 
 ```yaml
-remote_rules:
-    - type: "url"
-      url: "https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/reject-list.txt"
-      format: "v2ray"
-      action: "block"
+rules:
+    remote:
+        - type: "http"
+          url: "https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/reject-list.txt"
+          format: "v2ray"
+          action: "block"
 ```
 
 这个配置会下载一个域名列表，并将列表中的所有域名作为 `block` 规则添加到路由引擎中。

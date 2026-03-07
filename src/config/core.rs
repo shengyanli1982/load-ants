@@ -5,186 +5,192 @@ use crate::r#const::{
 use serde::{Deserialize, Serialize};
 use validator::{Validate, ValidationError};
 
-// DNS Client 配置（传统 UDP/TCP 上游）
+// DNS 客户端配置（传统 UDP/TCP 上游）
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Validate)]
-#[serde(rename_all = "lowercase")]
-pub struct DnsClientConfig {
-    // TCP 连接超时（秒）
+#[serde(rename_all = "lowercase", deny_unknown_fields)]
+pub struct DnsConfig {
     #[validate(range(
         min = dns_client_limits::MIN_CONNECT_TIMEOUT,
         max = dns_client_limits::MAX_CONNECT_TIMEOUT,
         message = "Connection timeout must be between {} and {} seconds"
     ))]
     pub connect_timeout: u64,
-    // 请求超时（秒）
+
     #[validate(range(
         min = dns_client_limits::MIN_REQUEST_TIMEOUT,
         max = dns_client_limits::MAX_REQUEST_TIMEOUT,
         message = "Request timeout must be between {} and {} seconds"
     ))]
     pub request_timeout: u64,
-    // 是否优先使用 TCP
-    #[serde(default = "default_dns_client_prefer_tcp")]
+
+    #[serde(default = "default_dns_prefer_tcp")]
     pub prefer_tcp: bool,
-    // TCP 请求失败后是否丢弃连接并在下一次请求重连
-    #[serde(default = "default_dns_client_tcp_reconnect")]
+
+    #[serde(default = "default_dns_tcp_reconnect")]
     pub tcp_reconnect: bool,
 }
 
-fn default_dns_client_prefer_tcp() -> bool {
+fn default_dns_prefer_tcp() -> bool {
     dns_client_limits::DEFAULT_PREFER_TCP
 }
 
-fn default_dns_client_tcp_reconnect() -> bool {
+fn default_dns_tcp_reconnect() -> bool {
     dns_client_limits::DEFAULT_TCP_RECONNECT
 }
 
-impl Default for DnsClientConfig {
+impl Default for DnsConfig {
     fn default() -> Self {
         Self {
             connect_timeout: dns_client_limits::DEFAULT_CONNECT_TIMEOUT,
             request_timeout: dns_client_limits::DEFAULT_REQUEST_TIMEOUT,
-            prefer_tcp: default_dns_client_prefer_tcp(),
-            tcp_reconnect: default_dns_client_tcp_reconnect(),
+            prefer_tcp: default_dns_prefer_tcp(),
+            tcp_reconnect: default_dns_tcp_reconnect(),
         }
     }
 }
 
-// HTTP客户端配置
+// HTTP 客户端配置（全局）
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Validate)]
-#[serde(rename_all = "lowercase")]
-pub struct HttpClientConfig {
-    // 连接超时（秒）
+#[serde(rename_all = "lowercase", deny_unknown_fields)]
+pub struct HttpConfig {
     #[validate(range(
         min = http_client_limits::MIN_CONNECT_TIMEOUT,
         max = http_client_limits::MAX_CONNECT_TIMEOUT,
         message = "Connection timeout must be between {} and {} seconds"
     ))]
     pub connect_timeout: u64,
-    // 请求超时（秒）
+
     #[validate(range(
         min = http_client_limits::MIN_REQUEST_TIMEOUT,
         max = http_client_limits::MAX_REQUEST_TIMEOUT,
         message = "Request timeout must be between {} and {} seconds"
     ))]
     pub request_timeout: u64,
-    // 空闲连接超时（秒）（可选）
+
     #[validate(custom(
         function = "validate_idle_timeout",
         message = "Idle timeout must be between minimum and maximum values"
     ))]
     pub idle_timeout: Option<u64>,
-    // TCP Keepalive（秒）（可选）
+
     #[validate(custom(
         function = "validate_keepalive",
         message = "Keepalive must be between minimum and maximum values"
     ))]
     pub keepalive: Option<u32>,
-    // HTTP用户代理（可选）
-    pub agent: Option<String>,
+
+    pub user_agent: Option<String>,
 }
 
-impl Default for HttpClientConfig {
+impl Default for HttpConfig {
     fn default() -> Self {
         Self {
             connect_timeout: http_client_limits::DEFAULT_CONNECT_TIMEOUT,
             request_timeout: http_client_limits::DEFAULT_REQUEST_TIMEOUT,
             idle_timeout: Some(http_client_limits::DEFAULT_IDLE_TIMEOUT),
             keepalive: Some(http_client_limits::DEFAULT_KEEPALIVE),
-            agent: None,
+            user_agent: None,
         }
     }
 }
 
-// 为 HttpClientConfig 实现自定义验证逻辑
-impl HttpClientConfig {
-    // 验证可选字段
-    pub fn validate_optional_fields(&self) -> Result<(), ValidationError> {
-        // 验证空闲超时
-        if let Some(idle_timeout) = self.idle_timeout {
-            if !(http_client_limits::MIN_IDLE_TIMEOUT..=http_client_limits::MAX_IDLE_TIMEOUT)
-                .contains(&idle_timeout)
-            {
-                return Err(ValidationError::new("idle_timeout_out_of_range"));
-            }
-        }
-
-        // 验证keepalive
-        if let Some(keepalive) = self.keepalive {
-            if !(http_client_limits::MIN_KEEPALIVE..=http_client_limits::MAX_KEEPALIVE)
-                .contains(&keepalive)
-            {
-                return Err(ValidationError::new("keepalive_out_of_range"));
-            }
-        }
-
-        Ok(())
-    }
-}
-
-// 服务器配置
+// 监听配置（服务端）
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Validate)]
-#[serde(rename_all = "lowercase")]
-pub struct ServerConfig {
-    // UDP监听地址
+#[serde(rename_all = "lowercase", deny_unknown_fields)]
+pub struct ListenersConfig {
     #[validate(custom(
         function = "validate_socket_addr",
         message = "Invalid UDP listen address format"
     ))]
-    pub listen_udp: String,
-    // TCP监听地址
+    pub udp: String,
+
     #[validate(custom(
         function = "validate_socket_addr",
         message = "Invalid TCP listen address format"
     ))]
-    pub listen_tcp: String,
-    // HTTP监听地址
+    pub tcp: String,
+
     #[validate(custom(
         function = "validate_socket_addr",
-        message = "Invalid HTTP listen address format"
+        message = "Invalid DoH listen address format"
     ))]
-    pub listen_http: Option<String>,
-    // TCP连接空闲超时（秒）
-    #[serde(default = "default_tcp_timeout")]
+    pub doh: Option<String>,
+
+    #[serde(default = "default_tcp_idle_timeout")]
     #[validate(range(
         min = timeout_limits::MIN_TIMEOUT,
         max = timeout_limits::MAX_TIMEOUT,
-        message = "TCP timeout must be between 1 and 65535 seconds"
+        message = "TCP idle timeout must be between 1 and 65535 seconds"
     ))]
-    pub tcp_timeout: u64,
-    // HTTP连接空闲超时（秒）
-    #[serde(default = "default_http_timeout")]
+    pub tcp_idle_timeout: u64,
+
+    #[serde(default = "default_http_idle_timeout")]
     #[validate(range(
         min = timeout_limits::MIN_TIMEOUT,
         max = timeout_limits::MAX_TIMEOUT,
-        message = "HTTP timeout must be between 1 and 65535 seconds"
+        message = "HTTP idle timeout must be between 1 and 65535 seconds"
     ))]
-    pub http_timeout: u64,
+    pub http_idle_timeout: u64,
 }
 
-fn default_tcp_timeout() -> u64 {
+fn default_tcp_idle_timeout() -> u64 {
     server_defaults::DEFAULT_TCP_TIMEOUT
 }
 
-fn default_http_timeout() -> u64 {
+fn default_http_idle_timeout() -> u64 {
     server_defaults::DEFAULT_HTTP_TIMEOUT
 }
 
-impl Default for ServerConfig {
+impl Default for ListenersConfig {
     fn default() -> Self {
         Self {
-            listen_udp: server_defaults::DEFAULT_DNS_LISTEN.to_string(),
-            listen_tcp: server_defaults::DEFAULT_DNS_LISTEN.to_string(),
-            listen_http: None,
-            tcp_timeout: default_tcp_timeout(),
-            http_timeout: default_http_timeout(),
+            udp: server_defaults::DEFAULT_DNS_LISTEN.to_string(),
+            tcp: server_defaults::DEFAULT_DNS_LISTEN.to_string(),
+            doh: None,
+            tcp_idle_timeout: default_tcp_idle_timeout(),
+            http_idle_timeout: default_http_idle_timeout(),
         }
     }
 }
 
-// 自定义验证函数 - 验证缓存TTL关系
+// 缓存 TTL 子配置
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Validate)]
+#[serde(rename_all = "lowercase", deny_unknown_fields)]
+pub struct CacheTtlConfig {
+    #[validate(range(
+        min = cache_limits::MIN_TTL,
+        max = cache_limits::MAX_TTL,
+        message = "Minimum TTL must be between 1 and 86400 seconds"
+    ))]
+    pub min: u32,
+
+    #[validate(range(
+        min = cache_limits::MIN_TTL,
+        max = cache_limits::MAX_TTL,
+        message = "Maximum TTL must be between 1 and 86400 seconds"
+    ))]
+    pub max: u32,
+
+    #[validate(range(
+        min = cache_limits::MIN_TTL,
+        max = cache_limits::MAX_TTL,
+        message = "Negative cache TTL must be between 1 and 86400 seconds"
+    ))]
+    pub negative: u32,
+}
+
+impl Default for CacheTtlConfig {
+    fn default() -> Self {
+        Self {
+            min: cache_limits::MIN_TTL,
+            max: cache_limits::MAX_TTL,
+            negative: cache_limits::DEFAULT_NEGATIVE_TTL,
+        }
+    }
+}
+
 pub fn validate_cache_ttl(cache: &CacheConfig) -> Result<(), ValidationError> {
-    if cache.enabled && cache.min_ttl > cache.max_ttl {
+    if cache.enabled && cache.ttl.min > cache.ttl.max {
         return Err(ValidationError::new("min_ttl_greater_than_max_ttl"));
     }
     Ok(())
@@ -196,57 +202,35 @@ pub fn validate_cache_ttl(cache: &CacheConfig) -> Result<(), ValidationError> {
     function = "validate_cache_ttl",
     message = "Minimum TTL cannot be greater than maximum TTL"
 ))]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "lowercase", deny_unknown_fields)]
 pub struct CacheConfig {
-    // 是否启用缓存
     pub enabled: bool,
-    // 最大缓存条目数
+
     #[validate(range(
         min = cache_limits::MIN_SIZE,
         max = cache_limits::MAX_SIZE,
         message = "Cache size must be between 10 and 1000000"
     ))]
-    pub max_size: usize,
-    // 最小TTL（秒）
-    #[validate(range(
-        min = cache_limits::MIN_TTL,
-        max = cache_limits::MAX_TTL,
-        message = "Minimum TTL must be between 1 and 86400 seconds"
-    ))]
-    pub min_ttl: u32,
-    // 最大TTL（秒）
-    #[validate(range(
-        min = cache_limits::MIN_TTL,
-        max = cache_limits::MAX_TTL,
-        message = "Maximum TTL must be between 1 and 86400 seconds"
-    ))]
-    pub max_ttl: u32,
-    // 负面缓存TTL（秒）
-    #[validate(range(
-        min = cache_limits::MIN_TTL,
-        max = cache_limits::MAX_TTL,
-        message = "Negative cache TTL must be between 1 and 86400 seconds"
-    ))]
-    pub negative_ttl: u32,
+    pub size: usize,
+
+    #[validate(nested)]
+    pub ttl: CacheTtlConfig,
 }
 
 impl Default for CacheConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            max_size: cache_limits::DEFAULT_SIZE,
-            min_ttl: cache_limits::MIN_TTL,
-            max_ttl: cache_limits::MAX_TTL,
-            negative_ttl: cache_limits::DEFAULT_NEGATIVE_TTL,
+            size: cache_limits::DEFAULT_SIZE,
+            ttl: CacheTtlConfig::default(),
         }
     }
 }
 
 // 管理服务器配置
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Validate)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "lowercase", deny_unknown_fields)]
 pub struct AdminConfig {
-    // 管理服务器监听地址
     #[validate(custom(
         function = "validate_socket_addr",
         message = "Invalid admin server listen address format"

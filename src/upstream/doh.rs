@@ -1,5 +1,5 @@
 use crate::{
-    config::{DoHContentType, DoHMethod, DoHUpstreamServerConfig},
+    config::{DoHContentType, DoHMethod, DoHUpstreamEndpointConfig},
     error::AppError,
     r#const::http_headers,
     upstream::{http_client::HttpClient, json::JsonConverter},
@@ -28,7 +28,7 @@ impl<'a> DoHClient<'a> {
     pub async fn send_request(
         &self,
         query: &Message,
-        server: &DoHUpstreamServerConfig,
+        server: &DoHUpstreamEndpointConfig,
     ) -> Result<Message, AppError> {
         // 根据配置的方法选择GET或POST
         match &server.method {
@@ -41,7 +41,7 @@ impl<'a> DoHClient<'a> {
     async fn send_doh_request_post(
         &self,
         query: &Message,
-        server: &DoHUpstreamServerConfig,
+        server: &DoHUpstreamEndpointConfig,
     ) -> Result<Message, AppError> {
         // 创建请求URL
         let url = server.url.clone();
@@ -97,7 +97,7 @@ impl<'a> DoHClient<'a> {
     async fn send_doh_request_get(
         &self,
         query: &Message,
-        server: &DoHUpstreamServerConfig,
+        server: &DoHUpstreamEndpointConfig,
     ) -> Result<Message, AppError> {
         // 创建请求URL
         let mut url = server.url.clone();

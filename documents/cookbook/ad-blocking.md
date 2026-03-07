@@ -33,57 +33,51 @@ load-ants-blocker/
 将以下内容粘贴到 `config/config.yaml` 文件中：
 
 ```yaml
-# ----------------------------------
-# 日志配置
-# ----------------------------------
-log:
-    level: "info" # 日常运行时使用 info，调试时可改为 debug
-    format: "text"
+listeners:
+  udp: "0.0.0.0:53"
+  tcp: "0.0.0.0:53"
+  doh: "0.0.0.0:5380" # 可选：用于 DoH（与 docker-compose 的端口映射对应）
 
-# ----------------------------------
-# 服务监听
-# ----------------------------------
-server:
-    listen_udp: "0.0.0.0:53"
-    listen_tcp: "0.0.0.0:53"
-    listen_http: "0.0.0.0:5380" # 可选，用于 DoH
+admin:
+  listen: "0.0.0.0:9000"
 
-# ----------------------------------
-# 缓存配置
-# ----------------------------------
 cache:
-    enabled: true
-    max_size: 100000 # 缓存最多 10 万条记录
-    retention_period: 3600 # 缓存项保留 1 小时
+  enabled: true
+  size: 100000 # 缓存最多 10 万条记录
+  ttl:
+    min: 60
+    max: 3600
+    negative: 300
 
-# ----------------------------------
-# 上游服务器组
-# ----------------------------------
-upstream_groups:
-    - name: "clean_dns"
-      strategy: "random"
-      servers:
-          - url: "https://dns.quad9.net/dns-query"
-            weight: 10
-          - url: "https://cloudflare-dns.com/dns-query"
-            weight: 10
+http:
+  connect_timeout: 5
+  request_timeout: 10
+  idle_timeout: 60
+  keepalive: 60
+  user_agent: "LoadAnts/0.2"
 
-# ----------------------------------
-# 路由规则
-# ----------------------------------
-static_rules:
+upstreams:
+  - name: "clean_dns"
+    protocol: "doh"
+    policy: "random"
+    endpoints:
+      - url: "https://dns.quad9.net/dns-query"
+        weight: 10
+      - url: "https://cloudflare-dns.com/dns-query"
+        weight: 10
+
+rules:
+  static:
     # 手动白名单 (优先级最高)
     # 如果某个域名被远程列表误杀，可以在这里放行
     - match: "exact"
-      patterns:
-          - "good-domain.com"
+      patterns: ["good-domain.com"]
       action: "forward"
-      target: "clean_dns"
+      upstream: "clean_dns"
 
     # 手动黑名单
     - match: "exact"
-      patterns:
-          - "very-bad-domain.com"
+      patterns: ["very-bad-domain.com"]
       action: "block"
 
     # 默认规则 (优先级最低)
@@ -91,25 +85,25 @@ static_rules:
     - match: "wildcard"
       patterns: ["*"]
       action: "forward"
-      target: "clean_dns"
+      upstream: "clean_dns"
 
-remote_rules:
-    # 订阅一个主流的广告/追踪器拦截列表
-    # 你可以添加多个不同的列表
-    - type: "url"
+  remote:
+    # 订阅一个主流的广告/追踪器拦截列表（示例）
+    - type: "http"
       url: "https://raw.githubusercontent.com/privacy-respecting-software/Blocky-Adlists/main/dns-hole-list.txt"
-      format: "v2ray" # 该列表格式兼容 v2ray 格式
+      format: "v2ray"
       action: "block"
       retry:
-          attempts: 3
-          delay: 1 # 指数回退，初始延迟1秒
+        attempts: 3
+        delay: 1
+      max_size: 10485760
 ```
 
 **配置逻辑解读**:
 
-1.  **`upstream_groups`**: 我们只定义了一个名为 `clean_dns` 的上游组，其中包含了两个广受好评的公共 DNS 解析服务。
-2.  **`remote_rules`**: 我们订阅了一个远程维护的黑名单。Load Ants 会在启动和固定的时间间隔自动下载这个列表。所有在此列表中的域名都将被 `block` (拦截)。
-3.  **`static_rules`**:
+1.  **`upstreams`**: 我们只定义了一个名为 `clean_dns` 的上游组，其中包含了两个广受好评的公共 DoH 解析服务。
+2.  **`rules.remote`**: 我们订阅了一个远程维护的黑名单。所有在此列表中的域名都将被 `block` (拦截)。
+3.  **`rules.static`**:
     - 我们设置的 `exact` 匹配规则优先级高于远程规则和 `wildcard` 规则。这给了我们最终的控制权。
     - 你可以通过向 `good-domain.com` 列表中添加域名来创建"白名单"，强制某个域名被解析。
     - `very-bad-domain.com` 则是你的私人"黑名单"。

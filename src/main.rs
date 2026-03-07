@@ -132,19 +132,19 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
     // 创建 DNS 缓存
     let cache = if let Some(cache_config) = &config.cache {
         let cache_size = if cache_config.enabled {
-            cache_config.max_size
+            cache_config.size
         } else {
             0
         };
         let cache = Arc::new(DnsCache::new(
             cache_size,
-            cache_config.min_ttl,
-            Some(cache_config.negative_ttl),
+            cache_config.ttl.min,
+            Some(cache_config.ttl.negative),
         ));
         if cache_config.enabled {
             info!(
                 "DNS cache enabled, size: {}, min TTL: {}s, negative TTL: {}s",
-                cache_config.max_size, cache_config.min_ttl, cache_config.negative_ttl
+                cache_config.size, cache_config.ttl.min, cache_config.ttl.negative
             );
         } else {
             info!("DNS cache disabled");
@@ -170,13 +170,13 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
     let admin_server = AdminServer::new(admin_listen_addr).with_cache(Arc::clone(&cache));
 
     // 准备HTTP客户端配置
-    let http_client_config = config.http_client.clone().unwrap_or_default();
+    let http_client_config = config.http.clone().unwrap_or_default();
     // 准备 DNS 客户端配置
-    let dns_client_config = config.dns_client.clone().unwrap_or_default();
+    let dns_client_config = config.dns.clone().unwrap_or_default();
 
     // 创建上游管理器 - 避免不必要的克隆
     let upstream = match UpstreamManager::new(
-        config.upstream_groups.clone().unwrap_or_default(),
+        config.upstreams.clone().unwrap_or_default(),
         http_client_config.clone(),
         dns_client_config.clone(),
     )
@@ -193,16 +193,16 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
     };
 
     // 获取静态规则（如果有）
-    let static_rules = config.static_rules.clone().unwrap_or_default();
+    let static_rules = config.rules.r#static.clone();
 
     // 加载远程规则并与静态规则合并
-    let rules = if !config.remote_rules.is_empty() {
+    let rules = if !config.rules.remote.is_empty() {
         info!(
             "Loading {} remote rule sources...",
-            config.remote_rules.len()
+            config.rules.remote.len()
         );
         match loadants::remote_rule::load_and_merge_rules(
-            &config.remote_rules,
+            &config.rules.remote,
             &static_rules,
             &http_client_config,
         )
@@ -313,38 +313,38 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
 
     // 创建DNS服务器配置
     let server_config = DnsServerConfig {
-        udp_bind_addr: config.server.listen_udp.parse()?,
-        tcp_bind_addr: config.server.listen_tcp.parse()?,
-        tcp_timeout: config.server.tcp_timeout,
+        udp_bind_addr: config.listeners.udp.parse()?,
+        tcp_bind_addr: config.listeners.tcp.parse()?,
+        tcp_timeout: config.listeners.tcp_idle_timeout,
         // DNS 服务器当前并不依赖 HTTP 监听地址；若未配置，则使用一个占位地址避免 panic。
         http_bind_addr: config
-            .server
-            .listen_http
+            .listeners
+            .doh
             .as_deref()
             .unwrap_or("127.0.0.1:0")
             .parse()?,
-        http_timeout: config.server.http_timeout,
+        http_timeout: config.listeners.http_idle_timeout,
     };
 
     // 创建 DNS 服务器
     let dns_server = DnsServer::new(server_config, handler.clone());
 
     // 启动 DoH 服务器
-    let doh_server = if let Some(ref listen_http) = config.server.listen_http {
+    let doh_server = if let Some(ref listen_doh) = config.listeners.doh {
         info!(
             "DNS server initialized with UDP: {:?}, TCP: {:?}, HTTP: {:?}",
-            config.server.listen_udp, config.server.listen_tcp, config.server.listen_http
+            config.listeners.udp, config.listeners.tcp, config.listeners.doh
         );
         // 创建 DoH 服务器
         Some(DoHServer::new(
-            listen_http.parse()?,
-            config.server.http_timeout,
+            listen_doh.parse()?,
+            config.listeners.http_idle_timeout,
             handler,
         ))
     } else {
         info!(
             "DNS server initialized with UDP: {:?}, TCP: {:?}",
-            config.server.listen_udp, config.server.listen_tcp
+            config.listeners.udp, config.listeners.tcp
         );
         None
     };

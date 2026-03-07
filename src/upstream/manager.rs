@@ -1,9 +1,6 @@
 use crate::{
     balancer::{LoadBalancer, RandomBalancer, RoundRobinBalancer, WeightedBalancer},
-    config::{
-        DnsClientConfig, HttpClientConfig, LoadBalancingStrategy, UpstreamGroupConfig,
-        UpstreamScheme,
-    },
+    config::{DnsConfig, HttpConfig, LoadBalancingPolicy, UpstreamGroupConfig, UpstreamProtocol},
     error::AppError,
     metrics::METRICS,
     r#const::{
@@ -23,8 +20,8 @@ use super::dns_client::{DnsClient, DnsTransport};
 pub struct UpstreamManager {
     // 上游组负载均衡器
     groups: HashMap<String, Arc<dyn LoadBalancer>>,
-    // 上游组 scheme
-    group_schemes: HashMap<String, UpstreamScheme>,
+    // 上游组协议
+    group_protocols: HashMap<String, UpstreamProtocol>,
     // 上游组客户端
     group_clients: HashMap<String, ClientWithMiddleware>,
     // DNS 客户端（用于 scheme=dns 的组）
@@ -35,37 +32,37 @@ impl UpstreamManager {
     // 创建新的上游管理器
     pub async fn new(
         groups: Vec<UpstreamGroupConfig>,
-        http_config: HttpClientConfig,
-        dns_config: DnsClientConfig,
+        http_config: HttpConfig,
+        dns_config: DnsConfig,
     ) -> Result<Self, AppError> {
         let mut group_map = HashMap::with_capacity(groups.len());
-        let mut group_schemes = HashMap::with_capacity(groups.len());
+        let mut group_protocols = HashMap::with_capacity(groups.len());
         let mut group_clients = HashMap::new();
         let dns_client = DnsClient::new(dns_config);
 
         // 为每个组创建负载均衡器和HTTP客户端
         for UpstreamGroupConfig {
             name,
-            scheme,
-            strategy,
-            servers,
+            protocol,
+            policy,
+            endpoints,
             retry,
             proxy,
         } in groups
         {
-            let lb: Arc<dyn LoadBalancer> = match strategy {
-                LoadBalancingStrategy::RoundRobin => Arc::new(RoundRobinBalancer::new(servers)),
-                LoadBalancingStrategy::Weighted => Arc::new(WeightedBalancer::new(servers)),
-                LoadBalancingStrategy::Random => Arc::new(RandomBalancer::new(servers)),
+            let lb: Arc<dyn LoadBalancer> = match policy {
+                LoadBalancingPolicy::RoundRobin => Arc::new(RoundRobinBalancer::new(endpoints)),
+                LoadBalancingPolicy::Weighted => Arc::new(WeightedBalancer::new(endpoints)),
+                LoadBalancingPolicy::Random => Arc::new(RandomBalancer::new(endpoints)),
             };
 
-            if matches!(scheme, UpstreamScheme::Doh) {
+            if matches!(protocol, UpstreamProtocol::Doh) {
                 // 创建该组的HTTP客户端
                 let client = HttpClient::create(&http_config, proxy.as_deref(), retry.as_ref())?;
                 group_clients.insert(name.clone(), client);
             }
 
-            group_schemes.insert(name.clone(), scheme);
+            group_protocols.insert(name.clone(), protocol);
             group_map.insert(name, lb);
         }
 
@@ -73,7 +70,7 @@ impl UpstreamManager {
 
         Ok(Self {
             groups: group_map,
-            group_schemes,
+            group_protocols,
             group_clients,
             dns_client,
         })
@@ -83,9 +80,9 @@ impl UpstreamManager {
     pub fn empty() -> Result<Self, AppError> {
         Ok(Self {
             groups: HashMap::new(),
-            group_schemes: HashMap::new(),
+            group_protocols: HashMap::new(),
             group_clients: HashMap::new(),
-            dns_client: DnsClient::new(DnsClientConfig::default()),
+            dns_client: DnsClient::new(DnsConfig::default()),
         })
     }
 
@@ -102,10 +99,10 @@ impl UpstreamManager {
             }
         };
 
-        let scheme = match self.group_schemes.get(group_name) {
-            Some(scheme) => scheme,
+        let protocol = match self.group_protocols.get(group_name) {
+            Some(protocol) => protocol,
             None => {
-                error!("Upstream group scheme not found: {}", group_name);
+                error!("Upstream group protocol not found: {}", group_name);
                 return Err(AppError::UpstreamGroupNotFound(group_name.to_string()));
             }
         };
@@ -117,13 +114,13 @@ impl UpstreamManager {
                 error!("Failed to select upstream server: {}", e);
 
                 // 记录上游错误指标
-                let upstream_protocol = match scheme {
-                    UpstreamScheme::Doh => upstream_protocol_labels::DOH,
-                    UpstreamScheme::Dns => upstream_protocol_labels::DNS,
+                let upstream_protocol = match protocol {
+                    UpstreamProtocol::Doh => upstream_protocol_labels::DOH,
+                    UpstreamProtocol::Dns => upstream_protocol_labels::DNS,
                 };
-                let upstream_transport = match scheme {
-                    UpstreamScheme::Doh => upstream_transport_labels::HTTP,
-                    UpstreamScheme::Dns => upstream_transport_labels::UNKNOWN,
+                let upstream_transport = match protocol {
+                    UpstreamProtocol::Doh => upstream_transport_labels::HTTP,
+                    UpstreamProtocol::Dns => upstream_transport_labels::UNKNOWN,
                 };
                 METRICS
                     .upstream_errors_total()
@@ -140,8 +137,8 @@ impl UpstreamManager {
             }
         };
 
-        match scheme {
-            UpstreamScheme::Doh => {
+        match protocol {
+            UpstreamProtocol::Doh => {
                 let Some(server) = selected_server.as_doh() else {
                     error!("Invalid upstream server type for group: {}", group_name);
                     return Err(AppError::Upstream(
@@ -215,7 +212,7 @@ impl UpstreamManager {
                     }
                 }
             }
-            UpstreamScheme::Dns => {
+            UpstreamProtocol::Dns => {
                 let Some(server) = selected_server.as_dns() else {
                     error!("Invalid upstream server type for group: {}", group_name);
                     return Err(AppError::Upstream(

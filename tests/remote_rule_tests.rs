@@ -1,6 +1,6 @@
 use loadants::config::{
-    AuthConfig, AuthType, HttpClientConfig, MatchType, RemoteRuleConfig, RemoteRuleType,
-    RetryConfig, RouteAction, RouteRuleConfig, RuleFormat,
+    AuthConfig, AuthType, HttpConfig, MatchType, RemoteRuleConfig, RemoteRuleType, RetryConfig,
+    RouteAction, RouteRuleConfig, RuleFormat,
 };
 use loadants::error::AppError;
 use loadants::r#const::remote_rule_limits;
@@ -78,11 +78,11 @@ sub.domain.org
 
     // 创建远程规则配置
     let config = RemoteRuleConfig {
-        r#type: RemoteRuleType::Url,
+        r#type: RemoteRuleType::Http,
         url: format!("{}/rules.txt", mock_server.uri()),
         format: RuleFormat::V2ray,
         action: RouteAction::Block,
-        target: None,
+        upstream: None,
         auth: None,
         retry: Some(RetryConfig {
             attempts: 3,
@@ -93,12 +93,12 @@ sub.domain.org
     };
 
     // 创建HTTP客户端配置
-    let http_config = HttpClientConfig {
+    let http_config = HttpConfig {
         connect_timeout: 5,
         request_timeout: 10,
         idle_timeout: Some(60),
         keepalive: Some(30),
-        agent: Some("Test-Agent".to_string()),
+        user_agent: Some("Test-Agent".to_string()),
     };
 
     // 创建远程规则加载器
@@ -137,7 +137,7 @@ sub.domain.org
         }
         // 检查动作和目标
         assert_eq!(rule.action, RouteAction::Block);
-        assert_eq!(rule.target, None);
+        assert_eq!(rule.upstream, None);
     }
 
     assert!(has_exact);
@@ -166,11 +166,11 @@ async fn test_remote_rule_with_auth() {
 
     // 创建远程规则配置，带认证信息
     let config = RemoteRuleConfig {
-        r#type: RemoteRuleType::Url,
+        r#type: RemoteRuleType::Http,
         url: format!("{}/auth-rules.txt", mock_server.uri()),
         format: RuleFormat::V2ray,
         action: RouteAction::Forward,
-        target: Some("test-target".to_string()),
+        upstream: Some("test-target".to_string()),
         auth: Some(AuthConfig {
             r#type: AuthType::Bearer,
             username: None,
@@ -183,7 +183,7 @@ async fn test_remote_rule_with_auth() {
     };
 
     // 创建HTTP客户端配置
-    let http_config = HttpClientConfig::default();
+    let http_config = HttpConfig::default();
 
     // 创建远程规则加载器
     let loader = RemoteRuleLoader::new(config, http_config).unwrap();
@@ -200,7 +200,7 @@ async fn test_remote_rule_with_auth() {
     assert_eq!(route_rules[0].patterns.len(), 1);
     assert_eq!(route_rules[0].patterns[0], "auth-example.com");
     assert_eq!(route_rules[0].action, RouteAction::Forward);
-    assert_eq!(route_rules[0].target, Some("test-target".to_string()));
+    assert_eq!(route_rules[0].upstream, Some("test-target".to_string()));
 }
 
 #[tokio::test]
@@ -228,22 +228,22 @@ async fn test_load_and_merge_rules() {
     // 创建远程规则配置列表
     let remote_configs = vec![
         RemoteRuleConfig {
-            r#type: RemoteRuleType::Url,
+            r#type: RemoteRuleType::Http,
             url: format!("{}/block-rules.txt", mock_server1.uri()),
             format: RuleFormat::V2ray,
             action: RouteAction::Block,
-            target: None,
+            upstream: None,
             auth: None,
             retry: None,
             proxy: None,
             max_size: remote_rule_limits::DEFAULT_MAX_SIZE,
         },
         RemoteRuleConfig {
-            r#type: RemoteRuleType::Url,
+            r#type: RemoteRuleType::Http,
             url: format!("{}/forward-rules.txt", mock_server2.uri()),
             format: RuleFormat::V2ray,
             action: RouteAction::Forward,
-            target: Some("test-target".to_string()),
+            upstream: Some("test-target".to_string()),
             auth: None,
             retry: None,
             proxy: None,
@@ -256,11 +256,11 @@ async fn test_load_and_merge_rules() {
         match_type: MatchType::Exact,
         patterns: vec!["static.example.com".to_string()],
         action: RouteAction::Block,
-        target: None,
+        upstream: None,
     }];
 
     // 创建HTTP客户端配置
-    let http_config = HttpClientConfig::default();
+    let http_config = HttpConfig::default();
 
     // 加载并合并规则
     let merged_rules = load_and_merge_rules(&remote_configs, &static_rules, &http_config).await;
@@ -288,7 +288,7 @@ async fn test_load_and_merge_rules() {
     });
     assert!(forward_rule.is_some());
     assert_eq!(
-        forward_rule.unwrap().target,
+        forward_rule.unwrap().upstream,
         Some("test-target".to_string())
     );
 
@@ -324,15 +324,15 @@ async fn test_error_handling() {
         .await;
 
     // 创建HTTP客户端配置
-    let http_config = HttpClientConfig::default();
+    let http_config = HttpConfig::default();
 
     // 测试404错误
     let not_found_config = RemoteRuleConfig {
-        r#type: RemoteRuleType::Url,
+        r#type: RemoteRuleType::Http,
         url: format!("{}/not-found.txt", mock_server.uri()),
         format: RuleFormat::V2ray,
         action: RouteAction::Block,
-        target: None,
+        upstream: None,
         auth: None,
         retry: None,
         proxy: None,
@@ -345,11 +345,11 @@ async fn test_error_handling() {
 
     // 测试文件大小限制
     let large_file_config = RemoteRuleConfig {
-        r#type: RemoteRuleType::Url,
+        r#type: RemoteRuleType::Http,
         url: format!("{}/large-file.txt", mock_server.uri()),
         format: RuleFormat::V2ray,
         action: RouteAction::Block,
-        target: None,
+        upstream: None,
         auth: None,
         retry: None,
         proxy: None,

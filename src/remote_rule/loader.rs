@@ -1,5 +1,5 @@
 use crate::config::{
-    HttpClientConfig, MatchType, RemoteRuleConfig, RetryConfig, RouteRuleConfig, RuleFormat,
+    HttpConfig, MatchType, RemoteRuleConfig, RetryConfig, RouteRuleConfig, RuleFormat,
 };
 use crate::error::{AppError, HttpClientError, InvalidProxyConfig};
 use crate::r#const::{retry_limits, rule_action_labels};
@@ -20,7 +20,7 @@ pub struct RemoteRuleLoader {
 
 impl RemoteRuleLoader {
     /// 创建新的远程规则加载器
-    pub fn new(config: RemoteRuleConfig, http_config: HttpClientConfig) -> Result<Self, AppError> {
+    pub fn new(config: RemoteRuleConfig, http_config: HttpConfig) -> Result<Self, AppError> {
         let client =
             Self::create_http_client(&http_config, config.proxy.as_deref(), config.retry.as_ref())?;
 
@@ -39,7 +39,7 @@ impl RemoteRuleLoader {
 
     /// 创建HTTP客户端
     fn create_http_client(
-        config: &HttpClientConfig,
+        config: &HttpConfig,
         proxy: Option<&str>,
         retry_config: Option<&RetryConfig>,
     ) -> Result<ClientWithMiddleware, AppError> {
@@ -65,8 +65,8 @@ impl RemoteRuleLoader {
         }
 
         // 配置用户代理
-        if let Some(ref agent) = config.agent {
-            client_builder = client_builder.user_agent(agent);
+        if let Some(ref user_agent) = config.user_agent {
+            client_builder = client_builder.user_agent(user_agent);
         }
 
         // 配置代理
@@ -202,7 +202,7 @@ impl RemoteRuleLoader {
                 match_type: MatchType::Exact,
                 patterns: exact_patterns,
                 action: self.config.action,
-                target: self.config.target.clone(),
+                upstream: self.config.upstream.clone(),
             });
         }
 
@@ -212,7 +212,7 @@ impl RemoteRuleLoader {
                 match_type: MatchType::Wildcard,
                 patterns: wildcard_patterns,
                 action: self.config.action,
-                target: self.config.target.clone(),
+                upstream: self.config.upstream.clone(),
             });
         }
 
@@ -222,7 +222,7 @@ impl RemoteRuleLoader {
                 match_type: MatchType::Regex,
                 patterns: regex_patterns,
                 action: self.config.action,
-                target: self.config.target.clone(),
+                upstream: self.config.upstream.clone(),
             });
         }
 

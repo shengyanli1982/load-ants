@@ -1,4 +1,4 @@
-use crate::config::DnsClientConfig;
+use crate::config::DnsConfig;
 use crate::error::AppError;
 use dashmap::DashMap;
 use futures_util::StreamExt;
@@ -41,14 +41,14 @@ pub struct DnsClientSendError {
 
 #[derive(Clone)]
 pub struct DnsClient {
-    config: DnsClientConfig,
+    config: DnsConfig,
     connector: GenericConnector<TokioRuntimeProvider>,
     opts: ResolverOpts,
     tcp_conns: Arc<DashMap<SocketAddr, GenericConnection>>,
 }
 
 impl DnsClient {
-    pub fn new(config: DnsClientConfig) -> Self {
+    pub fn new(config: DnsConfig) -> Self {
         let mut opts = ResolverOpts::default();
         opts.timeout = Duration::from_secs(config.request_timeout);
 

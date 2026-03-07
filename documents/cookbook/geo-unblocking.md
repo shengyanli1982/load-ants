@@ -27,28 +27,29 @@
 # ----------------------------------
 # 上游服务器组
 # ----------------------------------
-upstream_groups:
+upstreams:
     # 1. 直连组：用于所有常规流量
     - name: "direct_group"
-      scheme: "doh"
-      strategy: "random"
-      servers:
+      protocol: "doh"
+      policy: "random"
+      endpoints:
           - url: "https://dns.google/dns-query" # 你可以选择任何喜欢的公共DNS
 
     # 2. 代理组：用于流媒体服务
     - name: "streaming_proxy_group"
-      scheme: "doh"
-      strategy: "random"
+      protocol: "doh"
+      policy: "random"
       # 关键：为此组配置代理
       proxy: "http://proxy.example.com:8888"
-      servers:
+      endpoints:
           # 最好选择与你代理服务器地理位置相近的 DNS 服务
           - url: "https://cloudflare-dns.com/dns-query"
 
 # ----------------------------------
 # 路由规则
 # ----------------------------------
-static_rules:
+rules:
+  static:
     # 1. 规则A: 匹配 Netflix 相关域名
     # 使用正则表达式匹配 Netflix 的主域名和其 CDN 域名
     - match: "regex"
@@ -56,34 +57,34 @@ static_rules:
           - "^(.*\\.)?netflix\\.com$"
           - "^(.*\\.)?nflxvideo\\.net$"
       action: "forward"
-      target: "streaming_proxy_group"
+      upstream: "streaming_proxy_group"
 
     # 2. 规则B: 匹配 Hulu 相关域名
     - match: "regex"
       patterns:
           - "^(.*\\.)?hulu\\.com$"
       action: "forward"
-      target: "streaming_proxy_group"
+      upstream: "streaming_proxy_group"
 
     # 3. 规则C: 默认规则 (Fallback)
     # 确保所有其他流量都走直连组
     - match: "wildcard"
       patterns: ["*"]
       action: "forward"
-      target: "direct_group"
+      upstream: "direct_group"
 ```
 
 **配置逻辑解读**:
 
-1.  **`upstream_groups`**:
+1.  **`upstreams`**:
     - `direct_group`: 一个标准的上游组，不走任何代理。
     - `streaming_proxy_group`: 这个组的特殊之处在于它配置了 `proxy` 字段。所有通过这个组转发的 DNS 查询，其网络流量都会经过 `http://proxy.example.com:8888`。
 
-    > 提示：`proxy` 仅适用于 `scheme: doh` 的上游组；传统 DNS 上游（`scheme: dns`）不支持代理。
+    > 提示：`proxy` 仅适用于 `protocol: doh` 的上游组；传统 DNS 上游（`protocol: dns`）不支持代理。
 
-2.  **`static_rules`**:
+2.  **`rules.static`**:
     - Load Ants 的路由遵循“拦截优先（block first）”与“分层匹配”的原则：在 `block` 与 `forward` 两个阶段内部，匹配优先级为 `exact` > `wildcard` > `regex` > `*`（全局通配符）。
-    - **规则 A 和 B**: 我们使用 `regex` 来捕获目标服务的域名。例如，`^(.*\\.)?netflix\\.com$` 可以匹配 `netflix.com`, `www.netflix.com`, `movies.prod.netflix.com` 等所有子域名。当 DNS 查询匹配到这些模式时，Load Ants 会执行 `forward` 动作，并把查询交给 `target` 指定的 `streaming_proxy_group`。
+    - **规则 A 和 B**: 我们使用 `regex` 来捕获目标服务的域名。例如，`^(.*\\.)?netflix\\.com$` 可以匹配 `netflix.com`, `www.netflix.com`, `movies.prod.netflix.com` 等所有子域名。当 DNS 查询匹配到这些模式时，Load Ants 会执行 `forward` 动作，并把查询交给 `upstream` 指定的 `streaming_proxy_group`。
     - **规则 C**: `wildcard` 类型的 `"*"` 匹配所有域名，但它的优先级最低。因此，只有当一个查询**没有**匹配到任何 `regex` 规则时，它才会落到这个"全匹配"规则上，并被转发到 `direct_group`。
 
 ### 步骤二：启动和验证

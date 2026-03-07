@@ -1,5 +1,5 @@
 use crate::{
-    config::{AuthConfig, AuthType, HttpClientConfig, RetryConfig},
+    config::{AuthConfig, AuthType, HttpConfig, RetryConfig},
     error::{AppError, HttpClientError, InvalidProxyConfig},
     r#const::{http_headers, retry_limits},
 };
@@ -14,7 +14,7 @@ pub struct HttpClient;
 impl HttpClient {
     // 创建HTTP客户端
     pub fn create(
-        config: &HttpClientConfig,
+        config: &HttpConfig,
         proxy: Option<&str>,
         retry_config: Option<&RetryConfig>,
     ) -> Result<ClientWithMiddleware, AppError> {
@@ -40,8 +40,8 @@ impl HttpClient {
         }
 
         // 配置用户代理
-        if let Some(ref agent) = config.agent {
-            client_builder = client_builder.user_agent(agent);
+        if let Some(ref user_agent) = config.user_agent {
+            client_builder = client_builder.user_agent(user_agent);
         }
 
         // 配置代理

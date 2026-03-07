@@ -23,13 +23,13 @@ mkdir -p ./load-ants-config
 cp config.default.yaml ./load-ants-config/config.yaml
 ```
 
-然后，使用你喜欢的文本编辑器修改 `./load-ants-config/config.yaml`。确保 `server` 和 `admin` 的监听地址设置为 `0.0.0.0`，以便从容器外部访问。
+然后，使用你喜欢的文本编辑器修改 `./load-ants-config/config.yaml`。确保 `listeners` 和 `admin` 的监听地址设置为 `0.0.0.0`，以便从容器外部访问。
 
 ```yaml
 # config.yaml
-server:
-    listen_udp: "0.0.0.0:53"
-    listen_tcp: "0.0.0.0:53"
+listeners:
+    udp: "0.0.0.0:53"
+    tcp: "0.0.0.0:53"
 admin:
     listen: "0.0.0.0:9000"
 ```
@@ -43,6 +43,7 @@ docker run -d \
   --name load-ants \
   -p 53:53/udp \
   -p 53:53/tcp \
+  -p 8080:8080/tcp \
   -p 9000:9000/tcp \
   -v $(pwd)/load-ants-config:/app/config \
   --restart unless-stopped \
@@ -54,6 +55,7 @@ docker run -d \
 - `-d`: 在后台（detached mode）运行容器。
 - `--name load-ants`: 为容器指定一个易于记忆的名称。
 - `-p 53:53/udp -p 53:53/tcp`: 将主机的 53 端口（DNS 标准端口）的 UDP 和 TCP 流量映射到容器的 53 端口。
+- `-p 8080:8080/tcp`: （可选）将主机的 8080 端口映射到容器的 DoH 监听端口（如果你在配置中启用了 `listeners.doh`）。
 - `-p 9000:9000/tcp`: 将主机的 9000 端口映射到容器的 `admin` 服务端口。
 - `-v $(pwd)/load-ants-config:/app/config`: **非常重要**。将当前目录下的 `load-ants-config` 目录挂载到容器内的 `/app/config` 目录。这使得容器可以读取到你的配置文件。
 - `--restart unless-stopped`: 配置容器在退出时总是自动重启，除非它被手动停止。这对于保证服务的持续运行很有用。

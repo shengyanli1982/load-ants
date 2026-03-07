@@ -1,8 +1,8 @@
 use hickory_proto::op::{Message, MessageType, OpCode, Query, ResponseCode};
 use hickory_proto::rr::{Name, RecordType};
 use loadants::config::{
-    DnsClientConfig, DnsUpstreamServerConfig, HttpClientConfig, LoadBalancingStrategy,
-    UpstreamGroupConfig, UpstreamScheme, UpstreamServerConfig,
+    DnsConfig, DnsUpstreamEndpointConfig, HttpConfig, LoadBalancingPolicy, UpstreamEndpointConfig,
+    UpstreamGroupConfig, UpstreamProtocol,
 };
 use loadants::upstream::UpstreamManager;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -105,12 +105,12 @@ async fn spawn_tcp_server(
     })
 }
 
-async fn build_dns_manager(addr: SocketAddr, dns_config: DnsClientConfig) -> UpstreamManager {
+async fn build_dns_manager(addr: SocketAddr, dns_config: DnsConfig) -> UpstreamManager {
     let groups = vec![UpstreamGroupConfig {
         name: "dns_group".to_string(),
-        scheme: UpstreamScheme::Dns,
-        strategy: LoadBalancingStrategy::RoundRobin,
-        servers: vec![UpstreamServerConfig::Dns(DnsUpstreamServerConfig {
+        protocol: UpstreamProtocol::Dns,
+        policy: LoadBalancingPolicy::RoundRobin,
+        endpoints: vec![UpstreamEndpointConfig::Dns(DnsUpstreamEndpointConfig {
             addr,
             weight: 1,
         })],
@@ -118,7 +118,7 @@ async fn build_dns_manager(addr: SocketAddr, dns_config: DnsClientConfig) -> Ups
         proxy: None,
     }];
 
-    UpstreamManager::new(groups, HttpClientConfig::default(), dns_config)
+    UpstreamManager::new(groups, HttpConfig::default(), dns_config)
         .await
         .unwrap()
 }
@@ -137,7 +137,7 @@ async fn test_dns_prefer_tcp_true_uses_tcp_only() {
 
     let manager = build_dns_manager(
         addr,
-        DnsClientConfig {
+        DnsConfig {
             connect_timeout: 1,
             request_timeout: 2,
             prefer_tcp: true,
@@ -168,7 +168,7 @@ async fn test_dns_udp_tc_triggers_tcp_retry() {
 
     let manager = build_dns_manager(
         addr,
-        DnsClientConfig {
+        DnsConfig {
             connect_timeout: 1,
             request_timeout: 2,
             prefer_tcp: false,
@@ -196,7 +196,7 @@ async fn test_dns_nxdomain_transparent() {
 
     let manager = build_dns_manager(
         addr,
-        DnsClientConfig {
+        DnsConfig {
             connect_timeout: 1,
             request_timeout: 2,
             prefer_tcp: false,

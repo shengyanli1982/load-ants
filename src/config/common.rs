@@ -1,15 +1,32 @@
 use crate::r#const::retry_limits;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use validator::{Validate, ValidationError};
 
 // 认证类型枚举
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum AuthType {
     // HTTP基本认证
     Basic,
     // Bearer令牌认证
     Bearer,
+}
+
+impl<'de> Deserialize<'de> for AuthType {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        super::serde_utils::deserialize_string_enum(
+            deserializer,
+            |normalized| match normalized {
+                "basic" => Some(Self::Basic),
+                "bearer" => Some(Self::Bearer),
+                _ => None,
+            },
+            &["basic", "bearer"],
+        )
+    }
 }
 
 // 自定义验证函数 - 验证Basic认证配置
@@ -43,7 +60,7 @@ fn validate_bearer_auth(auth: &AuthConfig) -> Result<(), ValidationError> {
     function = "validate_bearer_auth",
     message = "Bearer authentication requires token"
 ))]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "lowercase", deny_unknown_fields)]
 pub struct AuthConfig {
     // 认证类型（basic/bearer）
     pub r#type: AuthType,
@@ -57,7 +74,7 @@ pub struct AuthConfig {
 
 // 重试配置
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Validate)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "lowercase", deny_unknown_fields)]
 pub struct RetryConfig {
     // 重试次数
     #[validate(range(

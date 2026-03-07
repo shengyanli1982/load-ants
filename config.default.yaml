@@ -1,109 +1,77 @@
-# Load Ants 配置示例
+# Load Ants 默认配置（vNext）
 # 必选：表示该配置项必须提供
 # 可选：表示该配置项可以不提供，使用默认值
 
-# 服务器监听设置
-server:
-  listen_udp: "0.0.0.0:53" # UDP 监听地址和端口
-  listen_tcp: "0.0.0.0:53" # TCP 监听地址和端口
-  listen_http: "0.0.0.0:8080" # DOH 监听地址和端口
+listeners:
+  udp: "0.0.0.0:53"
+  tcp: "0.0.0.0:53"
+  doh: "0.0.0.0:8080"
+  tcp_idle_timeout: 10
+  http_idle_timeout: 30
 
-# 管理服务器设置
 admin:
-  listen: "0.0.0.0:9000" # 管理服务器监听地址和端口
+  listen: "0.0.0.0:9000"
 
-# 缓存设置
 cache:
   enabled: true
-  max_size: 10000 # 最大缓存条目数 (有效范围: 10-1000000)
-  min_ttl: 60 # 缓存条目最小 TTL（秒）(有效范围: 1-86400)
-  max_ttl: 3600 # 缓存条目最大 TTL（秒）(有效范围: 1-86400)
-  negative_ttl: 60 # 负面缓存 TTL（秒）(有效范围: 1-86400)
+  size: 10000
+  ttl:
+    min: 60
+    max: 3600
+    negative: 300
 
-# 所有上游请求共享的 HTTP 客户端设置
-http_client:
-  connect_timeout: 5 # 连接超时（秒）(有效范围: 1-120)
-  request_timeout: 10 # 请求超时（秒）(有效范围: 1-1200)
-  idle_timeout: 60 # 可选：空闲连接超时（秒）(有效范围: 5-1800)
-  keepalive: 60 # 可选：TCP Keepalive（秒）(有效范围: 5-600)
-  agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" # 可选：HTTP 用户代理
+http:
+  connect_timeout: 5
+  request_timeout: 10
+  idle_timeout: 60
+  keepalive: 60
+  user_agent: "LoadAnts/0.2"
 
-# 所有上游请求共享的 DNS 客户端设置
-dns_client:
-  connect_timeout: 2 # TCP 连接超时（秒）(有效范围: 1-120)
-  request_timeout: 3 # DNS 请求超时（秒）(有效范围: 1-1200)
-  prefer_tcp: false # true=默认使用上游 TCP；false=默认使用上游 UDP，收到 TC=1 时切换 TCP 重试
-  tcp_reconnect: true # TCP 请求失败后丢弃连接，下次请求重连
+dns:
+  connect_timeout: 2
+  request_timeout: 3
+  prefer_tcp: false
+  tcp_reconnect: true
 
-# 上游 DoH 服务器组
-upstream_groups:
-  - name: "google"
-    scheme: "doh"
-    strategy: "random"
-    servers:
-      - url: "https://8.8.8.8/resolve" #
-        method: "get"
-        content_type: "json" # 使用 application/dns-json 内容类型
-      # - url: "https://1.0.0.1/dns-query"
-      #   method: "get"
-      #   content_type: "json" # 使用 application/dns-json 内容类型
-    proxy: "http://127.0.0.1:7890"
-
+upstreams:
   - name: "public"
-    scheme: "doh"
-    strategy: "roundrobin"
-    servers:
+    protocol: "doh"
+    policy: "roundrobin"
+    endpoints:
       - url: "https://223.5.5.5/dns-query"
         method: "get"
-        content_type: "message" # 使用 application/dns-message 内容类型
+        content_type: "message"
       - url: "https://223.6.6.6/dns-query"
         method: "get"
-        content_type: "message" # 使用 application/dns-message 内容类型
-      - url: "https://1.12.12.12/dns-query"
-        method: "get"
-        content_type: "message" # 使用 application/dns-message 内容类型
-      - url: "https://120.53.53.53/dns-query"
-        method: "get"
-        content_type: "message" # 使用 application/dns-message 内容类型
+        content_type: "message"
 
-  - name: "public_dns"
-    scheme: "dns"
-    strategy: "roundrobin"
-    servers:
-      - addr: 223.5.5.5:53
-      - addr: 223.6.6.6:53
+rules:
+  static:
+    - match: "exact"
+      patterns: ["ads.example.com", "ads2.example.com"]
+      action: "block"
 
-# 路由规则（静态配置）
-static_rules:
-  # 阻止特定域名
-  - match: "exact" # exact: 精确匹配，不支持通配符
-    patterns: ["ads.example.com", "ads2.example.com"] # 匹配模式必须非空
-    action: "block" # 动作：block, forward
+    - match: "wildcard"
+      patterns: ["*"]
+      action: "forward"
+      upstream: "public"
 
-  # 默认规则：将所有其他流量转发到 public（强烈推荐显式配置）
-  - match: "wildcard"
-    patterns: ["*"] # 匹配所有域名
-    action: "forward"
-    target: "public" # 默认上游
+  remote:
+    - type: "http"
+      url: "https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/reject-list.txt"
+      format: "v2ray"
+      action: "block"
+      retry:
+        attempts: 3
+        delay: 1
+      max_size: 10485760
 
-remote_rules:
-  # 从URL获取阻止列表
-  - type: "url" # URL规则类型，从外部URL获取规则
-    url: "https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/reject-list.txt"
-    format: "v2ray" # 支持的格式: v2ray, clash，默认v2ray
-    action: "block" # 阻止列表中的所有域名
-    retry: # 获取规则的重试策略
-      attempts: 3
-      delay: 1
-    proxy: "http://127.0.0.1:7890"
-
-  # 从URL获取代理列表
-  - type: "url"
-    url: "https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/proxy-list.txt"
-    format: "v2ray" # 支持的格式: v2ray, clash，默认v2ray
-    action: "forward" # 转发列表中的所有域名
-    target: "google" # 转发目标上游组
-    retry:
-      attempts: 3
-      delay: 1
-    proxy: "http://127.0.0.1:7890"
+    - type: "http"
+      url: "https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/proxy-list.txt"
+      format: "v2ray"
+      action: "forward"
+      upstream: "public"
+      retry:
+        attempts: 3
+        delay: 1
+      max_size: 10485760

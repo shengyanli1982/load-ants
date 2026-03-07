@@ -16,42 +16,42 @@ mod tests {
                     "special.corp.com".to_string(),
                 ],
                 action: RouteAction::Forward,
-                target: Some("cloudflare_secure".to_string()),
+                upstream: Some("cloudflare_secure".to_string()),
             },
             // 通配符 forward 规则
             RouteRuleConfig {
                 match_type: MatchType::Wildcard,
                 patterns: vec!["*.corp.local".to_string(), "*.corp.com".to_string()],
                 action: RouteAction::Forward,
-                target: Some("internal_doh".to_string()),
+                upstream: Some("internal_doh".to_string()),
             },
             // 精确匹配的 block 规则 - 应覆盖上面的 forward 规则
             RouteRuleConfig {
                 match_type: MatchType::Exact,
                 patterns: vec!["special.corp.com".to_string()],
                 action: RouteAction::Block,
-                target: None,
+                upstream: None,
             },
             // 正则匹配的 forward 规则
             RouteRuleConfig {
                 match_type: MatchType::Regex,
                 patterns: vec!["^(api|service)\\..+\\.com$".to_string()],
                 action: RouteAction::Forward,
-                target: Some("google_public".to_string()),
+                upstream: Some("google_public".to_string()),
             },
             // 正则匹配的 block 规则 - 应覆盖上面的 forward 规则
             RouteRuleConfig {
                 match_type: MatchType::Regex,
                 patterns: vec!["^api\\.service\\.com$".to_string()],
                 action: RouteAction::Block,
-                target: None,
+                upstream: None,
             },
             // 全局通配符 forward 规则（默认规则）
             RouteRuleConfig {
                 match_type: MatchType::Wildcard,
                 patterns: vec!["*".to_string()],
                 action: RouteAction::Forward,
-                target: Some("google_public".to_string()),
+                upstream: Some("google_public".to_string()),
             },
         ]
     }
@@ -148,21 +148,21 @@ mod tests {
                 match_type: MatchType::Exact,
                 patterns: vec!["overlap.example.com".to_string()],
                 action: RouteAction::Forward,
-                target: Some("cloudflare_secure".to_string()),
+                upstream: Some("cloudflare_secure".to_string()),
             },
             // 通配符规则 - forward
             RouteRuleConfig {
                 match_type: MatchType::Wildcard,
                 patterns: vec!["*.example.com".to_string()],
                 action: RouteAction::Forward,
-                target: Some("google_public".to_string()),
+                upstream: Some("google_public".to_string()),
             },
             // 精确匹配规则 - block (应该优先)
             RouteRuleConfig {
                 match_type: MatchType::Exact,
                 patterns: vec!["overlap.example.com".to_string()],
                 action: RouteAction::Block,
-                target: None,
+                upstream: None,
             },
         ];
 

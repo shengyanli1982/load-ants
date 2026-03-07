@@ -125,7 +125,7 @@ dig @127.0.0.1 example.com
 example.com.		172800	IN	A	93.184.216.34
 
 ;; Query time: 50 msec
-;; SERVER: 127.0.0.1#53(127.0.0.1)
+;; RESOLVER: 127.0.0.1#53(127.0.0.1)
 ;; WHEN: Wed Jul 27 10:00:00 UTC 2024
 ;; MSG SIZE  rcvd: 56
 ```

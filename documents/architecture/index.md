@@ -19,19 +19,19 @@ Load Ants 的设计哲学是**高性能、模块化和高可扩展性**。它作
 
 3.  **路由引擎 (Routing Engine)**:
     - **如果缓存未命中** (`cache miss`)，请求将被交给路由引擎。
-    - 路由引擎是 Load Ants 的决策中心。它会根据 `config.yaml` 中定义的 `static_rules` 或者 `remote_rules` 规则，对查询的域名进行匹配。
+    - 路由引擎是 Load Ants 的决策中心。它会根据 `config.yaml` 中定义的 `rules.static` 或者 `rules.remote` 规则，对查询的域名进行匹配。
     - 匹配支持多种方式：精确域名、通配符 (`*.example.com`) 和正则表达式。
     - 根据匹配到的第一条规则，路由引擎决定下一步的操作，通常是 `forward` (转发) 或 `block` (拦截)。
 
 4.  **上游管理 (Upstream Groups)**:
     - 如果路由决策是 `forward`，请求将被发送到规则指定的**上游组**。
-    - 上游组是上游服务器的逻辑集合。每个组通过 `scheme` 指定上游类型：`doh`（DoH）或 `dns`（传统 DNS，UDP/TCP）。
+    - 上游组是上游服务器的逻辑集合。每个组通过 `protocol` 指定上游类型：`doh`（DoH）或 `dns`（传统 DNS，UDP/TCP）。
     - 你可以为不同的上游组配置不同的负载均衡策略（如轮询、加权轮询、随机）。对于 DoH 组，还可以配置认证与代理等能力。
     - 这种分组机制使得用户可以灵活地将不同类型的流量导向不同的上游路径（例如，外网域名走 DoH，内网域名走局域网 DNS）。
 
 5.  **上游客户端 (Upstream Client)**:
-    - **对于 DoH 上游（`scheme: doh`）**：HTTP/DoH 客户端负责把 DNS 报文封装为符合 DoH 规范的 HTTPS 请求（如 `Content-Type: application/dns-message`），并复用连接池以减少握手延迟；如配置了重试策略，将按策略执行重试。
-    - **对于传统 DNS 上游（`scheme: dns`）**：DNS 客户端负责与上游的 `IP:端口` 进行 UDP/TCP 通信；默认优先 UDP，在收到 UDP 响应且 `TC=1`（截断）时会自动回退到 TCP 重试（或你可通过 `dns_client.prefer_tcp=true` 直接使用 TCP）。TCP 连接可复用，并可在失败后按需重连（`dns_client.tcp_reconnect`）。
+    - **对于 DoH 上游（`protocol: doh`）**：HTTP/DoH 客户端负责把 DNS 报文封装为符合 DoH 规范的 HTTPS 请求（如 `Content-Type: application/dns-message`），并复用连接池以减少握手延迟；如配置了重试策略，将按策略执行重试。
+    - **对于传统 DNS 上游（`protocol: dns`）**：DNS 客户端负责与上游的 `IP:端口` 进行 UDP/TCP 通信；默认优先 UDP，在收到 UDP 响应且 `TC=1`（截断）时会自动回退到 TCP 重试（或你可通过 `dns.prefer_tcp=true` 直接使用 TCP）。TCP 连接可复用，并可在失败后按需重连（`dns.tcp_reconnect`）。
 
 6.  **响应处理与缓存更新 (Response Handling & Cache Update)**:
     - 当上游返回响应后，Load Ants 会得到完整的 DNS 响应报文（无论该上游是 DoH 还是传统 DNS）。

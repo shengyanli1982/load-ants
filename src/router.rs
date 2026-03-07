@@ -181,7 +181,7 @@ impl Router {
         // 处理所有规则
         for rule in rules {
             // 将目标字符串转换为 Arc 以便共享
-            let target = rule.target.map(Arc::new);
+            let target = rule.upstream.map(Arc::new);
 
             match rule.match_type {
                 MatchType::Exact => {

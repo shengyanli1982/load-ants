@@ -4,7 +4,7 @@ mod parser;
 pub use self::loader::RemoteRuleLoader;
 pub use self::parser::{ClashRuleParser, RuleParser, V2RayRuleParser};
 
-use crate::config::{HttpClientConfig, RemoteRuleConfig, RouteRuleConfig};
+use crate::config::{HttpConfig, RemoteRuleConfig, RouteRuleConfig};
 use crate::error::AppError;
 use tracing::error;
 
@@ -15,7 +15,7 @@ pub type RemoteRuleResult = Result<Vec<RouteRuleConfig>, AppError>;
 pub async fn load_and_merge_rules(
     remote_configs: &[RemoteRuleConfig],
     static_rules: &[RouteRuleConfig],
-    http_config: &HttpClientConfig,
+    http_config: &HttpConfig,
 ) -> RemoteRuleResult {
     // 创建一个规则列表，预先分配足够的空间
     let mut merged_rules = Vec::with_capacity(static_rules.len() + remote_configs.len() * 3);
