@@ -22,6 +22,7 @@ test/
 design/
 .cursorrules
 .vscode/
+.serena/
 .idea/
 .DS_Store
 *.dat
