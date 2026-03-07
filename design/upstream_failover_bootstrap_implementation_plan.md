@@ -37,7 +37,7 @@
 
 1. 缺少请求内 failover（当前 `forward()` 只尝试一次）。
 2. 被动熔断无效（LB 的 `report_failure()` 无状态）。
-3. 缺少 server 级 `transport`（`auto|udp|tcp`）与 `transport=udp` 下 `TC=1` 语义（当前总会 TCP 回退）。
+3. 缺少 server 级 `transport`（`udp|tcp`）与 `TC=1` 语义说明（期望：首发 UDP 时同端点升级 TCP，且 `TC=1` 本身不计入 health failure）。
 4. 缺少 bootstrap_dns（DoH hostname/proxy hostname 解析不可控）。
 5. 配置层缺少 `bootstrap_dns / fallback / failover / health / transport` 结构体与校验。
 
@@ -50,7 +50,7 @@
 ### 2.1 向后兼容优先（默认不改变既有配置行为）
 
 - 仅当用户在 vNext 配置中显式启用相关块时，才开启新增能力：
-  - `upstreams[].fallback` / `upstreams[].failover` / `upstreams[].health` / 顶层 `bootstrap_dns`
+    - `upstreams[].fallback` / `upstreams[].failover` / `upstreams[].health` / 顶层 `bootstrap_dns`
 - 若配置不包含这些字段：行为保持现状（不做请求内 failover；DoH hostname 走系统 resolver）。
 
 > 解释：该策略与本仓库现有 `deny_unknown_fields` + “仓库自带配置文件必须能加载”的测试体系最稳妥；同时保留未来把“默认启用”提升为推荐写法的空间（可通过文档/示例配置推动）。
@@ -75,20 +75,22 @@
 
 ```yaml
 bootstrap_dns:
-  groups: ["public_dns"]        # 必须：引用 protocol=dns 的 upstream 名称
-  timeout: 2                    # 秒，范围 1-30
-  cache_ttl: 300                # 秒，范围 0-86400；0 禁用缓存
-  prefer_ipv6: false            # 是否优先 AAAA
-  use_system_resolver: false    # 兼容规则见 3.4
+    groups: ["public_dns"] # 必须：引用 protocol=dns 的 upstream 名称
+    timeout: 2 # 秒，范围 1-30
+    cache_ttl: 300 # 秒，范围 0-86400；0 禁用缓存
+    prefer_ipv6: false # 是否优先 AAAA
+    use_system_resolver: false # 兼容规则见 3.4
 ```
 
 **语义：**
+
 - 仅用于解析：
-  - DoH upstream URL 的 hostname（`upstreams[].endpoints[].url.host`）
-  - 可选：proxy URL 的 hostname（若未来 proxy 结构化；当前为字符串 URL 时可解析其 host）
+    - DoH upstream URL 的 hostname（`upstreams[].endpoints[].url.host`）
+    - 可选：proxy URL 的 hostname（若未来 proxy 结构化；当前为字符串 URL 时可解析其 host）
 - 禁止用于普通用户查询转发/兜底。
 
 **校验：**
+
 - `groups` 不能为空且引用必须存在。
 - 被引用组必须是 `protocol=dns`。
 - 规范级建议（文档提示，不做强校验）：bootstrap 组的 DNS server 地址应为 IP:port（避免 bootstrap 再 bootstrap）。
@@ -97,23 +99,24 @@ bootstrap_dns:
 
 ```yaml
 upstreams:
-  - name: "secure"
-    protocol: "doh"
-    policy: "random"
-    endpoints: [...]
-    fallback: "lan"             # 可选：单个后备组（本期仅支持 1 个）
-    failover:
-      on_rcode: []              # 默认空；可选 ["servfail", "refused"]
-      max_total_time_ms: 800    # 可选：总截止时间（毫秒）
-      max_groups: 2             # 可选：默认 2（primary + fallback）
-      max_endpoints_per_group: 2# 可选：默认 2（同组最多换 1 次）
-    health:
-      failure_threshold: 2
-      cooldown_seconds: 10
-      success_reset: true
+    - name: "secure"
+      protocol: "doh"
+      policy: "random"
+      endpoints: [...]
+      fallback: "lan" # 可选：单个后备组（本期仅支持 1 个）
+      failover:
+          on_rcode: [] # 默认空；可选 ["servfail", "refused"]
+          max_total_time_ms: 800 # 可选：总截止时间（毫秒）
+          max_groups: 2 # 可选：默认 2（primary + fallback）
+          max_endpoints_per_group: 2# 可选：默认 2（同组最多换 1 次）
+      health:
+          failure_threshold: 2
+          cooldown_seconds: 10
+          success_reset: true
 ```
 
 **校验要点：**
+
 - `fallback` 引用必须存在，且禁止指向自身。
 - `protocol=dns` 时仍禁止 `proxy/retry`（沿用现有校验逻辑）。
 - `failover.on_rcode` 仅允许固定集合：`servfail|refused`（输入需归一化）。
@@ -124,16 +127,15 @@ upstreams:
 
 ```yaml
 endpoints:
-  - addr: 223.5.5.5:53
-    transport: "auto"   # auto|udp|tcp；默认 auto
+    - addr: 223.5.5.5:53
+      transport: "udp" # 可选：udp|tcp；未配置时遵循 dns.prefer_tcp（prefer_tcp=false 时 UDP 首发，TC=1 同端点升级 TCP）
 ```
 
 **语义：**
-- `auto`：UDP 优先；若 UDP `TC=1`，对同一上游做一次 TCP 重试以拿完整响应（保持当前行为）。
+
+- 未配置 `transport`：由全局 `dns.prefer_tcp` 决定首发协议；若首发为 UDP 且 UDP `TC=1`，对同一上游做一次 TCP 重试以拿完整响应。
 - `tcp`：只用 TCP。
-- `udp`：只用 UDP，不做 TCP 回退；若 UDP `TC=1`：
-  - 作为本次上游尝试的 transport 失败原因 `udp_truncated` 进入 failover（预算允许时）
-  - 若预算耗尽/无路径：必须把该截断响应原样返回，并记录 reason `udp_truncated_exhausted`
+- `udp`：UDP 优先；若 UDP `TC=1`，对同一上游做一次 TCP 重试以拿完整响应（`TC=1` 本身不计入 health failure；只有 TCP 也失败/超时才算 failure）。
 
 ### 3.4 `bootstrap_dns.use_system_resolver` 兼容规则（分层默认）
 
@@ -148,9 +150,9 @@ endpoints:
 
 1. Router 选定 primary upstream（`target`）。
 2. `UpstreamManager` 执行 `forward_with_failover(primary, query, deadline)`：
-   - 在预算内按 “组 → endpoint” 进行有限次尝试
-   - 只对 transport error 触发 failover；对 rcode 的 failover 需显式开启 `on_rcode`
-   - 获得合法 DNS Message 立即返回（包括 `NXDOMAIN/NOERROR`）
+    - 在预算内按 “组 → endpoint” 进行有限次尝试
+    - 只对 transport error 触发 failover；对 rcode 的 failover 需显式开启 `on_rcode`
+    - 获得合法 DNS Message 立即返回（包括 `NXDOMAIN/NOERROR`）
 3. 每次失败都调用 `report_failure()` 更新被动熔断状态；成功可调用 `report_success()`（若 `success_reset=true`）。
 4. 输出指标与结构化日志（见第 6 节）。
 
@@ -159,19 +161,19 @@ endpoints:
 按是否“已获得合法 DNS 响应报文”分两大类：
 
 - A. Transport error（可触发 failover，默认启用）
-  - timeout / connect error / TLS error / HTTP 5xx /（未来可选 HTTP 429）
-  - A.1 `transport=udp` 且 UDP 响应 `TC=1`（作为 `udp_truncated` 处理）
+    - timeout / connect error / TLS error / HTTP 5xx /（未来可选 HTTP 429）
+    - 说明：DNS/UDP 的 `TC=1` 不属于 transport error；应先对同一上游做 TCP 升级重试，只有 TCP 也失败/超时才算 failure。
 - B. DNS 语义结果（默认不触发 failover）
-  - `NOERROR`、`NXDOMAIN`：禁止 failover
-  - `SERVFAIL/REFUSED`：默认不 failover；只有 `failover.on_rcode` 显式开启才允许
+    - `NOERROR`、`NXDOMAIN`：禁止 failover
+    - `SERVFAIL/REFUSED`：默认不 failover；只有 `failover.on_rcode` 显式开启才允许
 
 ### 4.3 尝试顺序与去重
 
 - 同一组内不得重复尝试同一 endpoint（请求上下文维护 `attempted_endpoints`）。
 - 选择 endpoint 必须跳过 cooldown 中的 endpoint。
 - 若组内所有 endpoint 均不可选（全部 cooldown 或 attempted 用尽）：
-  - 若存在 fallback 且预算允许：切换到 fallback 组继续
-  - 否则：返回错误（或若存在 `udp_truncated` 兜底场景则按 3.3 返回截断报文）
+    - 若存在 fallback 且预算允许：切换到 fallback 组继续
+    - 否则：返回错误
 
 ---
 
@@ -182,61 +184,73 @@ endpoints:
 ### Phase 1：配置结构与校验
 
 交付：
+
 - 新增 `bootstrap_dns / fallback / failover / health / transport` 结构体与 serde/validator 校验
 - 引用存在校验（fallback/bootstrap）
 - 错误信息可定位（指出字段路径与原因）
 
 影响文件（预计）：
+
 - `src/config/mod.rs`
 - `src/config/upstream.rs`
 - `tests/config_tests.rs`
 - （可选）更新文档示例：`config.example.yaml`
 
 回滚：
+
 - 仅 Schema 与校验，不改运行时逻辑，安全可回滚。
 
 ### Phase 2：请求内 failover（最小版本）
 
 交付：
+
 - `UpstreamManager::forward()` 支持在预算内循环尝试（组→endpoint）
 - 默认仅对 transport error failover；rcode 需显式开启
 - endpoint 去重（attempted）
 
 影响文件（预计）：
+
 - `src/upstream/manager.rs`
 - `tests/upstream_test.rs`（新增 failover 场景）
 
 回滚：
+
 - 通过配置门禁：仅当组显式配置 `fallback/failover` 才启用新逻辑，否则走旧路径。
 
 ### Phase 3：被动熔断
 
 交付：
+
 - `report_failure` 生效：失败阈值 + cooldown
 - `select_endpoint` 跳过 cooldown
 - `success_reset` 生效（成功后重置失败计数）
 
 影响文件（预计）：
+
 - `src/balancer.rs`（或新增健康状态模块）
 - `src/upstream/manager.rs`
 - `tests/upstream_test.rs`
 
 回滚：
+
 - `health` 默认为 None（保持现状 no-op），只有显式配置才启用熔断。
 
 ### Phase 4：Bootstrap DNS（DoH hostname 解析）
 
 交付：
+
 - 为 upstream DoH client 注入 reqwest 自定义 DNS resolver（实现 `reqwest::dns::Resolve`）
 - TTL 缓存、超时、`use_system_resolver` 兼容
 
 影响文件（预计）：
+
 - `src/upstream/http_client.rs`
 - `src/upstream/manager.rs`（透传 bootstrap 配置到 HTTP client 构建处）
 - `src/config/mod.rs`（bootstrap_dns 读入）
 - `tests/http_doh_tests.rs`（或新增集成测试）
 
 回滚：
+
 - `bootstrap_dns` 为可选块；缺省保持系统解析；可整体回滚该模块。
 
 ---
@@ -248,11 +262,12 @@ endpoints:
 建议新增指标（在 `src/metrics.rs`）：
 
 - `upstream_failover_total{reason, from_group, to_group}`
-  - `reason`: `timeout|network_error|http_5xx|udp_truncated|rcode_servfail|rcode_refused|no_upstream_available|udp_truncated_exhausted`
+    - `reason`: `timeout|network_error|http_5xx|rcode_servfail|rcode_refused|no_upstream_available`
 - `upstream_attempts_total{group, protocol, transport}`
 - `bootstrap_dns_queries_total{result}`：`hit|miss|error`
 
 日志（debug 级结构化字段）：
+
 - `request_id`（若有）、`group`、`endpoint`、`attempt_idx`、`reason`、`duration_ms`、`action=retry|failover|return`
 
 ---
@@ -267,6 +282,7 @@ endpoints:
 6. 集成：`transport=udp` 且 UDP 响应 `TC=1` → 在预算内触发 failover；无路径时原样返回截断响应
 
 建议验证命令：
+
 - `cargo fmt -- --check`
 - `cargo clippy -- -D warnings`
 - `cargo test`
@@ -282,7 +298,7 @@ endpoints:
 - **向后兼容**：未配置 `fallback/failover/health/bootstrap_dns` 时，行为保持原样（单次选择、无请求内 failover、无熔断、DoH hostname 仍走系统解析）。
 - **请求内 failover**：仅当该组配置了 `fallback` 或 `failover` 才启用请求内循环（组→endpoint），并在预算内尝试。
 - **RCODE gating**：`SERVFAIL/REFUSED` 默认不触发 failover；需要显式配置 `failover.on_rcode`。
-- **transport=udp + TC=1**：当 endpoint 显式 `transport: udp` 且响应 `TC=1` 时，视为 `udp_truncated` 进入 failover（预算耗尽时回退返回最后一个截断响应）。
+- **transport=udp + TC=1**：若首发为 UDP 且响应 `TC=1`，由 DNS client 对**同一端点**升级 TCP 并重试；`TC=1` 本身不计入 health failure，也不作为 failover reason。只有当 TCP 也失败/超时才会 `report_failure` 并触发后续 failover。
 - **被动熔断（health）**：仅当组配置了 `health` 时生效；达到阈值进入 cooldown，cooldown 内在选择阶段跳过；`success_reset=true` 时成功会清零失败并解除 cooldown。
 - **Bootstrap DNS**：仅注入 DoH upstream 的 reqwest client（以及该 client 可能使用到的 proxy hostname）；`use_system_resolver=false` 时 bootstrap 失败会直接失败，不回退系统解析。
 - **代理行为变更（重要）**：上游 HTTP client 默认启用 `no_proxy()`，避免环境/系统代理影响；只有显式配置 `proxy` 时才使用代理。
@@ -296,20 +312,20 @@ endpoints:
 - Bootstrap DNS resolver：`src/upstream/bootstrap_dns.rs`、`src/upstream/http_client.rs`、`src/main.rs`
 - 指标：`src/metrics.rs`
 - 主要测试：
-  - 配置校验：`tests/config_tests.rs`
-  - DNS transport：`tests/dns_client_integration_test.rs`
-  - failover：`tests/upstream_test.rs`
-  - 熔断：`tests/balancer_health_test.rs`
-  - bootstrap_dns：`tests/bootstrap_dns_integration_test.rs`
+    - 配置校验：`tests/config_tests.rs`
+    - DNS transport：`tests/dns_client_integration_test.rs`
+    - failover：`tests/upstream_test.rs`
+    - 熔断：`tests/balancer_health_test.rs`
+    - bootstrap_dns：`tests/bootstrap_dns_integration_test.rs`
 
 ### 8.3 Prometheus 指标（最终名称与 label）
 
 - `loadants_upstream_attempts_total{upstream_protocol, upstream_transport, group, server}`
-  - 语义：**同一次请求内**的“选择并尝试”次数（与 `loadants_upstream_requests_total` 的“实际网络请求次数”区分）。
+    - 语义：**同一次请求内**的“选择并尝试”次数（与 `loadants_upstream_requests_total` 的“实际网络请求次数”区分）。
 - `loadants_upstream_failover_total{reason, from_group, to_group, upstream_protocol, upstream_transport, server}`
-  - 语义：请求内触发“继续尝试/切换组”的次数（原因包括 `udp_truncated`、`rcode_*`、`request_error` 等）。
+    - 语义：请求内触发“继续尝试/切换组”的次数（原因包括 `rcode_*`、`request_error` 等）。
 - `loadants_bootstrap_dns_queries_total{result}`
-  - `result`：`hit|miss|system|error`
+    - `result`：`hit|miss|system|error`
 
 > 仍然禁止把 qname / client_ip 等高基数维度写入 label。
 
@@ -319,54 +335,54 @@ endpoints:
 
 ```yaml
 bootstrap_dns:
-  groups: ["bootstrap_dns"]
-  timeout: 2
-  cache_ttl: 300
-  prefer_ipv6: false
-  use_system_resolver: false
+    groups: ["bootstrap_dns"]
+    timeout: 2
+    cache_ttl: 300
+    prefer_ipv6: false
+    use_system_resolver: false
 ```
 
 #### 8.4.2 upstreams：DoH 主用 + DNS 兜底 + failover + 熔断 + transport
 
 ```yaml
 upstreams:
-  - name: doh_primary
-    protocol: doh
-    policy: roundrobin
-    endpoints:
-      - url: "https://dns.google/dns-query"
-        method: get
-        content_type: message
-        weight: 1
-      - url: "https://cloudflare-dns.com/dns-query"
-        method: get
-        content_type: message
-        weight: 1
-    fallback: dns_fallback
-    failover:
-      max_total_time_ms: 800
-      max_groups: 2
-      max_endpoints_per_group: 2
-      on_rcode: ["servfail", "refused"]
-    health:
-      failure_threshold: 3
-      cooldown_seconds: 30
-      success_reset: true
+    - name: doh_primary
+      protocol: doh
+      policy: roundrobin
+      endpoints:
+          - url: "https://dns.google/dns-query"
+            method: get
+            content_type: message
+            weight: 1
+          - url: "https://cloudflare-dns.com/dns-query"
+            method: get
+            content_type: message
+            weight: 1
+      fallback: dns_fallback
+      failover:
+          max_total_time_ms: 800
+          max_groups: 2
+          max_endpoints_per_group: 2
+          on_rcode: ["servfail", "refused"]
+      health:
+          failure_threshold: 3
+          cooldown_seconds: 30
+          success_reset: true
 
-  - name: dns_fallback
-    protocol: dns
-    policy: roundrobin
-    endpoints:
-      - addr: "223.5.5.5:53"
-        weight: 1
-        transport: udp
-      - addr: "119.29.29.29:53"
-        weight: 1
-        transport: udp
-    health:
-      failure_threshold: 3
-      cooldown_seconds: 30
-      success_reset: true
+    - name: dns_fallback
+      protocol: dns
+      policy: roundrobin
+      endpoints:
+          - addr: "223.5.5.5:53"
+            weight: 1
+            transport: udp
+          - addr: "119.29.29.29:53"
+            weight: 1
+            transport: udp
+      health:
+          failure_threshold: 3
+          cooldown_seconds: 30
+          success_reset: true
 ```
 
 > 注意：若 endpoint 显式 `transport: udp`，遇到 `TC=1` 时不会自动 TCP 回退，而是交给请求内 failover（或最终回退返回截断响应）。

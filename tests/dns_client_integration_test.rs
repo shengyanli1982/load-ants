@@ -195,7 +195,7 @@ async fn test_dns_udp_tc_triggers_tcp_retry() {
 }
 
 #[tokio::test]
-async fn test_dns_transport_udp_does_not_retry_tcp_on_tc() {
+async fn test_dns_transport_udp_tc_triggers_tcp_retry() {
     let tcp_count = Arc::new(AtomicUsize::new(0));
     let udp_count = Arc::new(AtomicUsize::new(0));
 
@@ -222,11 +222,11 @@ async fn test_dns_transport_udp_does_not_retry_tcp_on_tc() {
     let response = manager.forward(&query, "dns_group").await.unwrap();
     assert_eq!(response.response_code(), ResponseCode::NoError);
     assert!(
-        response.truncated(),
-        "Expected UDP transport to return truncated response"
+        !response.truncated(),
+        "Expected TCP upgrade to avoid truncation"
     );
     assert_eq!(udp_count.load(Ordering::SeqCst), 1);
-    assert_eq!(tcp_count.load(Ordering::SeqCst), 0);
+    assert_eq!(tcp_count.load(Ordering::SeqCst), 1);
 }
 
 #[tokio::test]

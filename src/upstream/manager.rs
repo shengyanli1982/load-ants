@@ -258,7 +258,6 @@ impl UpstreamManager {
         let mut current_group = primary_group.to_string();
 
         let mut last_error: Option<AppError> = None;
-        let mut last_truncated: Option<Message> = None;
 
         while groups_tried < max_groups {
             if Instant::now() >= deadline {
@@ -378,31 +377,6 @@ impl UpstreamManager {
                     Ok(response) => {
                         let rcode = response.response_code();
 
-                        if matches!(protocol, UpstreamProtocol::Dns) {
-                            if let Some(server) = selected_server.as_dns() {
-                                if server.transport == Some(DnsTransportMode::Udp)
-                                    && response.truncated()
-                                {
-                                    METRICS
-                                        .upstream_failover_total()
-                                        .with_label_values(&[
-                                            "udp_truncated",
-                                            current_group.as_str(),
-                                            current_group.as_str(),
-                                            upstream_protocol,
-                                            upstream_transport,
-                                            server_label.as_str(),
-                                        ])
-                                        .inc();
-                                    last_truncated = Some(response.clone());
-                                    load_balancer.report_failure(selected_server).await;
-                                    last_error =
-                                        Some(AppError::Upstream("udp_truncated".to_string()));
-                                    continue;
-                                }
-                            }
-                        }
-
                         match rcode {
                             ResponseCode::NoError | ResponseCode::NXDomain => {
                                 load_balancer.report_success(selected_server).await;
@@ -492,10 +466,6 @@ impl UpstreamManager {
             current_group = next_group.clone();
         }
 
-        if let Some(truncated) = last_truncated {
-            return Ok(truncated);
-        }
-
         Err(last_error.unwrap_or(AppError::NoUpstreamAvailable))
     }
 
@@ -523,9 +493,7 @@ impl UpstreamManager {
                         let transport = match s.transport {
                             Some(DnsTransportMode::Udp) => upstream_transport_labels::UDP,
                             Some(DnsTransportMode::Tcp) => upstream_transport_labels::TCP,
-                            Some(DnsTransportMode::Auto) | None => {
-                                upstream_transport_labels::UNKNOWN
-                            }
+                            None => upstream_transport_labels::UNKNOWN,
                         };
                         (transport, s.addr.ip().to_string())
                     }
@@ -733,7 +701,6 @@ impl UpstreamManager {
             UpstreamEndpointConfig::Doh(s) => format!("doh:{}", s.url.as_str()),
             UpstreamEndpointConfig::Dns(s) => {
                 let transport = match s.transport {
-                    Some(DnsTransportMode::Auto) => "auto",
                     Some(DnsTransportMode::Udp) => "udp",
                     Some(DnsTransportMode::Tcp) => "tcp",
                     None => "default",

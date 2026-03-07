@@ -70,7 +70,6 @@ fn default_upstream_protocol() -> UpstreamProtocol {
 #[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum DnsTransportMode {
-    Auto,
     Udp,
     Tcp,
 }
@@ -83,12 +82,11 @@ impl<'de> Deserialize<'de> for DnsTransportMode {
         super::serde_utils::deserialize_string_enum(
             deserializer,
             |normalized| match normalized {
-                "auto" => Some(Self::Auto),
                 "udp" => Some(Self::Udp),
                 "tcp" => Some(Self::Tcp),
                 _ => None,
             },
-            &["auto", "udp", "tcp"],
+            &["udp", "tcp"],
         )
     }
 }

@@ -68,19 +68,20 @@ impl DnsClient {
     ) -> Result<DnsClientResponse, DnsClientSendError> {
         let mut attempts = Vec::new();
 
-        let mode = match transport {
-            Some(m) => m,
+        let initial_transport = match transport {
+            Some(DnsTransportMode::Tcp) => DnsTransport::Tcp,
+            Some(DnsTransportMode::Udp) => DnsTransport::Udp,
             None => {
                 if self.config.prefer_tcp {
-                    DnsTransportMode::Tcp
+                    DnsTransport::Tcp
                 } else {
-                    DnsTransportMode::Auto
+                    DnsTransport::Udp
                 }
             }
         };
 
-        match mode {
-            DnsTransportMode::Tcp => {
+        match initial_transport {
+            DnsTransport::Tcp => {
                 let start = Instant::now();
                 let result = self.send_tcp(addr, message).await;
                 let duration = start.elapsed();
@@ -107,34 +108,7 @@ impl DnsClient {
                     }
                 }
             }
-            DnsTransportMode::Udp => {
-                let start = Instant::now();
-                let result = self.send_udp(addr, message).await;
-                let duration = start.elapsed();
-
-                match result {
-                    Ok(response) => {
-                        attempts.push(DnsClientAttempt {
-                            transport: DnsTransport::Udp,
-                            duration,
-                            truncated: response.truncated(),
-                        });
-                        Ok(DnsClientResponse {
-                            message: response,
-                            attempts,
-                        })
-                    }
-                    Err(error) => {
-                        attempts.push(DnsClientAttempt {
-                            transport: DnsTransport::Udp,
-                            duration,
-                            truncated: false,
-                        });
-                        Err(DnsClientSendError { error, attempts })
-                    }
-                }
-            }
-            DnsTransportMode::Auto => {
+            DnsTransport::Udp => {
                 let start = Instant::now();
                 let udp_result = self.send_udp(addr, message).await;
                 let udp_duration = start.elapsed();
