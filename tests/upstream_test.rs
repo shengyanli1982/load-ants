@@ -11,6 +11,8 @@ use loadants::upstream::UpstreamManager;
 use reqwest::Url;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::str::FromStr;
+use std::sync::Arc;
+use std::time::Duration;
 use tokio::net::UdpSocket;
 use wiremock::{
     matchers::{header, method, path},
@@ -130,6 +132,7 @@ async fn test_dns_scheme_forward_via_udp() {
         name: "dns_group".to_string(),
         protocol: UpstreamProtocol::Dns,
         policy: LoadBalancingPolicy::RoundRobin,
+        max_concurrent: None,
         endpoints: vec![UpstreamEndpointConfig::Dns(DnsUpstreamEndpointConfig {
             addr: SocketAddr::from(server_addr),
             weight: 1,
@@ -209,6 +212,7 @@ async fn test_upstream_manager_creation() {
             name: "round_robin_group".to_string(),
             protocol: UpstreamProtocol::Doh,
             policy: LoadBalancingPolicy::RoundRobin,
+            max_concurrent: None,
             endpoints: vec![
                 UpstreamEndpointConfig::Doh(DoHUpstreamEndpointConfig {
                     url: Url::parse("https://example.com/dns-query").unwrap(),
@@ -235,6 +239,7 @@ async fn test_upstream_manager_creation() {
             name: "weighted_group".to_string(),
             protocol: UpstreamProtocol::Doh,
             policy: LoadBalancingPolicy::Weighted,
+            max_concurrent: None,
             endpoints: vec![
                 UpstreamEndpointConfig::Doh(DoHUpstreamEndpointConfig {
                     url: Url::parse("https://example.com/dns-query").unwrap(),
@@ -277,6 +282,7 @@ async fn test_upstream_doh_get_message() {
         name: "test_group".to_string(),
         protocol: UpstreamProtocol::Doh,
         policy: LoadBalancingPolicy::RoundRobin,
+        max_concurrent: None,
         endpoints: vec![UpstreamEndpointConfig::Doh(DoHUpstreamEndpointConfig {
             url: Url::parse(&format!("{}/dns-query", mock_server.uri())).unwrap(),
             weight: 1,
@@ -349,6 +355,7 @@ async fn test_upstream_doh_post_message() {
         name: "test_group".to_string(),
         protocol: UpstreamProtocol::Doh,
         policy: LoadBalancingPolicy::RoundRobin,
+        max_concurrent: None,
         endpoints: vec![UpstreamEndpointConfig::Doh(DoHUpstreamEndpointConfig {
             url: Url::parse(&format!("{}/dns-query", mock_server.uri())).unwrap(),
             weight: 1,
@@ -409,6 +416,7 @@ async fn test_upstream_doh_get_json() {
         name: "test_group".to_string(),
         protocol: UpstreamProtocol::Doh,
         policy: LoadBalancingPolicy::RoundRobin,
+        max_concurrent: None,
         endpoints: vec![UpstreamEndpointConfig::Doh(DoHUpstreamEndpointConfig {
             url: Url::parse(&format!("{}/resolve", mock_server.uri())).unwrap(),
             weight: 1,
@@ -472,6 +480,7 @@ async fn test_upstream_doh_post_json_fails() {
         name: "test_group".to_string(),
         protocol: UpstreamProtocol::Doh,
         policy: LoadBalancingPolicy::RoundRobin,
+        max_concurrent: None,
         endpoints: vec![UpstreamEndpointConfig::Doh(DoHUpstreamEndpointConfig {
             url: Url::parse(&format!("{}/resolve", mock_server.uri())).unwrap(),
             weight: 1,
@@ -525,6 +534,7 @@ async fn test_upstream_with_auth() {
         name: "auth_group".to_string(),
         protocol: UpstreamProtocol::Doh,
         policy: LoadBalancingPolicy::RoundRobin,
+        max_concurrent: None,
         endpoints: vec![UpstreamEndpointConfig::Doh(DoHUpstreamEndpointConfig {
             url: Url::parse(&format!("{}/dns-query", mock_server.uri())).unwrap(),
             weight: 1,
@@ -587,6 +597,7 @@ async fn test_basic_auth() {
         name: "basic_auth_group".to_string(),
         protocol: UpstreamProtocol::Doh,
         policy: LoadBalancingPolicy::RoundRobin,
+        max_concurrent: None,
         endpoints: vec![UpstreamEndpointConfig::Doh(DoHUpstreamEndpointConfig {
             url: Url::parse(&format!("{}/dns-query", mock_server.uri())).unwrap(),
             weight: 1,
@@ -649,6 +660,7 @@ async fn test_load_balancing_round_robin() {
         name: "round_robin_group".to_string(),
         protocol: UpstreamProtocol::Doh,
         policy: LoadBalancingPolicy::RoundRobin,
+        max_concurrent: None,
         endpoints: vec![
             UpstreamEndpointConfig::Doh(DoHUpstreamEndpointConfig {
                 url: Url::parse(&format!("{}/dns-query1", mock_server.uri())).unwrap(),
@@ -730,6 +742,7 @@ async fn test_error_handling() {
         name: "test_group".to_string(),
         protocol: UpstreamProtocol::Doh,
         policy: LoadBalancingPolicy::RoundRobin,
+        max_concurrent: None,
         endpoints: vec![UpstreamEndpointConfig::Doh(DoHUpstreamEndpointConfig {
             url: Url::parse(&format!("{}/dns-query", mock_server.uri())).unwrap(),
             weight: 1,
@@ -769,6 +782,64 @@ async fn test_error_handling() {
 }
 
 #[tokio::test]
+async fn test_upstream_max_concurrent_overlimit_returns_overloaded() {
+    let mock_server = MockServer::start().await;
+
+    let http_config = HttpConfig::default();
+
+    Mock::given(method("GET"))
+        .and(path("/dns-query"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_delay(Duration::from_millis(200))
+                .append_header("Content-Type", "application/dns-message")
+                .set_body_bytes(create_test_dns_response(1234)),
+        )
+        .mount(&mock_server)
+        .await;
+
+    let groups = vec![UpstreamGroupConfig {
+        name: "limited_group".to_string(),
+        protocol: UpstreamProtocol::Doh,
+        policy: LoadBalancingPolicy::RoundRobin,
+        max_concurrent: Some(1),
+        endpoints: vec![UpstreamEndpointConfig::Doh(DoHUpstreamEndpointConfig {
+            url: Url::parse(&format!("{}/dns-query", mock_server.uri())).unwrap(),
+            weight: 1,
+            method: DoHMethod::Get,
+            content_type: DoHContentType::Message,
+            auth: None,
+        })],
+        fallback: None,
+        failover: None,
+        health: None,
+        retry: None,
+        proxy: None,
+    }];
+
+    let manager = Arc::new(
+        UpstreamManager::new(groups, http_config, DnsConfig::default())
+            .await
+            .unwrap(),
+    );
+
+    let query = create_test_dns_query("example.com", RecordType::A);
+
+    let manager_clone = Arc::clone(&manager);
+    let query_clone = query.clone();
+    let in_flight =
+        tokio::spawn(async move { manager_clone.forward(&query_clone, "limited_group").await });
+
+    tokio::time::sleep(Duration::from_millis(20)).await;
+
+    let overlimit = manager.forward(&query, "limited_group").await;
+    assert!(matches!(overlimit, Err(AppError::Overloaded(_))));
+
+    let first = in_flight.await.unwrap().unwrap();
+    assert_eq!(first.response_code(), ResponseCode::NoError);
+}
+
+#[tokio::test]
 async fn test_retry_config() {
     // 启动mock服务器
     let mock_server = MockServer::start().await;
@@ -781,6 +852,7 @@ async fn test_retry_config() {
         name: "retry_group".to_string(),
         protocol: UpstreamProtocol::Doh,
         policy: LoadBalancingPolicy::RoundRobin,
+        max_concurrent: None,
         endpoints: vec![UpstreamEndpointConfig::Doh(DoHUpstreamEndpointConfig {
             url: Url::parse(&format!("{}/dns-query", mock_server.uri())).unwrap(),
             weight: 1,
@@ -826,6 +898,7 @@ async fn test_json_response_parsing() {
         name: "json_group".to_string(),
         protocol: UpstreamProtocol::Doh,
         policy: LoadBalancingPolicy::RoundRobin,
+        max_concurrent: None,
         endpoints: vec![UpstreamEndpointConfig::Doh(DoHUpstreamEndpointConfig {
             url: Url::parse(&format!("{}/dns-query", mock_server.uri())).unwrap(),
             weight: 1,
@@ -969,6 +1042,7 @@ async fn test_json_error_response() {
         name: "error_group".to_string(),
         protocol: UpstreamProtocol::Doh,
         policy: LoadBalancingPolicy::RoundRobin,
+        max_concurrent: None,
         endpoints: vec![UpstreamEndpointConfig::Doh(DoHUpstreamEndpointConfig {
             url: Url::parse(&format!("{}/dns-query", mock_server.uri())).unwrap(),
             weight: 1,
@@ -1039,6 +1113,7 @@ async fn test_json_txt_response() {
         name: "txt_group".to_string(),
         protocol: UpstreamProtocol::Doh,
         policy: LoadBalancingPolicy::RoundRobin,
+        max_concurrent: None,
         endpoints: vec![UpstreamEndpointConfig::Doh(DoHUpstreamEndpointConfig {
             url: Url::parse(&format!("{}/dns-query", mock_server.uri())).unwrap(),
             weight: 1,
@@ -1112,6 +1187,7 @@ async fn test_json_edns_client_subnet() {
         name: "edns_group".to_string(),
         protocol: UpstreamProtocol::Doh,
         policy: LoadBalancingPolicy::RoundRobin,
+        max_concurrent: None,
         endpoints: vec![UpstreamEndpointConfig::Doh(DoHUpstreamEndpointConfig {
             url: Url::parse(&format!("{}/dns-query", mock_server.uri())).unwrap(),
             weight: 1,
@@ -1205,6 +1281,7 @@ async fn test_upstream_doh_failover_on_http_error_switches_endpoint() {
     let groups = vec![UpstreamGroupConfig {
         name: "test_group".to_string(),
         protocol: UpstreamProtocol::Doh,
+        max_concurrent: None,
         policy: LoadBalancingPolicy::RoundRobin,
         endpoints: vec![
             UpstreamEndpointConfig::Doh(DoHUpstreamEndpointConfig {
@@ -1277,6 +1354,7 @@ async fn test_upstream_doh_no_failover_does_not_try_other_endpoint() {
     let groups = vec![UpstreamGroupConfig {
         name: "test_group".to_string(),
         protocol: UpstreamProtocol::Doh,
+        max_concurrent: None,
         policy: LoadBalancingPolicy::RoundRobin,
         endpoints: vec![
             UpstreamEndpointConfig::Doh(DoHUpstreamEndpointConfig {

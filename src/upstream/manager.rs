@@ -20,6 +20,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tracing::{debug, error, info};
 
 use super::dns_client::{DnsClient, DnsTransport};
@@ -36,6 +37,8 @@ pub struct UpstreamManager {
     group_fallbacks: HashMap<String, String>,
     // 组级 failover 配置
     group_failover: HashMap<String, FailoverConfig>,
+    // 组级并发上限（permit = forward_selected 级别的一次端点尝试）
+    group_limiters: HashMap<String, Arc<Semaphore>>,
     // failover 默认总截止时间（毫秒）
     default_failover_total_time_ms: u64,
     // DNS 客户端（用于 scheme=dns 的组）
@@ -63,6 +66,7 @@ impl UpstreamManager {
         let mut group_clients = HashMap::new();
         let mut group_fallbacks = HashMap::new();
         let mut group_failover = HashMap::new();
+        let mut group_limiters = HashMap::new();
         let mut doh_http_settings: Vec<(String, Option<String>, Option<RetryConfig>)> = Vec::new();
 
         let default_failover_total_time_ms =
@@ -75,6 +79,7 @@ impl UpstreamManager {
                 name,
                 protocol,
                 policy,
+                max_concurrent,
                 endpoints,
                 fallback,
                 failover,
@@ -88,6 +93,15 @@ impl UpstreamManager {
             }
             if let Some(failover) = failover {
                 group_failover.insert(name.clone(), failover);
+            }
+
+            if let Some(max_concurrent) = max_concurrent {
+                if max_concurrent > 0 {
+                    group_limiters.insert(
+                        name.clone(),
+                        Arc::new(Semaphore::new(max_concurrent as usize)),
+                    );
+                }
             }
 
             let lb: Arc<dyn LoadBalancer> = match policy {
@@ -151,6 +165,7 @@ impl UpstreamManager {
             group_clients,
             group_fallbacks,
             group_failover,
+            group_limiters,
             default_failover_total_time_ms,
             dns_client,
         })
@@ -164,6 +179,7 @@ impl UpstreamManager {
             group_clients: HashMap::new(),
             group_fallbacks: HashMap::new(),
             group_failover: HashMap::new(),
+            group_limiters: HashMap::new(),
             default_failover_total_time_ms: 0,
             dns_client: DnsClient::new(DnsConfig::default()),
         })
@@ -417,6 +433,9 @@ impl UpstreamManager {
                         }
                     }
                     Err(e) => {
+                        if matches!(e, AppError::Overloaded(_)) {
+                            return Err(e);
+                        }
                         let reason = Self::failover_reason_for_error(&e);
                         METRICS
                             .upstream_failover_total()
@@ -515,6 +534,7 @@ impl UpstreamManager {
             AppError::Upstream(_) => "upstream_error",
             AppError::NoUpstreamAvailable => "no_upstream_available",
             AppError::UpstreamGroupNotFound(_) => "upstream_group_not_found",
+            AppError::Overloaded(_) => "overloaded",
             _ => "request_error",
         }
     }
@@ -527,6 +547,36 @@ impl UpstreamManager {
         load_balancer: &Arc<dyn LoadBalancer>,
         selected_server: &UpstreamEndpointConfig,
     ) -> Result<Message, AppError> {
+        let _permit: Option<OwnedSemaphorePermit> = match self.group_limiters.get(group_name) {
+            Some(limiter) => match limiter.clone().try_acquire_owned() {
+                Ok(permit) => Some(permit),
+                Err(_) => {
+                    let upstream_protocol = match protocol {
+                        UpstreamProtocol::Doh => upstream_protocol_labels::DOH,
+                        UpstreamProtocol::Dns => upstream_protocol_labels::DNS,
+                    };
+                    let upstream_transport = match protocol {
+                        UpstreamProtocol::Doh => upstream_transport_labels::HTTP,
+                        UpstreamProtocol::Dns => upstream_transport_labels::UNKNOWN,
+                    };
+
+                    METRICS
+                        .upstream_errors_total()
+                        .with_label_values(&[
+                            upstream_protocol,
+                            upstream_transport,
+                            error_labels::OVERLOADED,
+                            group_name,
+                            upstream_labels::UNKNOWN,
+                        ])
+                        .inc();
+
+                    return Err(AppError::Overloaded(group_name.to_string()));
+                }
+            },
+            None => None,
+        };
+
         match protocol {
             UpstreamProtocol::Doh => {
                 let Some(server) = selected_server.as_doh() else {

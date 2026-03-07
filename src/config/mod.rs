@@ -355,6 +355,7 @@ impl Default for Config {
                 name: upstream_defaults::DEFAULT_GROUP_NAME.to_string(),
                 protocol: UpstreamProtocol::Doh,
                 policy: LoadBalancingPolicy::RoundRobin,
+                max_concurrent: None,
                 endpoints: vec![UpstreamEndpointConfig::Doh(DoHUpstreamEndpointConfig {
                     url: DEFAULT_DOH_URL.clone(),
                     weight: upstream_defaults::DEFAULT_WEIGHT,

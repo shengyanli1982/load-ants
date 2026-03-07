@@ -37,6 +37,7 @@ upstreams:
   - name: "public"
     protocol: "doh"
     policy: "roundrobin"
+    # max_concurrent: 1024 # 可选：组级并发保护上限（permit=一次端点尝试），超限直接返回 SERVFAIL
     endpoints:
       - url: "https://223.5.5.5/dns-query"
         method: "get"

@@ -30,6 +30,7 @@ upstreams:
 | `name`      | 字符串 | 为这个上游组指定一个唯一的名称。这个名称将在路由规则（`rules.static` 或 `rules.remote`）的 `upstream` 字段中被引用。                                                                                            | -      | **是**   |
 | `protocol`  | 字符串 | 上游组类型。可选值：`doh`（DoH 上游）或 `dns`（传统 DNS 上游，UDP/TCP）。                                                                                                                                       | `doh`  | 否       |
 | `policy`    | 字符串 | 定义该组内端点的负载均衡策略。可选值为：`roundrobin` (轮询), `weighted` (加权轮询), `random` (随机)。                                                                                                           | -      | **是**   |
+| `max_concurrent` | 整数 | (可选) 组级并发保护上限。达到上限时，本组会立即拒绝新的上游尝试并返回错误（最终客户端表现为 `SERVFAIL`）。计数口径为 **一次端点尝试**（实现位于 `UpstreamManager::forward_selected()`）。 | - | 否 |
 | `endpoints` | 列表   | 定义本组包含的一个或多个上游端点。其条目结构取决于 `protocol`（DoH 使用 `url`，DNS 使用 `addr`）。详见下方的 `endpoints` 参数详解。                                                                             | -      | **是**   |
 | `retry`     | 对象   | (可选，仅 `protocol: doh`) 本组上游请求的重试策略。详见下方 `retry` 参数详解。                                                                                                                                  | -      | 否       |
 | `proxy`     | 字符串 | (可选，仅 `protocol: doh`) 为**整个组**的端点指定一个出站代理。所有发往该组内端点的 DoH 请求都将通过此代理。支持 `http`, `https` 和 `socks5` 协议。例如: `http://user:pass@host:port` 或 `socks5://host:port`。 | -      | 否       |

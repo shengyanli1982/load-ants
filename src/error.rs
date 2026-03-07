@@ -79,6 +79,9 @@ pub enum AppError {
 
     #[error("Feature not implemented: {0}")]
     NotImplemented(String),
+
+    #[error("Upstream group overloaded: {0}")]
+    Overloaded(String),
 }
 
 impl From<reqwest_middleware::Error> for AppError {

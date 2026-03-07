@@ -130,6 +130,7 @@ async fn test_bootstrap_dns_resolves_doh_hostname_without_system_resolver() {
             name: "bootstrap_dns_group".to_string(),
             protocol: UpstreamProtocol::Dns,
             policy: LoadBalancingPolicy::RoundRobin,
+            max_concurrent: None,
             endpoints: vec![UpstreamEndpointConfig::Dns(DnsUpstreamEndpointConfig {
                 addr: SocketAddr::from(dns_addr),
                 weight: 1,
@@ -145,12 +146,10 @@ async fn test_bootstrap_dns_resolves_doh_hostname_without_system_resolver() {
             name: "doh_group".to_string(),
             protocol: UpstreamProtocol::Doh,
             policy: LoadBalancingPolicy::RoundRobin,
+            max_concurrent: None,
             endpoints: vec![UpstreamEndpointConfig::Doh(DoHUpstreamEndpointConfig {
-                url: Url::parse(&format!(
-                    "http://{}:{}/dns-query",
-                    bootstrap_hostname, port
-                ))
-                .unwrap(),
+                url: Url::parse(&format!("http://{}:{}/dns-query", bootstrap_hostname, port))
+                    .unwrap(),
                 weight: 1,
                 method: DoHMethod::Get,
                 content_type: DoHContentType::Message,

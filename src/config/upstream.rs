@@ -472,6 +472,13 @@ pub struct UpstreamGroupConfig {
 
     pub policy: LoadBalancingPolicy,
 
+    #[validate(range(
+        min = 1,
+        max = 1000000,
+        message = "max_concurrent must be between 1 and 1000000"
+    ))]
+    pub max_concurrent: Option<u32>,
+
     #[validate(custom(
         function = "validate_endpoints_not_empty",
         message = "Endpoint list cannot be empty"

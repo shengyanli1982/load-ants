@@ -199,6 +199,8 @@ pub mod error_labels {
     pub const SELECT_ERROR: &str = "select_error";
     // 请求错误
     pub const REQUEST_ERROR: &str = "request_error";
+    // 并发超限（本地拒绝，不代表上游端点失败）
+    pub const OVERLOADED: &str = "overloaded";
 }
 
 // 缓存操作标签

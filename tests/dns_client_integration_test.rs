@@ -114,6 +114,7 @@ async fn build_dns_manager(
         name: "dns_group".to_string(),
         protocol: UpstreamProtocol::Dns,
         policy: LoadBalancingPolicy::RoundRobin,
+        max_concurrent: None,
         endpoints: vec![UpstreamEndpointConfig::Dns(DnsUpstreamEndpointConfig {
             addr,
             weight: 1,
