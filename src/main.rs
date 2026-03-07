@@ -334,7 +334,7 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
     let doh_server = if let Some(ref listen_doh) = config.listeners.doh {
         info!(
             "DNS server initialized with UDP: {:?}, TCP: {:?}, HTTP: {:?}",
-            config.listeners.udp, config.listeners.tcp, config.listeners.doh
+            config.listeners.udp, config.listeners.tcp, listen_doh
         );
         // 创建 DoH 服务器
         Some(DoHServer::new(
