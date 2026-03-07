@@ -175,10 +175,11 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
     let dns_client_config = config.dns.clone().unwrap_or_default();
 
     // 创建上游管理器 - 避免不必要的克隆
-    let upstream = match UpstreamManager::new(
+    let upstream = match UpstreamManager::new_with_bootstrap(
         config.upstreams.clone().unwrap_or_default(),
         http_client_config.clone(),
         dns_client_config.clone(),
+        config.bootstrap_dns.clone(),
     )
     .await
     {

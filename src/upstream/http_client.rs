@@ -6,8 +6,11 @@ use crate::{
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware, RequestBuilder};
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use retry_policies::Jitter;
+use std::sync::Arc;
 use std::time::Duration;
 use tracing::debug;
+
+use super::bootstrap_dns::BootstrapDnsResolver;
 
 pub struct HttpClient;
 
@@ -17,6 +20,7 @@ impl HttpClient {
         config: &HttpConfig,
         proxy: Option<&str>,
         retry_config: Option<&RetryConfig>,
+        bootstrap_resolver: Option<Arc<BootstrapDnsResolver>>,
     ) -> Result<ClientWithMiddleware, AppError> {
         debug!(
             "Creating HTTP client for upstream, config: {:?}, proxy: {:?}, retry_config: {:?}",
@@ -27,7 +31,13 @@ impl HttpClient {
         let mut client_builder = reqwest::ClientBuilder::new()
             .danger_accept_invalid_certs(true) // 允许无效证书，用于内部自签名证书
             .connect_timeout(Duration::from_secs(config.connect_timeout))
-            .timeout(Duration::from_secs(config.request_timeout));
+            .timeout(Duration::from_secs(config.request_timeout))
+            // 避免环境/系统代理污染上游请求；仅使用显式配置的 proxy
+            .no_proxy();
+
+        if let Some(resolver) = bootstrap_resolver {
+            client_builder = client_builder.dns_resolver(resolver);
+        }
 
         // 配置TCP keepalive
         if let Some(ref keepalive) = config.keepalive {

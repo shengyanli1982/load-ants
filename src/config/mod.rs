@@ -112,6 +112,71 @@ pub fn validate_upstream_references(config: &Config) -> Result<(), ValidationErr
     Ok(())
 }
 
+pub fn validate_bootstrap_and_fallback_references(config: &Config) -> Result<(), ValidationError> {
+    let Some(groups) = &config.upstreams else {
+        if config.bootstrap_dns.is_some() {
+            let mut err = ValidationError::new("missing_upstreams_for_bootstrap_dns");
+            err.message = Some(Cow::from(
+                "bootstrap_dns requires 'upstreams' to be configured and non-empty".to_string(),
+            ));
+            return Err(err);
+        }
+        return Ok(());
+    };
+
+    let upstream_names: HashSet<_> = groups.iter().map(|g| g.name.as_str()).collect();
+
+    for group in groups {
+        if let Some(fallback) = &group.fallback {
+            if fallback == &group.name {
+                let mut err = ValidationError::new("invalid_fallback_reference");
+                err.message = Some(Cow::from(format!(
+                    "Upstream group '{}' fallback cannot reference itself",
+                    group.name
+                )));
+                return Err(err);
+            }
+            if !upstream_names.contains(fallback.as_str()) {
+                let mut err = ValidationError::new("non_existent_fallback_reference");
+                err.message = Some(Cow::from(format!(
+                    "Upstream group '{}' references non-existent fallback group: '{}'",
+                    group.name, fallback
+                )));
+                return Err(err);
+            }
+        }
+    }
+
+    if let Some(bootstrap) = &config.bootstrap_dns {
+        if bootstrap.groups.is_empty() {
+            return Err(ValidationError::new("empty_bootstrap_groups"));
+        }
+
+        for bootstrap_group_name in &bootstrap.groups {
+            let Some(bootstrap_group) = groups.iter().find(|g| g.name == *bootstrap_group_name)
+            else {
+                let mut err = ValidationError::new("non_existent_bootstrap_group_reference");
+                err.message = Some(Cow::from(format!(
+                    "bootstrap_dns references non-existent upstream group: '{}'",
+                    bootstrap_group_name
+                )));
+                return Err(err);
+            };
+
+            if bootstrap_group.protocol != UpstreamProtocol::Dns {
+                let mut err = ValidationError::new("invalid_bootstrap_group_protocol");
+                err.message = Some(Cow::from(format!(
+                    "bootstrap_dns referenced group '{}' must use protocol 'dns'",
+                    bootstrap_group_name
+                )));
+                return Err(err);
+            }
+        }
+    }
+
+    Ok(())
+}
+
 pub fn validate_retry_config(retry: &RetryConfig) -> Result<(), ValidationError> {
     if retry.attempts < retry_limits::MIN_ATTEMPTS || retry.attempts > retry_limits::MAX_ATTEMPTS {
         return Err(ValidationError::new("invalid_retry_attempts"));
@@ -144,6 +209,7 @@ pub fn validate_keepalive(value: u32) -> Result<(), ValidationError> {
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Validate)]
 #[validate(schema(function = "validate_unique_upstream_names"))]
 #[validate(schema(function = "validate_upstream_references"))]
+#[validate(schema(function = "validate_bootstrap_and_fallback_references"))]
 #[serde(rename_all = "lowercase", deny_unknown_fields)]
 pub struct Config {
     #[validate(nested)]
@@ -164,6 +230,10 @@ pub struct Config {
     #[serde(default)]
     #[validate(nested)]
     pub dns: Option<DnsConfig>,
+
+    #[serde(default)]
+    #[validate(nested)]
+    pub bootstrap_dns: Option<BootstrapDnsConfig>,
 
     #[serde(default)]
     #[validate(nested)]
@@ -280,6 +350,7 @@ impl Default for Config {
             cache: Some(CacheConfig::default()),
             http: Some(HttpConfig::default()),
             dns: Some(DnsConfig::default()),
+            bootstrap_dns: None,
             upstreams: Some(vec![UpstreamGroupConfig {
                 name: upstream_defaults::DEFAULT_GROUP_NAME.to_string(),
                 protocol: UpstreamProtocol::Doh,
@@ -291,6 +362,9 @@ impl Default for Config {
                     content_type: DoHContentType::Message,
                     auth: None,
                 })],
+                fallback: None,
+                failover: None,
+                health: None,
                 retry: Some(RetryConfig {
                     attempts: retry_limits::DEFAULT_ATTEMPTS,
                     delay: retry_limits::DEFAULT_DELAY,

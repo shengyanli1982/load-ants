@@ -5,6 +5,10 @@ edition = "2021"
 description = "An lightweight DNS forwarder converting UDP/TCP queries to DoH, written in Rust."
 license = "MIT"
 
+[profile.dev]
+incremental = true
+debug = true
+
 [profile.release]
 opt-level = 3
 lto = true

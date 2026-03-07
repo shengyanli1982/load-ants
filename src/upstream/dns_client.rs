@@ -1,4 +1,4 @@
-use crate::config::DnsConfig;
+use crate::config::{DnsConfig, DnsTransportMode};
 use crate::error::AppError;
 use dashmap::DashMap;
 use futures_util::StreamExt;
@@ -64,91 +64,133 @@ impl DnsClient {
         &self,
         addr: SocketAddr,
         message: &Message,
+        transport: Option<DnsTransportMode>,
     ) -> Result<DnsClientResponse, DnsClientSendError> {
         let mut attempts = Vec::new();
 
-        if self.config.prefer_tcp {
-            let start = Instant::now();
-            let result = self.send_tcp(addr, message).await;
-            let duration = start.elapsed();
-
-            match result {
-                Ok(response) => {
-                    attempts.push(DnsClientAttempt {
-                        transport: DnsTransport::Tcp,
-                        duration,
-                        truncated: response.truncated(),
-                    });
-                    return Ok(DnsClientResponse {
-                        message: response,
-                        attempts,
-                    });
+        let mode = match transport {
+            Some(m) => m,
+            None => {
+                if self.config.prefer_tcp {
+                    DnsTransportMode::Tcp
+                } else {
+                    DnsTransportMode::Auto
                 }
-                Err(error) => {
-                    attempts.push(DnsClientAttempt {
-                        transport: DnsTransport::Tcp,
-                        duration,
-                        truncated: false,
-                    });
-                    return Err(DnsClientSendError { error, attempts });
-                }
-            }
-        }
-
-        let start = Instant::now();
-        let udp_result = self.send_udp(addr, message).await;
-        let udp_duration = start.elapsed();
-
-        let udp_response = match udp_result {
-            Ok(response) => {
-                let truncated = response.truncated();
-                attempts.push(DnsClientAttempt {
-                    transport: DnsTransport::Udp,
-                    duration: udp_duration,
-                    truncated,
-                });
-                response
-            }
-            Err(error) => {
-                attempts.push(DnsClientAttempt {
-                    transport: DnsTransport::Udp,
-                    duration: udp_duration,
-                    truncated: false,
-                });
-                return Err(DnsClientSendError { error, attempts });
             }
         };
 
-        if !udp_response.truncated() {
-            return Ok(DnsClientResponse {
-                message: udp_response,
-                attempts,
-            });
-        }
+        match mode {
+            DnsTransportMode::Tcp => {
+                let start = Instant::now();
+                let result = self.send_tcp(addr, message).await;
+                let duration = start.elapsed();
 
-        let start = Instant::now();
-        let tcp_result = self.send_tcp(addr, message).await;
-        let tcp_duration = start.elapsed();
-
-        match tcp_result {
-            Ok(response) => {
-                attempts.push(DnsClientAttempt {
-                    transport: DnsTransport::Tcp,
-                    duration: tcp_duration,
-                    truncated: response.truncated(),
-                });
-                Ok(DnsClientResponse {
-                    message: response,
-                    attempts,
-                })
+                match result {
+                    Ok(response) => {
+                        attempts.push(DnsClientAttempt {
+                            transport: DnsTransport::Tcp,
+                            duration,
+                            truncated: response.truncated(),
+                        });
+                        Ok(DnsClientResponse {
+                            message: response,
+                            attempts,
+                        })
+                    }
+                    Err(error) => {
+                        attempts.push(DnsClientAttempt {
+                            transport: DnsTransport::Tcp,
+                            duration,
+                            truncated: false,
+                        });
+                        Err(DnsClientSendError { error, attempts })
+                    }
+                }
             }
-            Err(error) => {
-                attempts.push(DnsClientAttempt {
-                    transport: DnsTransport::Tcp,
-                    duration: tcp_duration,
-                    truncated: false,
-                });
-                Err(DnsClientSendError { error, attempts })
+            DnsTransportMode::Udp => {
+                let start = Instant::now();
+                let result = self.send_udp(addr, message).await;
+                let duration = start.elapsed();
+
+                match result {
+                    Ok(response) => {
+                        attempts.push(DnsClientAttempt {
+                            transport: DnsTransport::Udp,
+                            duration,
+                            truncated: response.truncated(),
+                        });
+                        Ok(DnsClientResponse {
+                            message: response,
+                            attempts,
+                        })
+                    }
+                    Err(error) => {
+                        attempts.push(DnsClientAttempt {
+                            transport: DnsTransport::Udp,
+                            duration,
+                            truncated: false,
+                        });
+                        Err(DnsClientSendError { error, attempts })
+                    }
+                }
+            }
+            DnsTransportMode::Auto => {
+                let start = Instant::now();
+                let udp_result = self.send_udp(addr, message).await;
+                let udp_duration = start.elapsed();
+
+                let udp_response = match udp_result {
+                    Ok(response) => {
+                        let truncated = response.truncated();
+                        attempts.push(DnsClientAttempt {
+                            transport: DnsTransport::Udp,
+                            duration: udp_duration,
+                            truncated,
+                        });
+                        response
+                    }
+                    Err(error) => {
+                        attempts.push(DnsClientAttempt {
+                            transport: DnsTransport::Udp,
+                            duration: udp_duration,
+                            truncated: false,
+                        });
+                        return Err(DnsClientSendError { error, attempts });
+                    }
+                };
+
+                if !udp_response.truncated() {
+                    return Ok(DnsClientResponse {
+                        message: udp_response,
+                        attempts,
+                    });
+                }
+
+                let start = Instant::now();
+                let tcp_result = self.send_tcp(addr, message).await;
+                let tcp_duration = start.elapsed();
+
+                match tcp_result {
+                    Ok(response) => {
+                        attempts.push(DnsClientAttempt {
+                            transport: DnsTransport::Tcp,
+                            duration: tcp_duration,
+                            truncated: response.truncated(),
+                        });
+                        Ok(DnsClientResponse {
+                            message: response,
+                            attempts,
+                        })
+                    }
+                    Err(error) => {
+                        attempts.push(DnsClientAttempt {
+                            transport: DnsTransport::Tcp,
+                            duration: tcp_duration,
+                            truncated: false,
+                        });
+                        Err(DnsClientSendError { error, attempts })
+                    }
+                }
             }
         }
     }

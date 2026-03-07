@@ -1,8 +1,8 @@
 use hickory_proto::op::{Message, MessageType, OpCode, Query, ResponseCode};
 use hickory_proto::rr::{Name, RecordType};
 use loadants::config::{
-    DnsConfig, DnsUpstreamEndpointConfig, HttpConfig, LoadBalancingPolicy, UpstreamEndpointConfig,
-    UpstreamGroupConfig, UpstreamProtocol,
+    DnsConfig, DnsTransportMode, DnsUpstreamEndpointConfig, HttpConfig, LoadBalancingPolicy,
+    UpstreamEndpointConfig, UpstreamGroupConfig, UpstreamProtocol,
 };
 use loadants::upstream::UpstreamManager;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -105,7 +105,11 @@ async fn spawn_tcp_server(
     })
 }
 
-async fn build_dns_manager(addr: SocketAddr, dns_config: DnsConfig) -> UpstreamManager {
+async fn build_dns_manager(
+    addr: SocketAddr,
+    dns_config: DnsConfig,
+    transport: Option<DnsTransportMode>,
+) -> UpstreamManager {
     let groups = vec![UpstreamGroupConfig {
         name: "dns_group".to_string(),
         protocol: UpstreamProtocol::Dns,
@@ -113,7 +117,11 @@ async fn build_dns_manager(addr: SocketAddr, dns_config: DnsConfig) -> UpstreamM
         endpoints: vec![UpstreamEndpointConfig::Dns(DnsUpstreamEndpointConfig {
             addr,
             weight: 1,
+            transport,
         })],
+        fallback: None,
+        failover: None,
+        health: None,
         retry: None,
         proxy: None,
     }];
@@ -143,6 +151,7 @@ async fn test_dns_prefer_tcp_true_uses_tcp_only() {
             prefer_tcp: true,
             tcp_reconnect: true,
         },
+        None,
     )
     .await;
 
@@ -174,6 +183,7 @@ async fn test_dns_udp_tc_triggers_tcp_retry() {
             prefer_tcp: false,
             tcp_reconnect: true,
         },
+        None,
     )
     .await;
 
@@ -182,6 +192,41 @@ async fn test_dns_udp_tc_triggers_tcp_retry() {
     assert_eq!(response.response_code(), ResponseCode::NoError);
     assert_eq!(udp_count.load(Ordering::SeqCst), 1);
     assert_eq!(tcp_count.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn test_dns_transport_udp_does_not_retry_tcp_on_tc() {
+    let tcp_count = Arc::new(AtomicUsize::new(0));
+    let udp_count = Arc::new(AtomicUsize::new(0));
+
+    let tcp_listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).await.unwrap();
+    let port = tcp_listener.local_addr().unwrap().port();
+    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
+
+    let _tcp = spawn_tcp_server(tcp_listener, tcp_count.clone(), ResponseCode::NoError).await;
+    let _udp = spawn_udp_server(addr, udp_count.clone(), ResponseCode::NoError, true).await;
+
+    let manager = build_dns_manager(
+        addr,
+        DnsConfig {
+            connect_timeout: 1,
+            request_timeout: 2,
+            prefer_tcp: false,
+            tcp_reconnect: true,
+        },
+        Some(DnsTransportMode::Udp),
+    )
+    .await;
+
+    let query = create_dns_query(202, "example.com");
+    let response = manager.forward(&query, "dns_group").await.unwrap();
+    assert_eq!(response.response_code(), ResponseCode::NoError);
+    assert!(
+        response.truncated(),
+        "Expected UDP transport to return truncated response"
+    );
+    assert_eq!(udp_count.load(Ordering::SeqCst), 1);
+    assert_eq!(tcp_count.load(Ordering::SeqCst), 0);
 }
 
 #[tokio::test]
@@ -202,6 +247,7 @@ async fn test_dns_nxdomain_transparent() {
             prefer_tcp: false,
             tcp_reconnect: true,
         },
+        None,
     )
     .await;
 

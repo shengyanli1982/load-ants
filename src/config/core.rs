@@ -1,6 +1,7 @@
 use crate::config::{validate_idle_timeout, validate_keepalive, validate_socket_addr};
 use crate::r#const::{
-    cache_limits, dns_client_limits, http_client_limits, server_defaults, timeout_limits,
+    bootstrap_dns_limits, cache_limits, dns_client_limits, http_client_limits, server_defaults,
+    timeout_limits,
 };
 use serde::{Deserialize, Serialize};
 use validator::{Validate, ValidationError};
@@ -47,6 +48,52 @@ impl Default for DnsConfig {
             tcp_reconnect: default_dns_tcp_reconnect(),
         }
     }
+}
+
+// Bootstrap DNS 配置：用于解析 upstream/proxy hostname（不用于普通转发）
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Validate)]
+#[serde(rename_all = "lowercase", deny_unknown_fields)]
+pub struct BootstrapDnsConfig {
+    #[validate(length(min = 1, message = "Bootstrap groups cannot be empty"))]
+    pub groups: Vec<String>,
+
+    #[serde(default = "default_bootstrap_timeout")]
+    #[validate(range(
+        min = bootstrap_dns_limits::MIN_TIMEOUT,
+        max = bootstrap_dns_limits::MAX_TIMEOUT,
+        message = "Bootstrap timeout must be between 1 and 30 seconds"
+    ))]
+    pub timeout: u64,
+
+    #[serde(default = "default_bootstrap_cache_ttl")]
+    #[validate(range(
+        min = bootstrap_dns_limits::MIN_CACHE_TTL,
+        max = bootstrap_dns_limits::MAX_CACHE_TTL,
+        message = "Bootstrap cache_ttl must be between 0 and 86400 seconds"
+    ))]
+    pub cache_ttl: u64,
+
+    #[serde(default = "default_bootstrap_prefer_ipv6")]
+    pub prefer_ipv6: bool,
+
+    #[serde(default = "default_bootstrap_use_system_resolver")]
+    pub use_system_resolver: bool,
+}
+
+fn default_bootstrap_timeout() -> u64 {
+    bootstrap_dns_limits::DEFAULT_TIMEOUT
+}
+
+fn default_bootstrap_cache_ttl() -> u64 {
+    bootstrap_dns_limits::DEFAULT_CACHE_TTL
+}
+
+fn default_bootstrap_prefer_ipv6() -> bool {
+    bootstrap_dns_limits::DEFAULT_PREFER_IPV6
+}
+
+fn default_bootstrap_use_system_resolver() -> bool {
+    bootstrap_dns_limits::DEFAULT_USE_SYSTEM_RESOLVER
 }
 
 // HTTP 客户端配置（全局）

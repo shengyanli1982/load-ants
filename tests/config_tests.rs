@@ -227,6 +227,154 @@ rules:
 }
 
 #[test]
+fn test_bootstrap_fallback_failover_transport_validation() {
+    let config_content = r#"
+listeners:
+  udp: "127.0.0.1:53"
+  tcp: "127.0.0.1:53"
+bootstrap_dns:
+  groups: ["public_dns"]
+upstreams:
+  - name: "public_dns"
+    protocol: "dns"
+    policy: "roundrobin"
+    endpoints:
+      - addr: 223.5.5.5:53
+"#;
+    let file = create_temp_config_file(config_content);
+    let result = Config::from_file(file.path());
+    assert!(result.is_ok(), "Expected valid bootstrap_dns config");
+
+    let config_content = r#"
+listeners:
+  udp: "127.0.0.1:53"
+  tcp: "127.0.0.1:53"
+bootstrap_dns:
+  groups: ["missing_group"]
+upstreams:
+  - name: "public_dns"
+    protocol: "dns"
+    policy: "roundrobin"
+    endpoints:
+      - addr: 223.5.5.5:53
+"#;
+    let file = create_temp_config_file(config_content);
+    let result = Config::from_file(file.path());
+    assert!(
+        result.is_err(),
+        "Expected error for missing bootstrap group"
+    );
+
+    let config_content = r#"
+listeners:
+  udp: "127.0.0.1:53"
+  tcp: "127.0.0.1:53"
+bootstrap_dns:
+  groups: ["public"]
+upstreams:
+  - name: "public"
+    protocol: "doh"
+    policy: "roundrobin"
+    endpoints:
+      - url: "https://dns.google/dns-query"
+"#;
+    let file = create_temp_config_file(config_content);
+    let result = Config::from_file(file.path());
+    assert!(
+        result.is_err(),
+        "Expected error when bootstrap_dns references non-dns upstream"
+    );
+
+    let config_content = r#"
+listeners:
+  udp: "127.0.0.1:53"
+  tcp: "127.0.0.1:53"
+upstreams:
+  - name: "secure"
+    protocol: "doh"
+    policy: "roundrobin"
+    endpoints:
+      - url: "https://dns.google/dns-query"
+    fallback: "missing"
+"#;
+    let file = create_temp_config_file(config_content);
+    let result = Config::from_file(file.path());
+    assert!(result.is_err(), "Expected error for missing fallback group");
+
+    let config_content = r#"
+listeners:
+  udp: "127.0.0.1:53"
+  tcp: "127.0.0.1:53"
+upstreams:
+  - name: "secure"
+    protocol: "doh"
+    policy: "roundrobin"
+    endpoints:
+      - url: "https://dns.google/dns-query"
+    fallback: "secure"
+"#;
+    let file = create_temp_config_file(config_content);
+    let result = Config::from_file(file.path());
+    assert!(
+        result.is_err(),
+        "Expected error for self-referencing fallback"
+    );
+
+    let config_content = r#"
+listeners:
+  udp: "127.0.0.1:53"
+  tcp: "127.0.0.1:53"
+upstreams:
+  - name: "public_dns"
+    protocol: "dns"
+    policy: "roundrobin"
+    endpoints:
+      - addr: 223.5.5.5:53
+        transport: "bogus"
+"#;
+    let file = create_temp_config_file(config_content);
+    let result = Config::from_file(file.path());
+    assert!(result.is_err(), "Expected error for invalid dns transport");
+
+    let config_content = r#"
+listeners:
+  udp: "127.0.0.1:53"
+  tcp: "127.0.0.1:53"
+upstreams:
+  - name: "secure"
+    protocol: "doh"
+    policy: "roundrobin"
+    endpoints:
+      - url: "https://dns.google/dns-query"
+    failover:
+      on_rcode: ["bogus"]
+"#;
+    let file = create_temp_config_file(config_content);
+    let result = Config::from_file(file.path());
+    assert!(
+        result.is_err(),
+        "Expected error for invalid failover.on_rcode"
+    );
+
+    let config_content = r#"
+listeners:
+  udp: "127.0.0.1:53"
+  tcp: "127.0.0.1:53"
+upstreams:
+  - name: "secure"
+    protocol: "doh"
+    policy: "roundrobin"
+    endpoints:
+      - url: "https://dns.google/dns-query"
+    failover:
+      on_rcode: ["SERVFAIL"]
+"#;
+    let file = create_temp_config_file(config_content);
+    let result = Config::from_file(file.path());
+    assert!(result.is_ok(), "Expected normalized SERVFAIL to parse");
+}
+
+#[test]
 fn test_complete_valid_config() {
     let config_content = r#"
 listeners:

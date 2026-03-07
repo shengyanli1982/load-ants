@@ -3,7 +3,7 @@ use hickory_proto::rr::rdata::A;
 use hickory_proto::rr::{Name, RData, Record, RecordType};
 use loadants::config::{
     AuthConfig, AuthType, DnsConfig, DnsUpstreamEndpointConfig, DoHContentType, DoHMethod,
-    DoHUpstreamEndpointConfig, HttpConfig, LoadBalancingPolicy, RetryConfig,
+    DoHUpstreamEndpointConfig, FailoverConfig, HttpConfig, LoadBalancingPolicy, RetryConfig,
     UpstreamEndpointConfig, UpstreamGroupConfig, UpstreamProtocol,
 };
 use loadants::error::AppError;
@@ -133,7 +133,11 @@ async fn test_dns_scheme_forward_via_udp() {
         endpoints: vec![UpstreamEndpointConfig::Dns(DnsUpstreamEndpointConfig {
             addr: SocketAddr::from(server_addr),
             weight: 1,
+            transport: None,
         })],
+        fallback: None,
+        failover: None,
+        health: None,
         retry: None,
         proxy: None,
     }];
@@ -221,6 +225,9 @@ async fn test_upstream_manager_creation() {
                     auth: None,
                 }),
             ],
+            fallback: None,
+            failover: None,
+            health: None,
             retry: None,
             proxy: None,
         },
@@ -244,6 +251,9 @@ async fn test_upstream_manager_creation() {
                     auth: None,
                 }),
             ],
+            fallback: None,
+            failover: None,
+            health: None,
             retry: None,
             proxy: None,
         },
@@ -274,6 +284,9 @@ async fn test_upstream_doh_get_message() {
             content_type: DoHContentType::Message,
             auth: None,
         })],
+        fallback: None,
+        failover: None,
+        health: None,
         retry: None,
         proxy: None,
     }];
@@ -343,6 +356,9 @@ async fn test_upstream_doh_post_message() {
             content_type: DoHContentType::Message,
             auth: None,
         })],
+        fallback: None,
+        failover: None,
+        health: None,
         retry: None,
         proxy: None,
     }];
@@ -400,6 +416,9 @@ async fn test_upstream_doh_get_json() {
             content_type: DoHContentType::Json,
             auth: None,
         })],
+        fallback: None,
+        failover: None,
+        health: None,
         retry: None,
         proxy: None,
     }];
@@ -460,6 +479,9 @@ async fn test_upstream_doh_post_json_fails() {
             content_type: DoHContentType::Json,
             auth: None,
         })],
+        fallback: None,
+        failover: None,
+        health: None,
         retry: None,
         proxy: None,
     }];
@@ -515,6 +537,9 @@ async fn test_upstream_with_auth() {
                 token: Some("test-token".to_string()),
             }),
         })],
+        fallback: None,
+        failover: None,
+        health: None,
         retry: None,
         proxy: None,
     }];
@@ -574,6 +599,9 @@ async fn test_basic_auth() {
                 token: None,
             }),
         })],
+        fallback: None,
+        failover: None,
+        health: None,
         retry: None,
         proxy: None,
     }];
@@ -637,6 +665,9 @@ async fn test_load_balancing_round_robin() {
                 auth: None,
             }),
         ],
+        fallback: None,
+        failover: None,
+        health: None,
         retry: None,
         proxy: None,
     }];
@@ -706,6 +737,9 @@ async fn test_error_handling() {
             content_type: DoHContentType::Message,
             auth: None,
         })],
+        fallback: None,
+        failover: None,
+        health: None,
         retry: None,
         proxy: None,
     }];
@@ -754,6 +788,9 @@ async fn test_retry_config() {
             content_type: DoHContentType::Message,
             auth: None,
         })],
+        fallback: None,
+        failover: None,
+        health: None,
         retry: Some(RetryConfig {
             attempts: 3,
             delay: 1,
@@ -796,6 +833,9 @@ async fn test_json_response_parsing() {
             content_type: DoHContentType::Json,
             auth: None,
         })],
+        fallback: None,
+        failover: None,
+        health: None,
         retry: None,
         proxy: None,
     }];
@@ -936,6 +976,9 @@ async fn test_json_error_response() {
             content_type: DoHContentType::Json,
             auth: None,
         })],
+        fallback: None,
+        failover: None,
+        health: None,
         retry: None,
         proxy: None,
     }];
@@ -1003,6 +1046,9 @@ async fn test_json_txt_response() {
             content_type: DoHContentType::Json,
             auth: None,
         })],
+        fallback: None,
+        failover: None,
+        health: None,
         retry: None,
         proxy: None,
     }];
@@ -1073,6 +1119,9 @@ async fn test_json_edns_client_subnet() {
             content_type: DoHContentType::Json,
             auth: None,
         })],
+        fallback: None,
+        failover: None,
+        health: None,
         retry: None,
         proxy: None,
     }];
@@ -1121,4 +1170,142 @@ async fn test_json_edns_client_subnet() {
     // 但我们可以验证基本的DNS响应是否正确
     assert!(dns_response.recursion_desired());
     assert!(dns_response.recursion_available());
+}
+
+#[tokio::test]
+async fn test_upstream_doh_failover_on_http_error_switches_endpoint() {
+    let mock_server = MockServer::start().await;
+
+    let http_config = HttpConfig {
+        connect_timeout: 1,
+        request_timeout: 2,
+        idle_timeout: None,
+        keepalive: None,
+        user_agent: None,
+    };
+
+    Mock::given(method("GET"))
+        .and(path("/dns-query-fail"))
+        .respond_with(ResponseTemplate::new(500))
+        .expect(1)
+        .mount(&mock_server)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/dns-query-ok"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .append_header("Content-Type", "application/dns-message")
+                .set_body_bytes(create_test_dns_response(1234)),
+        )
+        .expect(1)
+        .mount(&mock_server)
+        .await;
+
+    let groups = vec![UpstreamGroupConfig {
+        name: "test_group".to_string(),
+        protocol: UpstreamProtocol::Doh,
+        policy: LoadBalancingPolicy::RoundRobin,
+        endpoints: vec![
+            UpstreamEndpointConfig::Doh(DoHUpstreamEndpointConfig {
+                url: Url::parse(&format!("{}/dns-query-fail", mock_server.uri())).unwrap(),
+                weight: 1,
+                method: DoHMethod::Get,
+                content_type: DoHContentType::Message,
+                auth: None,
+            }),
+            UpstreamEndpointConfig::Doh(DoHUpstreamEndpointConfig {
+                url: Url::parse(&format!("{}/dns-query-ok", mock_server.uri())).unwrap(),
+                weight: 1,
+                method: DoHMethod::Get,
+                content_type: DoHContentType::Message,
+                auth: None,
+            }),
+        ],
+        fallback: None,
+        failover: Some(FailoverConfig {
+            on_rcode: vec![],
+            max_total_time_ms: Some(1000),
+            max_groups: 1,
+            max_endpoints_per_group: 2,
+        }),
+        health: None,
+        retry: None,
+        proxy: None,
+    }];
+
+    let manager = UpstreamManager::new(groups, http_config, DnsConfig::default())
+        .await
+        .unwrap();
+
+    let query = create_test_dns_query("example.com", RecordType::A);
+    let response = manager.forward(&query, "test_group").await.unwrap();
+    assert_eq!(response.id(), 1234);
+    assert_eq!(response.response_code(), ResponseCode::NoError);
+}
+
+#[tokio::test]
+async fn test_upstream_doh_no_failover_does_not_try_other_endpoint() {
+    let mock_server = MockServer::start().await;
+
+    let http_config = HttpConfig {
+        connect_timeout: 1,
+        request_timeout: 2,
+        idle_timeout: None,
+        keepalive: None,
+        user_agent: None,
+    };
+
+    Mock::given(method("GET"))
+        .and(path("/dns-query-fail"))
+        .respond_with(ResponseTemplate::new(500))
+        .expect(1)
+        .mount(&mock_server)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/dns-query-ok"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .append_header("Content-Type", "application/dns-message")
+                .set_body_bytes(create_test_dns_response(1234)),
+        )
+        .expect(0)
+        .mount(&mock_server)
+        .await;
+
+    let groups = vec![UpstreamGroupConfig {
+        name: "test_group".to_string(),
+        protocol: UpstreamProtocol::Doh,
+        policy: LoadBalancingPolicy::RoundRobin,
+        endpoints: vec![
+            UpstreamEndpointConfig::Doh(DoHUpstreamEndpointConfig {
+                url: Url::parse(&format!("{}/dns-query-fail", mock_server.uri())).unwrap(),
+                weight: 1,
+                method: DoHMethod::Get,
+                content_type: DoHContentType::Message,
+                auth: None,
+            }),
+            UpstreamEndpointConfig::Doh(DoHUpstreamEndpointConfig {
+                url: Url::parse(&format!("{}/dns-query-ok", mock_server.uri())).unwrap(),
+                weight: 1,
+                method: DoHMethod::Get,
+                content_type: DoHContentType::Message,
+                auth: None,
+            }),
+        ],
+        fallback: None,
+        failover: None,
+        health: None,
+        retry: None,
+        proxy: None,
+    }];
+
+    let manager = UpstreamManager::new(groups, http_config, DnsConfig::default())
+        .await
+        .unwrap();
+
+    let query = create_test_dns_query("example.com", RecordType::A);
+    let result = manager.forward(&query, "test_group").await;
+    assert!(result.is_err());
 }

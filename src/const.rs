@@ -78,6 +78,28 @@ pub mod dns_client_limits {
     pub const DEFAULT_TCP_RECONNECT: bool = true;
 }
 
+// Bootstrap DNS（DoH upstream hostname 解析）配置限制
+pub mod bootstrap_dns_limits {
+    // 默认请求超时（秒）
+    pub const DEFAULT_TIMEOUT: u64 = 5;
+    // 最小请求超时（秒）
+    pub const MIN_TIMEOUT: u64 = 1;
+    // 最大请求超时（秒）
+    pub const MAX_TIMEOUT: u64 = 30;
+
+    // 默认缓存TTL（秒）
+    pub const DEFAULT_CACHE_TTL: u64 = 300;
+    // 最小缓存TTL（秒）
+    pub const MIN_CACHE_TTL: u64 = 0;
+    // 最大缓存TTL（秒）
+    pub const MAX_CACHE_TTL: u64 = 86400;
+
+    // 默认 prefer_ipv6
+    pub const DEFAULT_PREFER_IPV6: bool = false;
+    // 默认 use_system_resolver（当 bootstrap_dns 块存在但未显式配置时）
+    pub const DEFAULT_USE_SYSTEM_RESOLVER: bool = false;
+}
+
 // 重试配置限制
 pub mod retry_limits {
     // 默认重试次数

@@ -32,6 +32,9 @@ pub struct DnsMetrics {
     upstream_requests_total: IntCounterVec,
     upstream_errors_total: IntCounterVec,
     upstream_duration_seconds: HistogramVec,
+    upstream_attempts_total: IntCounterVec,
+    upstream_failover_total: IntCounterVec,
+    bootstrap_dns_queries_total: IntCounterVec,
 
     // 5. 路由策略指标
     route_matches_total: IntCounterVec,
@@ -191,6 +194,40 @@ impl DnsMetrics {
         )
         .unwrap();
 
+        let upstream_attempts_total = IntCounterVec::new(
+            opts!(
+                "loadants_upstream_attempts_total",
+                "Total upstream selection attempts within a single DNS request, classified by protocol, transport, group and server"
+            ),
+            &["upstream_protocol", "upstream_transport", "group", "server"],
+        )
+        .unwrap();
+
+        let upstream_failover_total = IntCounterVec::new(
+            opts!(
+                "loadants_upstream_failover_total",
+                "Total upstream failover decisions within a single DNS request, classified by reason, from/to group, protocol, transport and server"
+            ),
+            &[
+                "reason",
+                "from_group",
+                "to_group",
+                "upstream_protocol",
+                "upstream_transport",
+                "server",
+            ],
+        )
+        .unwrap();
+
+        let bootstrap_dns_queries_total = IntCounterVec::new(
+            opts!(
+                "loadants_bootstrap_dns_queries_total",
+                "Total bootstrap DNS resolution queries, classified by result"
+            ),
+            &["result"],
+        )
+        .unwrap();
+
         // 5. 路由策略指标
         let route_matches_total = IntCounterVec::new(
             opts!("loadants_route_matches_total", "Total routing rule matches, classified by rule type, target group, rule source and action"),
@@ -224,6 +261,9 @@ impl DnsMetrics {
             upstream_requests_total,
             upstream_errors_total,
             upstream_duration_seconds,
+            upstream_attempts_total,
+            upstream_failover_total,
+            bootstrap_dns_queries_total,
             route_matches_total,
             route_rules_count,
         };
@@ -287,6 +327,15 @@ impl DnsMetrics {
             .unwrap();
         self.registry
             .register(Box::new(self.upstream_duration_seconds.clone()))
+            .unwrap();
+        self.registry
+            .register(Box::new(self.upstream_attempts_total.clone()))
+            .unwrap();
+        self.registry
+            .register(Box::new(self.upstream_failover_total.clone()))
+            .unwrap();
+        self.registry
+            .register(Box::new(self.bootstrap_dns_queries_total.clone()))
             .unwrap();
 
         // 5. 路由策略指标
@@ -377,6 +426,18 @@ impl DnsMetrics {
 
     pub fn upstream_duration_seconds(&self) -> &HistogramVec {
         &self.upstream_duration_seconds
+    }
+
+    pub fn upstream_attempts_total(&self) -> &IntCounterVec {
+        &self.upstream_attempts_total
+    }
+
+    pub fn upstream_failover_total(&self) -> &IntCounterVec {
+        &self.upstream_failover_total
+    }
+
+    pub fn bootstrap_dns_queries_total(&self) -> &IntCounterVec {
+        &self.bootstrap_dns_queries_total
     }
 
     // 5. 路由策略指标

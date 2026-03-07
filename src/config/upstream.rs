@@ -66,6 +66,130 @@ fn default_upstream_protocol() -> UpstreamProtocol {
     UpstreamProtocol::Doh
 }
 
+// DNS endpoint 传输模式（server 级）
+#[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum DnsTransportMode {
+    Auto,
+    Udp,
+    Tcp,
+}
+
+impl<'de> Deserialize<'de> for DnsTransportMode {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        super::serde_utils::deserialize_string_enum(
+            deserializer,
+            |normalized| match normalized {
+                "auto" => Some(Self::Auto),
+                "udp" => Some(Self::Udp),
+                "tcp" => Some(Self::Tcp),
+                _ => None,
+            },
+            &["auto", "udp", "tcp"],
+        )
+    }
+}
+
+// failover 的 rcode 触发条件
+#[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum FailoverRcode {
+    ServFail,
+    Refused,
+}
+
+impl<'de> Deserialize<'de> for FailoverRcode {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        super::serde_utils::deserialize_string_enum(
+            deserializer,
+            |normalized| match normalized {
+                "servfail" => Some(Self::ServFail),
+                "refused" => Some(Self::Refused),
+                _ => None,
+            },
+            &["servfail", "refused"],
+        )
+    }
+}
+
+fn default_failover_max_groups() -> u8 {
+    2
+}
+
+fn default_failover_max_endpoints_per_group() -> u8 {
+    2
+}
+
+fn default_health_failure_threshold() -> u32 {
+    2
+}
+
+fn default_health_cooldown_seconds() -> u64 {
+    10
+}
+
+fn default_health_success_reset() -> bool {
+    true
+}
+
+// failover 组级配置
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Validate)]
+#[serde(rename_all = "lowercase", deny_unknown_fields)]
+pub struct FailoverConfig {
+    #[serde(default)]
+    pub on_rcode: Vec<FailoverRcode>,
+
+    #[serde(default)]
+    #[validate(range(
+        min = 1,
+        max = 600000,
+        message = "max_total_time_ms must be between 1 and 600000"
+    ))]
+    pub max_total_time_ms: Option<u64>,
+
+    #[serde(default = "default_failover_max_groups")]
+    #[validate(range(min = 1, max = 8, message = "max_groups must be between 1 and 8"))]
+    pub max_groups: u8,
+
+    #[serde(default = "default_failover_max_endpoints_per_group")]
+    #[validate(range(
+        min = 1,
+        max = 8,
+        message = "max_endpoints_per_group must be between 1 and 8"
+    ))]
+    pub max_endpoints_per_group: u8,
+}
+
+// 被动熔断组级配置
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Validate)]
+#[serde(rename_all = "lowercase", deny_unknown_fields)]
+pub struct HealthConfig {
+    #[serde(default = "default_health_failure_threshold")]
+    #[validate(range(
+        min = 1,
+        max = 100,
+        message = "failure_threshold must be between 1 and 100"
+    ))]
+    pub failure_threshold: u32,
+
+    #[serde(default = "default_health_cooldown_seconds")]
+    #[validate(range(
+        min = 1,
+        max = 3600,
+        message = "cooldown_seconds must be between 1 and 3600"
+    ))]
+    pub cooldown_seconds: u64,
+
+    #[serde(default = "default_health_success_reset")]
+    pub success_reset: bool,
+}
+
 // DoH 请求方法枚举
 #[derive(Debug, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -236,6 +360,9 @@ pub struct DnsUpstreamEndpointConfig {
         message = "Weight must be between 1-65535"
     ))]
     pub weight: u32,
+
+    #[serde(default)]
+    pub transport: Option<DnsTransportMode>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -353,6 +480,15 @@ pub struct UpstreamGroupConfig {
     ))]
     #[validate(nested)]
     pub endpoints: Vec<UpstreamEndpointConfig>,
+
+    #[validate(length(min = 1, message = "Fallback group name cannot be empty"))]
+    pub fallback: Option<String>,
+
+    #[validate(nested)]
+    pub failover: Option<FailoverConfig>,
+
+    #[validate(nested)]
+    pub health: Option<HealthConfig>,
 
     #[validate(nested)]
     pub retry: Option<RetryConfig>,
