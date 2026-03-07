@@ -449,6 +449,7 @@ fn record_doh_metrics(
                 .with_label_values(&[query_type, status_str])
                 .observe(duration);
             info!(
+                query_type = query_type,
                 client_ip = %client_addr,
                 status_code = %status,
                 duration = ?start_time.elapsed(),
@@ -462,6 +463,7 @@ fn record_doh_metrics(
                     .with_label_values(&[err_type])
                     .inc();
                 error!(
+                    query_type = query_type,
                     client_ip = %client_addr,
                     status_code = %status,
                     error_type = err_type,
@@ -470,6 +472,7 @@ fn record_doh_metrics(
                 );
             } else {
                 warn!(
+                    query_type = query_type,
                     client_ip = %client_addr,
                     status_code = %status,
                     duration = ?start_time.elapsed(),

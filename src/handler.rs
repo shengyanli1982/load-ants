@@ -85,7 +85,7 @@ impl RequestHandler {
             .with_label_values(&[processing_labels::RESOLVED, query_type.to_string().as_str()])
             .observe(duration.as_secs_f64());
 
-        info!(
+        debug!(
             "DNS request processed in {:?} - {}",
             duration,
             query_name.to_utf8()
@@ -137,7 +137,7 @@ impl RequestHandler {
 
         let cache_check_time = Instant::now();
         if let Some(cached_response) = self.cache.get(request).await {
-            debug!("Cache hit: {} ({})", query_name.to_utf8(), query_type);
+            info!("Cache hit: {} ({})", query_name.to_utf8(), query_type);
 
             // 设置响应ID与请求ID相匹配
             let mut response = cached_response.clone();
@@ -150,7 +150,7 @@ impl RequestHandler {
                 .with_label_values(&[processing_labels::CACHED, query_type.to_string().as_str()])
                 .observe(duration.as_secs_f64());
 
-            info!(
+            debug!(
                 "Cache hit: {} processed in {:?}",
                 query_name.to_utf8(),
                 duration
@@ -163,7 +163,7 @@ impl RequestHandler {
                 .cache_operations_total()
                 .with_label_values(&[cache_labels::MISS])
                 .inc();
-            info!(
+            debug!(
                 "Cache check for {} took {:?}",
                 query_name.to_utf8(),
                 cache_check_time.elapsed()
@@ -193,7 +193,7 @@ impl RequestHandler {
                 return Err(AppError::Internal(format!("Route matching failed: {}", e)));
             }
         };
-        info!(
+        debug!(
             "Route matching for {} took {:?}",
             query_name.to_utf8(),
             route_match_time.elapsed()
@@ -240,7 +240,7 @@ impl RequestHandler {
         // 转发到上游
         let upstream_time = Instant::now();
         let result = self.upstream.forward(request, target_group).await;
-        info!(
+        debug!(
             "Upstream forwarding to {} for {} took {:?}",
             target_group,
             query_name.to_utf8(),
@@ -278,7 +278,7 @@ impl RequestHandler {
         if let Err(e) = self.cache.insert(request, response).await {
             warn!("Cache insertion failed: {}", e);
         } else {
-            info!(
+            debug!(
                 "Cache insertion for {} took {:?}",
                 query_name.to_utf8(),
                 cache_insert_time.elapsed()

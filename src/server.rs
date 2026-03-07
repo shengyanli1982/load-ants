@@ -78,6 +78,16 @@ impl RequestHandler for HandlerAdapter {
             let builder = MessageResponseBuilder::from_message_request(request);
             let response = builder.error_msg(&header, ResponseCode::NotImp);
 
+            warn!(
+                client_addr = %request.src(),
+                protocol = protocol,
+                op_code = ?request.op_code(),
+                message_type = ?request.message_type(),
+                rcode = %ResponseCode::NotImp,
+                duration = ?start_time.elapsed(),
+                "Rejected DNS request (unsupported opcode)"
+            );
+
             return response_handler
                 .send_response(response)
                 .await
@@ -104,6 +114,16 @@ impl RequestHandler for HandlerAdapter {
             let builder = MessageResponseBuilder::from_message_request(request);
             let response = builder.error_msg(&header, ResponseCode::NotImp);
 
+            warn!(
+                client_addr = %request.src(),
+                protocol = protocol,
+                op_code = ?request.op_code(),
+                message_type = ?request.message_type(),
+                rcode = %ResponseCode::NotImp,
+                duration = ?start_time.elapsed(),
+                "Rejected DNS request (unsupported message type)"
+            );
+
             return response_handler
                 .send_response(response)
                 .await
@@ -128,7 +148,17 @@ impl RequestHandler for HandlerAdapter {
         let message = match parse_request_message(request) {
             Ok(message) => message,
             Err(e) => {
-                error!("Failed to parse request message: {}", e);
+                let duration = start_time.elapsed();
+                error!(
+                    client_addr = %request.src(),
+                    protocol = protocol,
+                    query_name = %query_name,
+                    query_type = %query_type,
+                    rcode = %ResponseCode::ServFail,
+                    duration = ?duration,
+                    error = %e,
+                    "Failed to parse DNS request message"
+                );
 
                 METRICS
                     .dns_request_errors_total()
@@ -144,7 +174,6 @@ impl RequestHandler for HandlerAdapter {
                 let response = builder.error_msg(&header, ResponseCode::ServFail);
 
                 // 记录处理时间
-                let duration = start_time.elapsed();
                 METRICS
                     .dns_request_duration_seconds()
                     .with_label_values(&[protocol, query_type.to_string().as_str()])
@@ -188,6 +217,16 @@ impl RequestHandler for HandlerAdapter {
                     .with_label_values(&[protocol, query_type.to_string().as_str()])
                     .observe(duration.as_secs_f64());
 
+                info!(
+                    client_addr = %request.src(),
+                    protocol = protocol,
+                    query_name = %query_name,
+                    query_type = %query_type,
+                    rcode = %header.response_code(),
+                    duration = ?duration,
+                    "Finished processing DNS request"
+                );
+
                 response_handler
                     .send_response(response)
                     .await
@@ -199,7 +238,17 @@ impl RequestHandler for HandlerAdapter {
                     })
             }
             Err(e) => {
-                error!("Error processing DNS request: {}", e);
+                let duration = start_time.elapsed();
+                error!(
+                    client_addr = %request.src(),
+                    protocol = protocol,
+                    query_name = %query_name,
+                    query_type = %query_type,
+                    rcode = %ResponseCode::ServFail,
+                    duration = ?duration,
+                    error = %e,
+                    "Failed to process DNS request"
+                );
 
                 // 记录错误
                 METRICS
@@ -216,7 +265,6 @@ impl RequestHandler for HandlerAdapter {
                 let response = builder.error_msg(&header, ResponseCode::ServFail);
 
                 // 记录处理时间
-                let duration = start_time.elapsed();
                 METRICS
                     .dns_request_duration_seconds()
                     .with_label_values(&[protocol, query_type.to_string().as_str()])
