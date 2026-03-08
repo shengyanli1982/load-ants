@@ -669,3 +669,140 @@ rules:
         "Expected RemoteRuleType=url to be rejected"
     );
 }
+
+#[test]
+fn test_duplicate_upstream_group_names_rejected() {
+    let config_content = r#"
+listeners:
+  udp: "127.0.0.1:53"
+  tcp: "127.0.0.1:53"
+rules:
+  static: []
+  remote: []
+upstreams:
+  - name: "dup"
+    protocol: "dns"
+    policy: "roundrobin"
+    endpoints:
+      - addr: 127.0.0.1:53
+  - name: "dup"
+    protocol: "dns"
+    policy: "roundrobin"
+    endpoints:
+      - addr: 127.0.0.2:53
+"#;
+
+    let file = create_temp_config_file(config_content);
+    let result = Config::from_file(file.path());
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_http_keepalive_range_validation() {
+    let config_content = r#"
+listeners:
+  udp: "127.0.0.1:53"
+  tcp: "127.0.0.1:53"
+http:
+  keepalive: 1
+rules:
+  static: []
+  remote: []
+"#;
+
+    let file = create_temp_config_file(config_content);
+    let result = Config::from_file(file.path());
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_upstream_max_concurrent_range_validation() {
+    let config_content = r#"
+listeners:
+  udp: "127.0.0.1:53"
+  tcp: "127.0.0.1:53"
+rules:
+  static: []
+  remote: []
+upstreams:
+  - name: "public_dns"
+    protocol: "dns"
+    policy: "roundrobin"
+    max_concurrent: 0
+    endpoints:
+      - addr: 127.0.0.1:53
+"#;
+
+    let file = create_temp_config_file(config_content);
+    let result = Config::from_file(file.path());
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_remote_rule_retry_range_validation() {
+    let config_content = r#"
+listeners:
+  udp: "127.0.0.1:53"
+  tcp: "127.0.0.1:53"
+rules:
+  static: []
+  remote:
+    - type: "http"
+      url: "https://example.com/rules.txt"
+      format: "v2ray"
+      action: "block"
+      retry:
+        attempts: 0
+        delay: 1
+      max_size: 10485760
+"#;
+
+    let file = create_temp_config_file(config_content);
+    let result = Config::from_file(file.path());
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_remote_rule_retry_upper_bounds_validation() {
+    // attempts 上界
+    let config_content = r#"
+listeners:
+  udp: "127.0.0.1:53"
+  tcp: "127.0.0.1:53"
+rules:
+  static: []
+  remote:
+    - type: "http"
+      url: "https://example.com/rules.txt"
+      format: "v2ray"
+      action: "block"
+      retry:
+        attempts: 101
+        delay: 1
+      max_size: 10485760
+"#;
+    let file = create_temp_config_file(config_content);
+    let result = Config::from_file(file.path());
+    assert!(result.is_err());
+
+    // delay 上界
+    let config_content = r#"
+listeners:
+  udp: "127.0.0.1:53"
+  tcp: "127.0.0.1:53"
+rules:
+  static: []
+  remote:
+    - type: "http"
+      url: "https://example.com/rules.txt"
+      format: "v2ray"
+      action: "block"
+      retry:
+        attempts: 1
+        delay: 121
+      max_size: 10485760
+"#;
+    let file = create_temp_config_file(config_content);
+    let result = Config::from_file(file.path());
+    assert!(result.is_err());
+}

@@ -177,4 +177,78 @@ mod tests {
         assert_eq!(result.action, RouteAction::Block);
         assert_eq!(result.rule_type, "exact");
     }
+
+    #[test]
+    fn test_invalid_wildcard_pattern_rejected() {
+        let rules = vec![RouteRuleConfig {
+            match_type: MatchType::Wildcard,
+            patterns: vec!["example.com".to_string()],
+            action: RouteAction::Forward,
+            upstream: Some("public".to_string()),
+        }];
+
+        assert!(Router::new(rules).is_err());
+    }
+
+    #[test]
+    fn test_invalid_regex_pattern_rejected() {
+        let rules = vec![RouteRuleConfig {
+            match_type: MatchType::Regex,
+            patterns: vec!["(".to_string()],
+            action: RouteAction::Forward,
+            upstream: Some("public".to_string()),
+        }];
+
+        assert!(Router::new(rules).is_err());
+    }
+
+    #[test]
+    fn test_domain_normalization_case_and_trailing_dot() {
+        let rules = vec![RouteRuleConfig {
+            match_type: MatchType::Exact,
+            patterns: vec!["Example.COM.".to_string()],
+            action: RouteAction::Forward,
+            upstream: Some("public".to_string()),
+        }];
+
+        let router = Router::new(rules).expect("Router should accept valid exact rule");
+
+        let query_name = Name::from_str("example.com.").expect("Invalid name");
+        let result = router
+            .find_match(&query_name)
+            .expect("Match should succeed");
+
+        assert_eq!(result.action, RouteAction::Forward);
+        assert_eq!(result.rule_type, "exact");
+        assert_eq!(result.target, Some("public".to_string()));
+    }
+
+    #[test]
+    fn test_global_wildcard_last_definition_wins() {
+        let rules = vec![
+            RouteRuleConfig {
+                match_type: MatchType::Wildcard,
+                patterns: vec!["*".to_string()],
+                action: RouteAction::Forward,
+                upstream: Some("first".to_string()),
+            },
+            RouteRuleConfig {
+                match_type: MatchType::Wildcard,
+                patterns: vec!["*".to_string()],
+                action: RouteAction::Forward,
+                upstream: Some("second".to_string()),
+            },
+        ];
+
+        let router = Router::new(rules).expect("Router should accept global wildcard rules");
+
+        let query_name = Name::from_str("random.domain.org.").expect("Invalid name");
+        let result = router
+            .find_match(&query_name)
+            .expect("Match should succeed");
+
+        assert_eq!(result.action, RouteAction::Forward);
+        assert_eq!(result.rule_type, "wildcard");
+        assert_eq!(result.target, Some("second".to_string()));
+    }
 }

@@ -184,3 +184,146 @@ async fn test_bootstrap_dns_resolves_doh_hostname_without_system_resolver() {
     let response = manager.forward(&query, "doh_group").await.unwrap();
     assert_eq!(response.response_code(), ResponseCode::NoError);
 }
+
+#[tokio::test]
+async fn test_bootstrap_dns_returns_error_when_no_ip_records_found() {
+    // 避免本机环境变量代理（HTTP_PROXY/HTTPS_PROXY/ALL_PROXY）干扰：该测试需要直连 upstream
+    for key in [
+        "HTTP_PROXY",
+        "http_proxy",
+        "HTTPS_PROXY",
+        "https_proxy",
+        "ALL_PROXY",
+        "all_proxy",
+        "NO_PROXY",
+        "no_proxy",
+    ] {
+        std::env::remove_var(key);
+    }
+
+    let bootstrap_hostname = "bootstrap.noip.test.invalid";
+
+    // 1) 启动本地 UDP DNS stub：对 bootstrap_hostname 返回 NOERROR 但不返回 A/AAAA 记录
+    let udp_socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+    let dns_addr = udp_socket.local_addr().unwrap();
+
+    let qname = format!("{}.", bootstrap_hostname);
+    tokio::spawn(async move {
+        let mut buf = [0u8; 2048];
+        loop {
+            let Ok((len, peer)) = udp_socket.recv_from(&mut buf).await else {
+                break;
+            };
+
+            let Ok(query) = Message::from_vec(&buf[..len]) else {
+                continue;
+            };
+
+            let mut response = Message::new();
+            response.set_id(query.id());
+            response.set_message_type(hickory_proto::op::MessageType::Response);
+            response.set_recursion_desired(query.recursion_desired());
+            response.set_recursion_available(true);
+            response.set_op_code(query.op_code());
+            response.set_response_code(ResponseCode::NoError);
+
+            if let Some(q) = query.queries().first() {
+                response.add_query(q.clone());
+                // 故意不添加回答记录：模拟 NOERROR 但无 A/AAAA
+                if q.name().to_utf8() != qname {
+                    // 不是目标域名也保持空回答
+                }
+            }
+
+            let bytes = response.to_vec().unwrap();
+            let _ = udp_socket.send_to(&bytes, peer).await;
+        }
+    });
+
+    // 2) 启动 wiremock 作为 DoH upstream（理论上不应被调用）
+    let mock_server = MockServer::start().await;
+    let base = Url::parse(&mock_server.uri()).unwrap();
+    let port = base.port_or_known_default().unwrap();
+
+    Mock::given(method("GET"))
+        .and(path("/dns-query"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .append_header("Content-Type", "application/dns-message")
+                .set_body_bytes(create_test_dns_response(1234)),
+        )
+        .expect(0)
+        .mount(&mock_server)
+        .await;
+
+    // 3) 组装 UpstreamManager：bootstrap DNS 组 + hostname DoH 组
+    let groups = vec![
+        UpstreamGroupConfig {
+            name: "bootstrap_dns_group".to_string(),
+            protocol: UpstreamProtocol::Dns,
+            policy: LoadBalancingPolicy::RoundRobin,
+            max_concurrent: None,
+            endpoints: vec![UpstreamEndpointConfig::Dns(DnsUpstreamEndpointConfig {
+                addr: SocketAddr::from(dns_addr),
+                weight: 1,
+                transport: Some(DnsTransportMode::Udp),
+            })],
+            fallback: None,
+            failover: None,
+            health: None,
+            retry: None,
+            proxy: None,
+        },
+        UpstreamGroupConfig {
+            name: "doh_group".to_string(),
+            protocol: UpstreamProtocol::Doh,
+            policy: LoadBalancingPolicy::RoundRobin,
+            max_concurrent: None,
+            endpoints: vec![UpstreamEndpointConfig::Doh(DoHUpstreamEndpointConfig {
+                url: Url::parse(&format!("http://{}:{}/dns-query", bootstrap_hostname, port))
+                    .unwrap(),
+                weight: 1,
+                method: DoHMethod::Get,
+                content_type: DoHContentType::Message,
+                auth: None,
+            })],
+            fallback: None,
+            failover: None,
+            health: None,
+            retry: None,
+            proxy: None,
+        },
+    ];
+
+    let manager = UpstreamManager::new_with_bootstrap(
+        groups,
+        HttpConfig::default(),
+        DnsConfig::default(),
+        Some(BootstrapDnsConfig {
+            groups: vec!["bootstrap_dns_group".to_string()],
+            timeout: 2,
+            cache_ttl: 300,
+            prefer_ipv6: false,
+            use_system_resolver: false,
+        }),
+    )
+    .await
+    .unwrap();
+
+    let query = create_test_dns_query("example.com", RecordType::A);
+    let result = manager.forward(&query, "doh_group").await;
+    assert!(
+        result.is_err(),
+        "expected bootstrap resolver to fail when no IP records are returned"
+    );
+
+    let received = mock_server
+        .received_requests()
+        .await
+        .expect("wiremock request recording should be enabled by default");
+    assert_eq!(
+        received.len(),
+        0,
+        "expected no upstream HTTP calls when bootstrap resolution fails"
+    );
+}

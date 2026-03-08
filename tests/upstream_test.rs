@@ -3,8 +3,8 @@ use hickory_proto::rr::rdata::A;
 use hickory_proto::rr::{Name, RData, Record, RecordType};
 use loadants::config::{
     AuthConfig, AuthType, DnsConfig, DnsUpstreamEndpointConfig, DoHContentType, DoHMethod,
-    DoHUpstreamEndpointConfig, FailoverConfig, HttpConfig, LoadBalancingPolicy, RetryConfig,
-    UpstreamEndpointConfig, UpstreamGroupConfig, UpstreamProtocol,
+    DoHUpstreamEndpointConfig, FailoverConfig, FailoverRcode, HttpConfig, LoadBalancingPolicy,
+    RetryConfig, UpstreamEndpointConfig, UpstreamGroupConfig, UpstreamProtocol,
 };
 use loadants::error::AppError;
 use loadants::upstream::UpstreamManager;
@@ -15,7 +15,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::UdpSocket;
 use wiremock::{
-    matchers::{header, method, path},
+    matchers::{header, method, path, query_param},
     Mock, MockServer, ResponseTemplate,
 };
 
@@ -52,6 +52,26 @@ fn create_test_dns_response(id: u16) -> Vec<u8> {
     response.add_answer(record);
 
     // 将响应序列化为二进制
+    response.to_vec().unwrap()
+}
+
+fn create_test_dns_response_with_rcode(id: u16, rcode: ResponseCode) -> Vec<u8> {
+    let mut response = Message::new();
+    response.set_id(id);
+    response.set_recursion_desired(true);
+    response.set_recursion_available(true);
+    response.set_op_code(OpCode::Query);
+    response.set_response_code(rcode);
+
+    let name = Name::from_str("example.com.").unwrap();
+    let query = Query::query(name.clone(), RecordType::A);
+    response.add_query(query);
+
+    if rcode == ResponseCode::NoError {
+        let record = Record::from_rdata(name, 300, RData::A(A(Ipv4Addr::new(93, 184, 216, 34))));
+        response.add_answer(record);
+    }
+
     response.to_vec().unwrap()
 }
 
@@ -430,9 +450,12 @@ async fn test_upstream_doh_get_json() {
         proxy: None,
     }];
 
-    // 设置mock响应 - 匹配任何GET请求到/dns-query
+    // 设置mock响应：
+    // - 业务场景：DoH JSON 模式下，客户端应发起 GET /resolve?name=example.com.&type=1
     Mock::given(method("GET"))
         .and(path("/resolve"))
+        .and(query_param("name", "example.com."))
+        .and(query_param("type", "1"))
         .respond_with(
             ResponseTemplate::new(200)
                 .append_header("Content-Type", "application/dns-json")
@@ -440,9 +463,6 @@ async fn test_upstream_doh_get_json() {
         )
         .mount(&mock_server)
         .await;
-
-    println!("Mock server started at: {}", mock_server.uri());
-    println!("Mock response body: {}", create_test_json_response());
 
     // 创建上游管理器
     let manager = UpstreamManager::new(groups, http_config, DnsConfig::default())
@@ -452,18 +472,17 @@ async fn test_upstream_doh_get_json() {
     // 创建DNS查询
     let query = create_test_dns_query("example.com", RecordType::A);
 
-    println!("Sending query: {:?}", query);
-
     // 转发查询
-    let response = manager.forward(&query, "test_group").await;
+    let response = manager
+        .forward(&query, "test_group")
+        .await
+        .expect("expected DoH JSON GET to succeed");
 
-    // 验证响应
-    if let Err(ref e) = response {
-        println!("Error: {:?}", e);
-    } else if let Ok(ref dns_response) = response {
-        println!("Got response: {:?}", dns_response);
-        println!("Answer count: {}", dns_response.answers().len());
-    }
+    // 验证：请求 ID 被正确保留/覆写
+    assert_eq!(response.id(), query.id());
+    assert_eq!(response.response_code(), ResponseCode::NoError);
+    assert_eq!(response.answers().len(), 1);
+    assert!(matches!(response.answers()[0].data(), RData::A(_)));
 }
 
 #[tokio::test]
@@ -846,6 +865,24 @@ async fn test_retry_config() {
     // 创建HTTP客户端配置
     let http_config = HttpConfig::default();
 
+    // 让第一次请求返回 500，触发重试；第二次返回 200 并携带有效 DNS 消息
+    Mock::given(method("GET"))
+        .and(path("/dns-query"))
+        .respond_with(ResponseTemplate::new(500))
+        .up_to_n_times(1)
+        .mount(&mock_server)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/dns-query"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .append_header("Content-Type", "application/dns-message")
+                .set_body_bytes(create_test_dns_response(1234)),
+        )
+        .mount(&mock_server)
+        .await;
+
     // 创建上游组配置 - 带重试配置
     let groups = vec![UpstreamGroupConfig {
         name: "retry_group".to_string(),
@@ -863,7 +900,7 @@ async fn test_retry_config() {
         failover: None,
         health: None,
         retry: Some(RetryConfig {
-            attempts: 3,
+            attempts: 1,
             delay: 1,
         }),
         proxy: None,
@@ -874,14 +911,24 @@ async fn test_retry_config() {
         .await
         .unwrap();
 
-    // 验证成功创建
-    assert!(manager
-        .forward(
-            &create_test_dns_query("example.com", RecordType::A),
-            "retry_group"
-        )
+    let query = create_test_dns_query("example.com", RecordType::A);
+    let response = manager
+        .forward(&query, "retry_group")
         .await
-        .is_err()); // 这里仍然会失败，因为没有设置有效的mock响应
+        .expect("expected request to succeed after one retry");
+
+    assert_eq!(response.id(), query.id());
+    assert_eq!(response.response_code(), ResponseCode::NoError);
+
+    let received = mock_server
+        .received_requests()
+        .await
+        .expect("wiremock request recording should be enabled by default");
+    assert_eq!(
+        received.len(),
+        2,
+        "expected one initial attempt + one retry"
+    );
 }
 
 #[tokio::test]
@@ -1301,6 +1348,86 @@ async fn test_upstream_doh_failover_on_http_error_switches_endpoint() {
         fallback: None,
         failover: Some(FailoverConfig {
             on_rcode: vec![],
+            max_total_time_ms: Some(1000),
+            max_groups: 1,
+            max_endpoints_per_group: 2,
+        }),
+        health: None,
+        retry: None,
+        proxy: None,
+    }];
+
+    let manager = UpstreamManager::new(groups, http_config, DnsConfig::default())
+        .await
+        .unwrap();
+
+    let query = create_test_dns_query("example.com", RecordType::A);
+    let response = manager.forward(&query, "test_group").await.unwrap();
+    assert_eq!(response.id(), 1234);
+    assert_eq!(response.response_code(), ResponseCode::NoError);
+}
+
+#[tokio::test]
+async fn test_upstream_doh_failover_on_servfail_rcode_switches_endpoint() {
+    let mock_server = MockServer::start().await;
+
+    let http_config = HttpConfig {
+        connect_timeout: 1,
+        request_timeout: 2,
+        idle_timeout: None,
+        keepalive: None,
+        user_agent: None,
+    };
+
+    Mock::given(method("GET"))
+        .and(path("/dns-query-rcode-fail"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .append_header("Content-Type", "application/dns-message")
+                .set_body_bytes(create_test_dns_response_with_rcode(
+                    1234,
+                    ResponseCode::ServFail,
+                )),
+        )
+        .expect(1)
+        .mount(&mock_server)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/dns-query-ok"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .append_header("Content-Type", "application/dns-message")
+                .set_body_bytes(create_test_dns_response(1234)),
+        )
+        .expect(1)
+        .mount(&mock_server)
+        .await;
+
+    let groups = vec![UpstreamGroupConfig {
+        name: "test_group".to_string(),
+        protocol: UpstreamProtocol::Doh,
+        max_concurrent: None,
+        policy: LoadBalancingPolicy::RoundRobin,
+        endpoints: vec![
+            UpstreamEndpointConfig::Doh(DoHUpstreamEndpointConfig {
+                url: Url::parse(&format!("{}/dns-query-rcode-fail", mock_server.uri())).unwrap(),
+                weight: 1,
+                method: DoHMethod::Get,
+                content_type: DoHContentType::Message,
+                auth: None,
+            }),
+            UpstreamEndpointConfig::Doh(DoHUpstreamEndpointConfig {
+                url: Url::parse(&format!("{}/dns-query-ok", mock_server.uri())).unwrap(),
+                weight: 1,
+                method: DoHMethod::Get,
+                content_type: DoHContentType::Message,
+                auth: None,
+            }),
+        ],
+        fallback: None,
+        failover: Some(FailoverConfig {
+            on_rcode: vec![FailoverRcode::ServFail],
             max_total_time_ms: Some(1000),
             max_groups: 1,
             max_endpoints_per_group: 2,
