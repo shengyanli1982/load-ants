@@ -1,17 +1,24 @@
-pub mod admin;
-pub mod args;
-pub mod balancer;
-pub mod cache;
+pub mod cli;
+pub mod common;
+pub mod core;
+pub mod servers;
+
 pub mod config;
-pub mod r#const;
-pub mod doh;
-pub mod error;
-pub mod handler;
-pub mod metrics;
 pub mod remote_rule;
-pub mod router;
-pub mod server;
 pub mod upstream;
+
+// 兼容旧模块路径（tests/外部使用方可能依赖）
+pub use cli::args;
+pub use common::constants as r#const;
+pub use common::error;
+pub use common::metrics;
+pub use core::balancer;
+pub use core::cache;
+pub use core::handler;
+pub use core::router;
+pub use servers::admin;
+pub use servers::dns as server;
+pub use servers::doh;
 
 // 重导出常用组件
 pub use admin::AdminServer;
@@ -20,7 +27,7 @@ pub use balancer::{LoadBalancer, RandomBalancer, RoundRobinBalancer, WeightedBal
 pub use cache::DnsCache;
 pub use config::Config;
 pub use doh::DoHServer;
-pub use error::AppError;
+pub use error::{AppError, ConfigError};
 pub use handler::RequestHandler;
 pub use metrics::DnsMetrics;
 pub use remote_rule::{ClashRuleParser, RemoteRuleLoader, RuleParser, V2RayRuleParser};

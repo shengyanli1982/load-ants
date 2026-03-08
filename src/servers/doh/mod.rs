@@ -1,4 +1,4 @@
-// src/doh/mod.rs
+// src/servers/doh/mod.rs
 //
 // DoH (DNS over HTTPS) 服务器模块实现，支持:
 // - RFC 8484: 标准 DoH 协议，支持 GET 和 POST 方法

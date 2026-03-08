@@ -1,4 +1,4 @@
-// src/server/admin.rs
+// src/servers/admin.rs
 
 use crate::cache::DnsCache;
 use crate::error::AppError;

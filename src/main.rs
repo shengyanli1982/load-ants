@@ -1,7 +1,8 @@
 use loadants::{
     doh::server::DoHServer, metrics::METRICS, r#const::server_defaults, rule_source_labels,
     rule_type_labels, server::DnsServerConfig, subsystem_names, AdminServer, AppError, Args,
-    Config, DnsCache, DnsServer, MatchType, RequestHandler, Router, UpstreamManager,
+    Config, DnsCache, DnsConfig, DnsServer, HttpConfig, MatchType, RequestHandler, RouteRuleConfig,
+    Router, UpstreamManager,
 };
 use mimalloc::MiMalloc;
 use std::process;
@@ -133,10 +134,8 @@ struct AppComponents {
     admin_server: AdminServer,
 }
 
-// 创建应用组件
-async fn create_components(config: Config) -> Result<AppComponents, AppError> {
-    // 创建 DNS 缓存
-    let cache = if let Some(cache_config) = &config.cache {
+fn build_dns_cache(config: &Config) -> Arc<DnsCache> {
+    if let Some(cache_config) = &config.cache {
         let cache_size = if cache_config.enabled {
             cache_config.size
         } else {
@@ -157,12 +156,12 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
         }
         cache
     } else {
-        // 如果没有提供缓存配置，创建一个默认的禁用缓存
         info!("Cache configuration not provided, cache disabled");
         Arc::new(DnsCache::new(0, 0, Some(0)))
-    };
+    }
+}
 
-    // 创建管理服务器
+fn build_admin_server(config: &Config, cache: Arc<DnsCache>) -> Result<AdminServer, AppError> {
     let admin_listen_addr = match &config.admin {
         Some(admin_config) => admin_config.listen.parse()?,
         None => {
@@ -173,153 +172,162 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
             server_defaults::DEFAULT_ADMIN_LISTEN.parse()?
         }
     };
-    let admin_server = AdminServer::new(admin_listen_addr).with_cache(Arc::clone(&cache));
 
-    // 准备HTTP客户端配置
-    let http_client_config = config.http.clone().unwrap_or_default();
-    // 准备 DNS 客户端配置
-    let dns_client_config = config.dns.clone().unwrap_or_default();
+    Ok(AdminServer::new(admin_listen_addr).with_cache(cache))
+}
 
-    // 创建上游管理器 - 避免不必要的克隆
-    let upstream = match UpstreamManager::new_with_bootstrap(
+fn prepare_http_client_config(config: &Config) -> HttpConfig {
+    config.http.clone().unwrap_or_default()
+}
+
+fn prepare_dns_client_config(config: &Config) -> DnsConfig {
+    config.dns.clone().unwrap_or_default()
+}
+
+async fn build_upstream_manager(
+    config: &Config,
+    http_client_config: HttpConfig,
+    dns_client_config: DnsConfig,
+) -> Result<Arc<UpstreamManager>, AppError> {
+    match UpstreamManager::new_with_bootstrap(
         config.upstreams.clone().unwrap_or_default(),
-        http_client_config.clone(),
-        dns_client_config.clone(),
+        http_client_config,
+        dns_client_config,
         config.bootstrap_dns.clone(),
     )
     .await
     {
         Ok(manager) => {
             info!("Upstream manager initialized successfully");
-            Arc::new(manager)
+            Ok(Arc::new(manager))
         }
         Err(e) => {
             error!("Failed to initialize upstream manager: {}", e);
-            return Err(e);
+            Err(e)
         }
-    };
+    }
+}
 
-    // 获取静态规则（如果有）
-    let static_rules = config.rules.r#static.clone();
+async fn load_merged_rules(
+    config: &Config,
+    static_rules: &[RouteRuleConfig],
+    http_client_config: &HttpConfig,
+) -> Vec<RouteRuleConfig> {
+    if config.rules.remote.is_empty() {
+        return static_rules.to_vec();
+    }
 
-    // 加载远程规则并与静态规则合并
-    let rules = if !config.rules.remote.is_empty() {
-        info!(
-            "Loading {} remote rule sources...",
-            config.rules.remote.len()
-        );
-        match loadants::remote_rule::load_and_merge_rules(
-            &config.rules.remote,
-            &static_rules,
-            &http_client_config,
-        )
-        .await
-        {
-            Ok(merged_rules) => merged_rules,
-            Err(e) => {
-                error!(
-                    "Failed to load remote rules: {}, falling back to static rules only",
-                    e
-                );
-                static_rules.clone()
-            }
-        }
-    } else {
-        // 没有远程规则，直接使用静态规则
-        static_rules.clone()
-    };
-
-    // 创建路由引擎 - 使用合并后的规则
-    let router = match Router::new(rules.clone()) {
-        Ok(router) => {
-            // 设置路由规则数量指标 - 考虑每个规则中的多个模式
-            let mut exact_count_static = 0;
-            let mut wildcard_count_static = 0;
-            let mut regex_count_static = 0;
-            let mut exact_count_remote = 0;
-            let mut wildcard_count_remote = 0;
-            let mut regex_count_remote = 0;
-
-            // 静态规则数量
-            for rule in &static_rules {
-                match &rule.match_type {
-                    MatchType::Exact => exact_count_static += rule.patterns.len(),
-                    MatchType::Wildcard => wildcard_count_static += rule.patterns.len(),
-                    MatchType::Regex => regex_count_static += rule.patterns.len(),
-                }
-            }
-
-            // 远程规则数量
-            let static_rules_len = static_rules.len();
-            if static_rules_len < rules.len() {
-                // 计算远程规则中各类型的数量
-                for rule in rules.iter().skip(static_rules_len) {
-                    match &rule.match_type {
-                        MatchType::Exact => exact_count_remote += rule.patterns.len(),
-                        MatchType::Wildcard => wildcard_count_remote += rule.patterns.len(),
-                        MatchType::Regex => regex_count_remote += rule.patterns.len(),
-                    }
-                }
-            }
-
-            // 设置静态规则指标
-            METRICS
-                .route_rules_count()
-                .with_label_values(&[rule_type_labels::EXACT, rule_source_labels::STATIC])
-                .set(exact_count_static as i64);
-
-            METRICS
-                .route_rules_count()
-                .with_label_values(&[rule_type_labels::WILDCARD, rule_source_labels::STATIC])
-                .set(wildcard_count_static as i64);
-
-            METRICS
-                .route_rules_count()
-                .with_label_values(&[rule_type_labels::REGEX, rule_source_labels::STATIC])
-                .set(regex_count_static as i64);
-
-            // 设置远程规则指标
-            let remote_rules_count = rules.len() - static_rules_len;
-            if remote_rules_count > 0 {
-                METRICS
-                    .route_rules_count()
-                    .with_label_values(&[rule_type_labels::EXACT, rule_source_labels::REMOTE])
-                    .set(exact_count_remote as i64);
-
-                METRICS
-                    .route_rules_count()
-                    .with_label_values(&[rule_type_labels::WILDCARD, rule_source_labels::REMOTE])
-                    .set(wildcard_count_remote as i64);
-
-                METRICS
-                    .route_rules_count()
-                    .with_label_values(&[rule_type_labels::REGEX, rule_source_labels::REMOTE])
-                    .set(regex_count_remote as i64);
-            }
-
-            info!(
-                "Routing engine initialized successfully with {} rules ({} static, {} remote): {} exact, {} wildcard, {} regex",
-                rules.len(),
-                static_rules_len,
-                remote_rules_count,
-                exact_count_static + exact_count_remote,
-                wildcard_count_static + wildcard_count_remote,
-                regex_count_static + regex_count_remote
+    info!(
+        "Loading {} remote rule sources...",
+        config.rules.remote.len()
+    );
+    match loadants::remote_rule::load_and_merge_rules(
+        &config.rules.remote,
+        static_rules,
+        http_client_config,
+    )
+    .await
+    {
+        Ok(merged_rules) => merged_rules,
+        Err(e) => {
+            error!(
+                "Failed to load remote rules: {}, falling back to static rules only",
+                e
             );
+            static_rules.to_vec()
+        }
+    }
+}
 
-            Arc::new(router)
+fn record_route_rules_count_metrics(static_rules: &[RouteRuleConfig], rules: &[RouteRuleConfig]) {
+    let mut exact_count_static = 0;
+    let mut wildcard_count_static = 0;
+    let mut regex_count_static = 0;
+    let mut exact_count_remote = 0;
+    let mut wildcard_count_remote = 0;
+    let mut regex_count_remote = 0;
+
+    for rule in static_rules {
+        match &rule.match_type {
+            MatchType::Exact => exact_count_static += rule.patterns.len(),
+            MatchType::Wildcard => wildcard_count_static += rule.patterns.len(),
+            MatchType::Regex => regex_count_static += rule.patterns.len(),
+        }
+    }
+
+    let static_rules_len = static_rules.len();
+    if static_rules_len < rules.len() {
+        for rule in rules.iter().skip(static_rules_len) {
+            match &rule.match_type {
+                MatchType::Exact => exact_count_remote += rule.patterns.len(),
+                MatchType::Wildcard => wildcard_count_remote += rule.patterns.len(),
+                MatchType::Regex => regex_count_remote += rule.patterns.len(),
+            }
+        }
+    }
+
+    METRICS
+        .route_rules_count()
+        .with_label_values(&[rule_type_labels::EXACT, rule_source_labels::STATIC])
+        .set(exact_count_static as i64);
+
+    METRICS
+        .route_rules_count()
+        .with_label_values(&[rule_type_labels::WILDCARD, rule_source_labels::STATIC])
+        .set(wildcard_count_static as i64);
+
+    METRICS
+        .route_rules_count()
+        .with_label_values(&[rule_type_labels::REGEX, rule_source_labels::STATIC])
+        .set(regex_count_static as i64);
+
+    let remote_rules_count = rules.len().saturating_sub(static_rules_len);
+    if remote_rules_count > 0 {
+        METRICS
+            .route_rules_count()
+            .with_label_values(&[rule_type_labels::EXACT, rule_source_labels::REMOTE])
+            .set(exact_count_remote as i64);
+
+        METRICS
+            .route_rules_count()
+            .with_label_values(&[rule_type_labels::WILDCARD, rule_source_labels::REMOTE])
+            .set(wildcard_count_remote as i64);
+
+        METRICS
+            .route_rules_count()
+            .with_label_values(&[rule_type_labels::REGEX, rule_source_labels::REMOTE])
+            .set(regex_count_remote as i64);
+    }
+
+    info!(
+        "Routing engine initialized successfully with {} rules ({} static, {} remote): {} exact, {} wildcard, {} regex",
+        rules.len(),
+        static_rules_len,
+        remote_rules_count,
+        exact_count_static + exact_count_remote,
+        wildcard_count_static + wildcard_count_remote,
+        regex_count_static + regex_count_remote
+    );
+}
+
+fn build_router(
+    static_rules: &[RouteRuleConfig],
+    rules: Vec<RouteRuleConfig>,
+) -> Result<Arc<Router>, AppError> {
+    match Router::new(rules.clone()) {
+        Ok(router) => {
+            record_route_rules_count_metrics(static_rules, &rules);
+            Ok(Arc::new(router))
         }
         Err(e) => {
             error!("Failed to initialize routing engine: {}", e);
-            return Err(AppError::Config(e));
+            Err(AppError::Config(e))
         }
-    };
+    }
+}
 
-    // 创建请求处理器
-    let handler = Arc::new(RequestHandler::new(cache, router, upstream));
-
-    // 创建DNS服务器配置
-    let server_config = DnsServerConfig {
+fn build_dns_server_config(config: &Config) -> Result<DnsServerConfig, AppError> {
+    Ok(DnsServerConfig {
         udp_bind_addr: config.listeners.udp.parse()?,
         tcp_bind_addr: config.listeners.tcp.parse()?,
         tcp_timeout: config.listeners.tcp_idle_timeout,
@@ -331,30 +339,54 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
             .unwrap_or("127.0.0.1:0")
             .parse()?,
         http_timeout: config.listeners.http_idle_timeout,
-    };
+    })
+}
 
-    // 创建 DNS 服务器
-    let dns_server = DnsServer::new(server_config, handler.clone());
+fn build_dns_server(config: &Config, handler: Arc<RequestHandler>) -> Result<DnsServer, AppError> {
+    let server_config = build_dns_server_config(config)?;
+    Ok(DnsServer::new(server_config, handler))
+}
 
-    // 启动 DoH 服务器
-    let doh_server = if let Some(ref listen_doh) = config.listeners.doh {
+fn build_doh_server(
+    config: &Config,
+    handler: Arc<RequestHandler>,
+) -> Result<Option<DoHServer>, AppError> {
+    if let Some(ref listen_doh) = config.listeners.doh {
         info!(
             "DNS server initialized with UDP: {:?}, TCP: {:?}, HTTP: {:?}",
             config.listeners.udp, config.listeners.tcp, listen_doh
         );
-        // 创建 DoH 服务器
-        Some(DoHServer::new(
+        Ok(Some(DoHServer::new(
             listen_doh.parse()?,
             config.listeners.http_idle_timeout,
             handler,
-        ))
+        )))
     } else {
         info!(
             "DNS server initialized with UDP: {:?}, TCP: {:?}",
             config.listeners.udp, config.listeners.tcp
         );
-        None
-    };
+        Ok(None)
+    }
+}
+
+// 创建应用组件
+async fn create_components(config: Config) -> Result<AppComponents, AppError> {
+    let cache = build_dns_cache(&config);
+    let admin_server = build_admin_server(&config, Arc::clone(&cache))?;
+
+    let http_client_config = prepare_http_client_config(&config);
+    let dns_client_config = prepare_dns_client_config(&config);
+    let upstream =
+        build_upstream_manager(&config, http_client_config.clone(), dns_client_config).await?;
+
+    let static_rules = config.rules.r#static.clone();
+    let rules = load_merged_rules(&config, &static_rules, &http_client_config).await;
+    let router = build_router(&static_rules, rules)?;
+
+    let handler = Arc::new(RequestHandler::new(cache, router, upstream));
+    let dns_server = build_dns_server(&config, handler.clone())?;
+    let doh_server = build_doh_server(&config, handler)?;
 
     // 返回应用组件
     Ok(AppComponents {
