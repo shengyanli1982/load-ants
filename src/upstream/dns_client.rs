@@ -3,10 +3,11 @@ use crate::error::AppError;
 use dashmap::DashMap;
 use futures_util::StreamExt;
 use hickory_proto::op::Message;
-use hickory_proto::xfer::{DnsHandle, DnsRequest, DnsRequestOptions};
-use hickory_server::resolver::config::{NameServerConfig, Protocol, ResolverOpts};
+use hickory_proto::runtime::TokioRuntimeProvider;
+use hickory_proto::xfer::{DnsHandle, DnsRequest, DnsRequestOptions, Protocol};
+use hickory_server::resolver::config::{NameServerConfig, ResolverOpts};
 use hickory_server::resolver::name_server::{
-    ConnectionProvider, GenericConnection, GenericConnector, TokioRuntimeProvider,
+    ConnectionProvider, GenericConnection, GenericConnector,
 };
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -175,19 +176,23 @@ impl DnsClient {
         protocol: Protocol,
     ) -> Result<GenericConnection, AppError> {
         let name_server = NameServerConfig::new(addr, protocol);
-        let connect_future = self.connector.new_connection(&name_server, &self.opts);
+        let connect_future = self
+            .connector
+            .new_connection(&name_server, &self.opts)
+            .map_err(|e| AppError::Upstream(e.to_string()))?;
 
-        let conn_result = if protocol == Protocol::Tcp {
-            let connect_timeout = TokioDuration::from_secs(self.config.connect_timeout);
-            match time::timeout(connect_timeout, connect_future).await {
-                Ok(conn) => conn,
-                Err(_) => return Err(AppError::Timeout),
-            }
-        } else {
-            connect_future.await
-        };
+        let conn_result: Result<GenericConnection, hickory_proto::ProtoError> =
+            if protocol == Protocol::Tcp {
+                let connect_timeout = TokioDuration::from_secs(self.config.connect_timeout);
+                match time::timeout(connect_timeout, connect_future).await {
+                    Ok(conn) => conn,
+                    Err(_) => return Err(AppError::Timeout),
+                }
+            } else {
+                connect_future.await
+            };
 
-        conn_result.map_err(|e| AppError::Upstream(e.to_string()))
+        conn_result.map_err(AppError::DnsProto)
     }
 
     async fn send_udp(&self, addr: SocketAddr, message: &Message) -> Result<Message, AppError> {

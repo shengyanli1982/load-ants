@@ -1,7 +1,7 @@
 use crate::config::{HealthConfig, UpstreamEndpointConfig};
 use crate::error::AppError;
 use async_trait::async_trait;
-use rand::{seq::SliceRandom, thread_rng};
+use rand::seq::IndexedRandom;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 use tokio::time::{Duration, Instant};
@@ -293,6 +293,8 @@ impl LoadBalancer for RandomBalancer {
             return Err(AppError::NoUpstreamAvailable);
         }
 
+        let mut rng = rand::rng();
+
         if let Some(health) = &self.health {
             let now = Instant::now();
             let available_indices: Vec<usize> = (0..self.servers.len())
@@ -300,7 +302,7 @@ impl LoadBalancer for RandomBalancer {
                 .collect();
 
             let index = available_indices
-                .choose(&mut thread_rng())
+                .choose(&mut rng)
                 .copied()
                 .ok_or(AppError::NoUpstreamAvailable)?;
             return Ok(&self.servers[index]);
@@ -308,7 +310,7 @@ impl LoadBalancer for RandomBalancer {
 
         let server = self
             .servers
-            .choose(&mut thread_rng())
+            .choose(&mut rng)
             .ok_or(AppError::NoUpstreamAvailable)?;
         Ok(server)
     }

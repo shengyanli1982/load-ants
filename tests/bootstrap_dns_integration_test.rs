@@ -41,8 +41,7 @@ fn create_test_dns_response(id: u16) -> Vec<u8> {
     let query = Query::query(name.clone(), RecordType::A);
     response.add_query(query);
 
-    let mut record = Record::with(name, RecordType::A, 300);
-    record.set_data(Some(RData::A(A(Ipv4Addr::new(93, 184, 216, 34)))));
+    let record = Record::from_rdata(name, 300, RData::A(A(Ipv4Addr::new(93, 184, 216, 34))));
     response.add_answer(record);
 
     response.to_vec().unwrap()
@@ -98,8 +97,11 @@ async fn test_bootstrap_dns_resolves_doh_hostname_without_system_resolver() {
             if let Some(q) = query.queries().first() {
                 response.add_query(q.clone());
                 if q.name().to_utf8() == qname && q.query_type() == RecordType::A {
-                    let mut record = Record::with(q.name().clone(), RecordType::A, 60);
-                    record.set_data(Some(RData::A(A(Ipv4Addr::new(127, 0, 0, 1)))));
+                    let record = Record::from_rdata(
+                        q.name().clone(),
+                        60,
+                        RData::A(A(Ipv4Addr::new(127, 0, 0, 1))),
+                    );
                     response.add_answer(record);
                 }
             }

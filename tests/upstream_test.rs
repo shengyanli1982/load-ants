@@ -48,8 +48,7 @@ fn create_test_dns_response(id: u16) -> Vec<u8> {
     response.add_query(query);
 
     // 添加一个回答记录
-    let mut record = Record::with(name, RecordType::A, 300);
-    record.set_data(Some(RData::A(A(Ipv4Addr::new(93, 184, 216, 34)))));
+    let record = Record::from_rdata(name, 300, RData::A(A(Ipv4Addr::new(93, 184, 216, 34))));
     response.add_answer(record);
 
     // 将响应序列化为二进制

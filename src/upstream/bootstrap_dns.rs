@@ -343,10 +343,10 @@ fn extract_ips(message: &Message, record_type: RecordType) -> (Vec<IpAddr>, Opti
         let ttl = record.ttl();
         min_ttl = Some(min_ttl.map(|t| t.min(ttl)).unwrap_or(ttl));
 
-        if let Some(RData::A(A(ip))) = record.data() {
+        if let RData::A(A(ip)) = record.data() {
             ips.push(IpAddr::V4(*ip));
         }
-        if let Some(RData::AAAA(AAAA(ip))) = record.data() {
+        if let RData::AAAA(AAAA(ip)) = record.data() {
             ips.push(IpAddr::V6(*ip));
         }
     }

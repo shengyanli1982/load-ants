@@ -7,7 +7,7 @@ use hickory_proto::{
 };
 use moka::future::Cache;
 use moka::policy::Expiry;
-use rand::{seq::SliceRandom, thread_rng};
+use rand::seq::SliceRandom;
 use std::{
     sync::Arc,
     time::{Duration, Instant},
@@ -197,7 +197,8 @@ impl DnsCache {
         }
 
         // 只对目标类型的记录进行随机排序
-        answers[0..target_end].shuffle(&mut thread_rng());
+        let mut rng = rand::rng();
+        answers[0..target_end].shuffle(&mut rng);
     }
 
     // 向缓存添加响应

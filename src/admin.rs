@@ -80,28 +80,27 @@ impl AdminServer {
     }
 }
 
-#[async_trait::async_trait]
 impl IntoSubsystem<AppError> for AdminServer {
-    async fn run(mut self, subsys: SubsystemHandle) -> Result<(), AppError> {
-        let result = tokio::try_join! {
-            async {
-                let result = self.start().await;
-                subsys.request_local_shutdown();
-                result
-            },
-            async {
-                subsys.on_shutdown_requested().await;
-                self.shutdown();
-                Ok(())
+    fn run(
+        self,
+        subsys: &mut SubsystemHandle,
+    ) -> impl std::future::Future<Output = Result<(), AppError>> + Send {
+        async move {
+            tokio::select! {
+                result = self.start() => {
+                    if let Err(err) = &result {
+                        error!("Admin server error: {}", err);
+                    } else {
+                        info!("Admin server stopped");
+                    }
+                    subsys.request_local_shutdown();
+                    result
+                }
+                _ = subsys.on_shutdown_requested() => {
+                    self.shutdown();
+                    Ok(())
+                }
             }
-        };
-
-        if let Err(err) = result {
-            error!("Admin server error: {}", err);
-            Err(err)
-        } else {
-            info!("Admin server stopped");
-            Ok(())
         }
     }
 }

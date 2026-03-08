@@ -24,15 +24,15 @@ name = "loadants"
 path = "src/main.rs"
 
 [dependencies]
-hickory-server = { version = "0.24", features = ["hickory-resolver"] }
-hickory-proto = "0.24"
-reqwest = { version = "0.12", default-features = false, features = [
+hickory-server = { version = "0.25", features = ["resolver"] }
+hickory-proto = "0.25"
+reqwest = { version = "0.13", default-features = false, features = [
     "json",
     "native-tls",
 ] } # 用于 DoH 请求
-reqwest-middleware = "0.4"
-reqwest-retry = "0.7"
-retry-policies = "0.4"
+reqwest-middleware = "0.5"
+reqwest-retry = "0.9"
+retry-policies = "0.5"
 reqwest-lb = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.9"
@@ -41,28 +41,28 @@ bytes = "1.10"
 clap = { version = "4.5", features = ["derive"] }
 moka = { version = "0.12", features = ["future"] }
 tokio = { version = "1.44", features = ["full"] }
-tokio-graceful-shutdown = "0.15"
+tokio-graceful-shutdown = "0.19"
 tokio-util = { version = "0.7", features = ["io"] }
 native-tls = "0.2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-thiserror = "1.0"
+thiserror = "2.0"
 anyhow = "1.0"
 mimalloc = { version = "0.1", default-features = false }
 regex = { version = "1.10", features = ["unicode"] }
 async-trait = "0.1"
-base64 = "0.21"
+base64 = "0.22"
 chrono = "0.4"
-rand = "0.8"
+rand = "0.10"
 once_cell = "1.19"
-dashmap = "5.5"
+dashmap = "6.1"
 futures-util = "0.3"
 axum = "0.8"
 hyper = "1.0"
-prometheus = "0.13"
+prometheus = "0.14"
 url = "2.4"
 lazy_static = "1.5"
-validator = { version = "0.19", features = ["derive"] }
+validator = { version = "0.20", features = ["derive"] }
 
 # 这个一定要放在最后，否则会报错
 [target.'cfg(unix)'.dependencies]

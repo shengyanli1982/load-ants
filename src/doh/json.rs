@@ -133,12 +133,7 @@ impl Serialize for SerializableQueries<'_> {
 
 /// 高效地将 `RData` 转换为字符串，尽可能减少内存分配。
 #[inline(always)]
-fn rdata_to_string(rdata: Option<&RData>) -> String {
-    let rdata = match rdata {
-        Some(r) => r,
-        None => return String::new(),
-    };
-
+fn rdata_to_string(rdata: &RData) -> String {
     match rdata {
         RData::A(addr) => addr.to_string(),
         RData::AAAA(addr) => addr.to_string(),

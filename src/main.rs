@@ -6,7 +6,7 @@ use loadants::{
 use mimalloc::MiMalloc;
 use std::process;
 use std::sync::Arc;
-use tokio_graceful_shutdown::{IntoSubsystem, SubsystemBuilder, Toplevel};
+use tokio_graceful_shutdown::{IntoSubsystem, SubsystemBuilder, SubsystemHandle, Toplevel};
 use tracing::{error, info, warn};
 
 // 使用 mimalloc 分配器提高内存效率
@@ -77,24 +77,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // 创建优雅关闭顶层管理器
-    let toplevel = Toplevel::new(|s| async move {
+    let AppComponents {
+        doh_server,
+        dns_server,
+        admin_server,
+    } = components;
+
+    let toplevel = Toplevel::new(async move |s: &mut SubsystemHandle| {
         // 启动DNS服务器子系统
-        let dns_server = components.dns_server;
         s.start(SubsystemBuilder::new(
             subsystem_names::DNS_SERVER,
             dns_server.into_subsystem(),
         ));
+
         // 启动管理服务器子系统
-        let admin_server = components.admin_server;
         s.start(SubsystemBuilder::new(
             subsystem_names::ADMIN_SERVER,
             admin_server.into_subsystem(),
         ));
+
         // 启动DoH服务器子系统
-        if let Some(doh_server) = components.doh_server {
+        if let Some(doh_server) = doh_server {
             s.start(SubsystemBuilder::new(
                 subsystem_names::DOH_SERVER,
-                move |s| async move { doh_server.run(s).await },
+                async move |s: &mut SubsystemHandle| doh_server.run(s).await,
             ));
         }
     });

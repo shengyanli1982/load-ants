@@ -58,7 +58,7 @@ impl DoHServer {
     }
 
     /// 启动 DoH 服务器
-    pub async fn run(self, subsys: SubsystemHandle) -> Result<(), AppError> {
+    pub async fn run(self, subsys: &SubsystemHandle) -> Result<(), AppError> {
         // 创建路由
         let app = self.create_router();
 

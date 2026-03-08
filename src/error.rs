@@ -1,4 +1,4 @@
-use hickory_proto::error::ProtoError;
+use hickory_proto::ProtoError;
 use std::io;
 use std::net::AddrParseError;
 use thiserror::Error;
