@@ -141,10 +141,10 @@ impl BootstrapDnsResolver {
             .with_label_values(&[BOOTSTRAP_METRIC_ERROR])
             .inc();
 
-        Err(Box::new(io::Error::new(
-            io::ErrorKind::Other,
-            format!("Bootstrap DNS resolution failed for host {}", host),
-        )))
+        Err(Box::new(io::Error::other(format!(
+            "Bootstrap DNS resolution failed for host {}",
+            host
+        ))))
     }
 
     fn maybe_cache(&self, host: &str, addrs: Vec<IpAddr>, ttl: Option<u32>) {
@@ -326,7 +326,7 @@ fn build_dns_query(host: &str, record_type: RecordType) -> Result<Message, AppEr
     } else {
         format!("{}.", host)
     };
-    let name = Name::from_str(&qname).map_err(|e| AppError::DnsProto(e.into()))?;
+    let name = Name::from_str(&qname).map_err(AppError::DnsProto)?;
     let query = Query::query(name, record_type);
     message.add_query(query);
     Ok(message)

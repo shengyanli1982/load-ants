@@ -354,71 +354,66 @@ impl DnsServer {
 }
 
 impl IntoSubsystem<AppError> for DnsServer {
-    fn run(
-        self,
-        subsys: &mut SubsystemHandle,
-    ) -> impl std::future::Future<Output = Result<(), AppError>> + Send {
-        async move {
-            // 创建处理器适配器
-            let adapter = HandlerAdapter::new(self.handler.clone());
+    async fn run(self, subsys: &mut SubsystemHandle) -> Result<(), AppError> {
+        // 创建处理器适配器
+        let adapter = HandlerAdapter::new(self.handler.clone());
 
-            // 创建服务器实例
-            let mut server = hickory_server::ServerFuture::new(adapter);
+        // 创建服务器实例
+        let mut server = hickory_server::ServerFuture::new(adapter);
 
-            // 绑定 UDP 端口
-            let udp_socket = match UdpSocket::bind(self.config.udp_bind_addr).await {
-                Ok(socket) => {
-                    info!("DNS server UDP listening on {}", self.config.udp_bind_addr);
-                    socket
+        // 绑定 UDP 端口
+        let udp_socket = match UdpSocket::bind(self.config.udp_bind_addr).await {
+            Ok(socket) => {
+                info!("DNS server UDP listening on {}", self.config.udp_bind_addr);
+                socket
+            }
+            Err(e) => {
+                error!("Failed to bind UDP socket: {}", e);
+                return Err(AppError::Io(e));
+            }
+        };
+        server.register_socket(udp_socket);
+
+        // 绑定 TCP 端口
+        let tcp_listener = match TcpListener::bind(self.config.tcp_bind_addr).await {
+            Ok(listener) => {
+                info!("DNS server TCP listening on {}", self.config.tcp_bind_addr);
+                listener
+            }
+            Err(e) => {
+                error!("Failed to bind TCP listener: {}", e);
+                return Err(AppError::Io(e));
+            }
+        };
+
+        // 设置TCP超时
+        let tcp_timeout = std::time::Duration::from_secs(self.config.tcp_timeout);
+        server.register_listener(tcp_listener, tcp_timeout);
+
+        // 使用tokio::select!监听服务器和关闭信号
+        tokio::select! {
+            result = server.block_until_done() => {
+                if let Err(e) = result {
+                    error!("DNS server error: {}", e);
+                } else {
+                    info!("DNS server completed normally");
                 }
-                Err(e) => {
-                    error!("Failed to bind UDP socket: {}", e);
-                    return Err(AppError::Io(e));
-                }
-            };
-            server.register_socket(udp_socket);
+                Ok(())
+            }
+            _ = subsys.on_shutdown_requested() => {
+                info!("Shutdown requested, stopping DNS server");
 
-            // 绑定 TCP 端口
-            let tcp_listener = match TcpListener::bind(self.config.tcp_bind_addr).await {
-                Ok(listener) => {
-                    info!("DNS server TCP listening on {}", self.config.tcp_bind_addr);
-                    listener
+                // 使用timeout包装graceful shutdown
+                match tokio::time::timeout(
+                    std::time::Duration::from_secs(15),
+                    server.shutdown_gracefully()
+                ).await {
+                    Ok(Ok(_)) => info!("DNS server shutdown completed successfully"),
+                    Ok(Err(e)) => warn!("DNS server shutdown error: {}", e),
+                    Err(_) => warn!("DNS server shutdown timed out")
                 }
-                Err(e) => {
-                    error!("Failed to bind TCP listener: {}", e);
-                    return Err(AppError::Io(e));
-                }
-            };
 
-            // 设置TCP超时
-            let tcp_timeout = std::time::Duration::from_secs(self.config.tcp_timeout);
-            server.register_listener(tcp_listener, tcp_timeout);
-
-            // 使用tokio::select!监听服务器和关闭信号
-            tokio::select! {
-                result = server.block_until_done() => {
-                    if let Err(e) = result {
-                        error!("DNS server error: {}", e);
-                    } else {
-                        info!("DNS server completed normally");
-                    }
-                    Ok(())
-                }
-                _ = subsys.on_shutdown_requested() => {
-                    info!("Shutdown requested, stopping DNS server");
-
-                    // 使用timeout包装graceful shutdown
-                    match tokio::time::timeout(
-                        std::time::Duration::from_secs(15),
-                        server.shutdown_gracefully()
-                    ).await {
-                        Ok(Ok(_)) => info!("DNS server shutdown completed successfully"),
-                        Ok(Err(e)) => warn!("DNS server shutdown error: {}", e),
-                        Err(_) => warn!("DNS server shutdown timed out")
-                    }
-
-                    Ok(())
-                }
+                Ok(())
             }
         }
     }

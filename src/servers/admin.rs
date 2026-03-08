@@ -53,7 +53,7 @@ impl AdminServer {
         // 组合健康检查和指标路由
         let app = Router::new()
             .route("/health", get(health_handler))
-            .route("/api/cache/refresh", post(refresh_cache_handler))
+            .route("/api/v1/cache/refresh", post(refresh_cache_handler))
             .with_state(self.cache.clone())
             .merge(metrics::metrics_routes());
 
@@ -81,25 +81,20 @@ impl AdminServer {
 }
 
 impl IntoSubsystem<AppError> for AdminServer {
-    fn run(
-        self,
-        subsys: &mut SubsystemHandle,
-    ) -> impl std::future::Future<Output = Result<(), AppError>> + Send {
-        async move {
-            tokio::select! {
-                result = self.start() => {
-                    if let Err(err) = &result {
-                        error!("Admin server error: {}", err);
-                    } else {
-                        info!("Admin server stopped");
-                    }
-                    subsys.request_local_shutdown();
-                    result
+    async fn run(self, subsys: &mut SubsystemHandle) -> Result<(), AppError> {
+        tokio::select! {
+            result = self.start() => {
+                if let Err(err) = &result {
+                    error!("Admin server error: {}", err);
+                } else {
+                    info!("Admin server stopped");
                 }
-                _ = subsys.on_shutdown_requested() => {
-                    self.shutdown();
-                    Ok(())
-                }
+                subsys.request_local_shutdown();
+                result
+            }
+            _ = subsys.on_shutdown_requested() => {
+                self.shutdown();
+                Ok(())
             }
         }
     }

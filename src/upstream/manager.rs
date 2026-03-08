@@ -765,10 +765,12 @@ impl UpstreamManager {
             return false;
         };
 
-        cfg.on_rcode.iter().any(|r| match (r, rcode) {
-            (FailoverRcode::ServFail, ResponseCode::ServFail) => true,
-            (FailoverRcode::Refused, ResponseCode::Refused) => true,
-            _ => false,
+        cfg.on_rcode.iter().any(|r| {
+            matches!(
+                (r, rcode),
+                (FailoverRcode::ServFail, ResponseCode::ServFail)
+                    | (FailoverRcode::Refused, ResponseCode::Refused)
+            )
         })
     }
 }
