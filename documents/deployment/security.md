@@ -93,7 +93,7 @@ upstreams:
 
 ### 3. 保护 Admin API
 
-Load Ants 的 `admin` 服务提供了运维端点（例如 `/health`、`/metrics`，以及用于清空缓存的 `POST /api/cache/refresh`）。将它暴露在公网上是极其危险的。
+Load Ants 的 `admin` 服务提供了运维端点（例如 `/health`、`/metrics`，以及用于清空缓存的 `POST /api/v1/cache/refresh`）。将它暴露在公网上是极其危险的。
 
 **建议**:
 
