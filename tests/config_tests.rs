@@ -1,4 +1,5 @@
 use loadants::config::{Config, UpstreamServerConfig};
+use loadants::error::ConfigError;
 use std::io::Write;
 use std::path::PathBuf;
 use tempfile::NamedTempFile;
@@ -527,4 +528,174 @@ remote_rules:
     let result = Config::from_file(file.path());
 
     assert!(result.is_err());
+}
+
+#[test]
+fn test_remote_rule_failure_policy_validation() {
+    let strict_config = r#"
+server:
+  listen_udp: "127.0.0.1:53"
+  listen_tcp: "127.0.0.1:53"
+admin:
+  listen: "127.0.0.1:8080"
+upstream_groups:
+  - name: "default"
+    strategy: "roundrobin"
+    servers:
+      - url: "https://dns.google/dns-query"
+static_rules:
+  - match: "wildcard"
+    patterns: ["*"]
+    action: "forward"
+    target: "default"
+remote_rules:
+  - type: "url"
+    url: "https://example.com/strict.txt"
+    format: "v2ray"
+    failure_policy: "strict"
+    action: "block"
+"#;
+
+    let file = create_temp_config_file(strict_config);
+    let config = Config::from_file(file.path()).expect("strict policy should parse");
+    assert_eq!(config.remote_rules[0].failure_policy.to_string(), "strict");
+
+    let lenient_config = strict_config.replace("strict", "lenient");
+    let file = create_temp_config_file(&lenient_config);
+    let config = Config::from_file(file.path()).expect("lenient policy should parse");
+    assert_eq!(config.remote_rules[0].failure_policy.to_string(), "lenient");
+
+    let invalid_policy_config = strict_config.replace("strict", "best-effort");
+    let file = create_temp_config_file(&invalid_policy_config);
+    let result = Config::from_file(file.path());
+    assert!(result.is_err(), "unknown failure_policy should be rejected");
+}
+
+#[test]
+fn test_remote_rule_failure_policy_defaults_to_strict() {
+    let config_content = r#"
+server:
+  listen_udp: "127.0.0.1:53"
+  listen_tcp: "127.0.0.1:53"
+admin:
+  listen: "127.0.0.1:8080"
+upstream_groups:
+  - name: "default"
+    strategy: "roundrobin"
+    servers:
+      - url: "https://dns.google/dns-query"
+static_rules:
+  - match: "wildcard"
+    patterns: ["*"]
+    action: "forward"
+    target: "default"
+remote_rules:
+  - type: "url"
+    url: "https://example.com/rules.txt"
+    format: "v2ray"
+    action: "block"
+"#;
+
+    let file = create_temp_config_file(config_content);
+    let config = Config::from_file(file.path()).expect("missing failure_policy should use default");
+    assert_eq!(config.remote_rules[0].failure_policy.to_string(), "strict");
+}
+
+#[test]
+fn test_remote_rule_snapshot_defaults_are_applied() {
+    let config_content = r#"
+server:
+  listen_udp: "127.0.0.1:53"
+  listen_tcp: "127.0.0.1:53"
+admin:
+  listen: "127.0.0.1:8080"
+upstream_groups:
+  - name: "default"
+    strategy: "roundrobin"
+    servers:
+      - url: "https://dns.google/dns-query"
+static_rules:
+  - match: "wildcard"
+    patterns: ["*"]
+    action: "forward"
+    target: "default"
+"#;
+
+    let file = create_temp_config_file(config_content);
+    let config = Config::from_file(file.path()).expect("config should parse");
+
+    assert!(config.remote_rule_snapshot.enabled);
+    assert_eq!(
+        config.remote_rule_snapshot.path,
+        ".load-ants/remote-rule-snapshots"
+    );
+}
+
+#[test]
+fn test_remote_rule_snapshot_custom_config_parses() {
+    let config_content = r#"
+server:
+  listen_udp: "127.0.0.1:53"
+  listen_tcp: "127.0.0.1:53"
+admin:
+  listen: "127.0.0.1:8080"
+upstream_groups:
+  - name: "default"
+    strategy: "roundrobin"
+    servers:
+      - url: "https://dns.google/dns-query"
+static_rules:
+  - match: "wildcard"
+    patterns: ["*"]
+    action: "forward"
+    target: "default"
+remote_rule_snapshot:
+  enabled: false
+  path: "./custom-snapshots"
+"#;
+
+    let file = create_temp_config_file(config_content);
+    let config = Config::from_file(file.path()).expect("config should parse");
+
+    assert!(!config.remote_rule_snapshot.enabled);
+    assert_eq!(config.remote_rule_snapshot.path, "./custom-snapshots");
+}
+
+#[test]
+fn test_runtime_requirements_reject_duplicate_static_rule_patterns() {
+    let config_content = r#"
+server:
+  listen_udp: "127.0.0.1:53"
+  listen_tcp: "127.0.0.1:53"
+admin:
+  listen: "127.0.0.1:8080"
+upstream_groups:
+  - name: "default"
+    strategy: "roundrobin"
+    servers:
+      - url: "https://dns.google/dns-query"
+static_rules:
+  - match: "wildcard"
+    patterns: ["*"]
+    action: "forward"
+    target: "default"
+  - match: "wildcard"
+    patterns: ["*"]
+    action: "forward"
+    target: "default"
+"#;
+
+    let file = create_temp_config_file(config_content);
+    let config = Config::from_file(file.path()).expect("config should parse");
+    let error = config
+        .validate_runtime_requirements()
+        .expect_err("duplicate global wildcard should fail at runtime validation");
+
+    match error {
+        ConfigError::RuleConflict(message) => {
+            assert!(message.contains("global wildcard"));
+            assert!(message.contains("*"));
+        }
+        other => panic!("expected RuleConflict, got {other:?}"),
+    }
 }

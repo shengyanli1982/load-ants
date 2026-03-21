@@ -1,4 +1,4 @@
-// src/doh/handlers.rs
+// DoH 请求处理函数与响应转换逻辑。
 
 use crate::doh::json::SerializableDnsMessage;
 use crate::doh::state::AppState;
@@ -27,9 +27,9 @@ type DohHandlerError = (StatusCode, &'static str, DohQueryType);
 type DohBinaryHandlerResult = Result<(HeaderMap, Vec<u8>), DohHandlerError>;
 type DohResponseHandlerResult = Result<Response, DohHandlerError>;
 
-/// 根据记录类型高效地返回一个 Cow<'static, str>
-/// 对于常见类型，它借用一个静态字符串，避免了分配。
-/// 对于不常见的类型，它会分配一个新的字符串。
+/// 根据记录类型高效返回 `Cow<'static, str>`。
+/// 常见类型直接借用静态字符串，避免额外分配；
+/// 不常见类型则按需分配新的字符串。
 #[inline(always)]
 fn record_type_to_cow_str(record_type: RecordType) -> Cow<'static, str> {
     Cow::Borrowed(normalize_query_type_label(record_type))
@@ -47,11 +47,11 @@ pub struct DohJsonGetParams {
     pub name: String,
     #[serde(rename = "type")]
     pub r#type: Option<String>,
-    /// CD (Checking Disabled) 标志，用于控制是否禁用 DNSSEC 验证
+    /// CD 标志（Checking Disabled），用于控制是否禁用 DNSSEC 验证。
     /// 使用 cd=1 或 cd=true 禁用 DNSSEC 验证；使用 cd=0，cd=false 或不提供 cd 参数启用验证
     #[serde(default)]
     pub cd: Option<String>,
-    /// DO (DNSSEC OK) 标志，用于控制是否包含 DNSSEC 记录
+    /// DO 标志（DNSSEC OK），用于控制是否包含 DNSSEC 记录。
     /// 使用 do=1 或 do=true 包含 DNSSEC 记录；使用 do=0，do=false 或不提供 do 参数忽略 DNSSEC 记录
     #[serde(rename = "do", default)]
     pub do_flag: Option<String>,
@@ -93,7 +93,7 @@ pub async fn handle_doh_get(
         // 提取 DNS 查询参数
         let dns_param = &params.dns;
 
-        // 解码 base64url DNS 消息
+        // 解码 base64url 编码的 DNS 消息。
         let dns_bytes = URL_SAFE_NO_PAD.decode(dns_param).map_err(|_| {
             (
                 StatusCode::BAD_REQUEST,
@@ -132,7 +132,7 @@ pub async fn handle_doh_get(
             )
         })?;
 
-        // 构建 HTTP 响应
+        // 构建 HTTP 响应。
         let mut headers = HeaderMap::new();
         headers.insert(
             header::CONTENT_TYPE,
@@ -221,7 +221,7 @@ pub async fn handle_doh_post(
             )
         })?;
 
-        // 构建 HTTP 响应
+        // 构建 HTTP 响应。
         let mut headers = HeaderMap::new();
         headers.insert(
             header::CONTENT_TYPE,
@@ -280,7 +280,7 @@ pub async fn handle_json_get(
             ));
         }
 
-        // 提取查询类型 (默认为 "1" = A 记录)
+        // 提取查询类型，默认值 `"1"` 表示 A 记录。
         let type_str = params.r#type.as_deref().unwrap_or("1");
 
         // 尝试从字符串（如 "A", "AAAA"）或数字解析 RecordType
@@ -296,14 +296,14 @@ pub async fn handle_json_get(
 
         let query_type = record_type_to_cow_str(record_type);
 
-        // 处理 CD 标志 (Checking Disabled)
+        // 处理 CD 标志。
         let checking_disabled = match params.cd.as_deref() {
             Some("1") | Some("true") => true,
             Some("0") | Some("false") | None => false,
             _ => false, // 无效值默认为 false
         };
 
-        // 处理 DO 标志 (DNSSEC OK)
+        // 处理 DO 标志。
         let _dnssec_ok = match params.do_flag.as_deref() {
             Some("1") | Some("true") => true,
             Some("0") | Some("false") | None => false,
@@ -335,7 +335,7 @@ pub async fn handle_json_get(
         // 构建 HTTP 响应
         let mut headers = HeaderMap::new();
 
-        // 处理内容类型 (Content Type)
+        // 根据内容类型决定返回二进制 DNS 消息还是 JSON 文本。
         let response = match params.ct.as_deref() {
             Some("application/dns-message") => {
                 // 返回二进制 DNS 消息

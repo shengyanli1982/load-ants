@@ -21,7 +21,7 @@ Load Ants 的设计哲学是**高性能、模块化和高可扩展性**。它作
     - **如果缓存未命中** (`cache miss`)，请求将被交给路由引擎。
     - 路由引擎是 Load Ants 的决策中心。它会根据 `config.yaml` 中定义的 `static_rules` 或者 `remote_rules` 规则，对查询的域名进行匹配。
     - 匹配支持多种方式：精确域名、通配符 (`*.example.com`) 和正则表达式。
-    - 根据匹配到的第一条规则，路由引擎决定下一步的操作，通常是 `forward` (转发) 或 `block` (拦截)。
+    - 路由引擎按固定契约求值：先判断所有 `block` 规则，再判断 `forward` 规则；在同一动作内，优先级为 `exact` > `wildcard` > `regex` > `*`。命中后，决定下一步的操作，通常是 `forward` (转发) 或 `block` (拦截)。
 
 4.  **上游管理 (Upstream Groups)**:
     - 如果路由决策是 `forward`，请求将被发送到规则指定的**上游组**。

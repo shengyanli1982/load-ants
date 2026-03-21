@@ -1,4 +1,4 @@
-// src/doh/state.rs
+// Axum 路由共享状态定义。
 
 use crate::handler::RequestHandler;
 use std::sync::Arc;

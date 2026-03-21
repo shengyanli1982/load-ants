@@ -9,10 +9,11 @@ use retry_policies::Jitter;
 use std::time::Duration;
 use tracing::debug;
 
+/// 统一封装上游 HTTP 客户端构建与请求发送逻辑。
 pub struct HttpClient;
 
 impl HttpClient {
-    // 创建HTTP客户端
+    // 创建上游 HTTP 客户端。
     pub fn create(
         config: &HttpClientConfig,
         proxy: Option<&str>,
@@ -89,7 +90,7 @@ impl HttpClient {
         Ok(middleware_client)
     }
 
-    // 处理认证头添加
+    // 为请求补充认证头。
     pub fn add_auth_to_request(
         request: RequestBuilder,
         auth: &Option<AuthConfig>,
@@ -123,7 +124,7 @@ impl HttpClient {
         Ok(req)
     }
 
-    // 发送middleware请求并读取响应体
+    // 发送带中间件的请求并读取响应体。
     pub async fn send_request(request: RequestBuilder) -> Result<bytes::Bytes, AppError> {
         // 发送请求
         let response = request.send().await?;

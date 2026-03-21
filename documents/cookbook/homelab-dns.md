@@ -87,7 +87,7 @@ static_rules:
 2.  该规则的 `action` 是 `forward`，`target` 是 `local_dns` 上游组。
 3.  Load Ants 随即将该查询通过传统 DNS（UDP/TCP）转发给你配置的本地 DNS 服务（`192.168.1.53:53`）。
 4.  你的本地 DNS 服务解析 `nas.lan` 到 `192.168.1.10` 并返回结果。
-5.  当一个对 `www.google.com` 的查询到达时，它无法匹配第一条规则，于是匹配了第二条 `wildcard` 规则，被转发到 `public_doh` 组，并由谷歌的 DoH 服务器解析。
+5.  当一个对 `www.google.com` 的查询到达时，它不会命中前面的 `regex` 规则，于是会继续落到优先级较低的全局 `wildcard` `forward` 规则，被转发到 `public_doh` 组，并由谷歌的 DoH 服务器解析。
 
 这个方法虽然比想象中复杂，但它正确地利用了 Load Ants 的核心能力，并实现了稳定、可扩展的本地网络 DNS 管理。
 

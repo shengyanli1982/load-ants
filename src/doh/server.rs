@@ -1,4 +1,4 @@
-// src/doh/server.rs
+// DoH 服务器封装与生命周期管理。
 
 use crate::doh::handlers::{handle_doh_get, handle_doh_post, handle_json_get};
 use crate::doh::state::AppState;

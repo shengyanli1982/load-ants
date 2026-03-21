@@ -99,12 +99,18 @@ static_rules:
     action: "forward" # 路由动作：block(阻止), forward(转发)（必选）
     target: "public" # 目标上游组（当action为forward时必选）
 
+# 远程规则快照（可选）
+remote_rule_snapshot:
+  enabled: true # 是否启用远程规则的 last-known-good 快照恢复（可选，默认值: true）
+  path: ".load-ants/remote-rule-snapshots" # 快照目录；每个远程 URL 会派生为独立文件（可选）
+
 # 远程规则配置（可选，但必须至少配置 static_rules 或 remote_rules 之一）
 remote_rules:
   # 从URL获取阻止列表
   - type: "url" # 规则类型，目前仅支持 "url"（必选）
     url: "https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/reject-list.txt" # 远程规则文件的 URL (必选)
     format: "v2ray" # 规则文件格式: v2ray (必选)
+    failure_policy: "strict" # strict=无有效快照时终止启动, lenient=允许降级启动（可选，默认值: strict）
     action: "block" # 应用于此规则列表中所有域名的动作: block(阻止), forward(转发)（必选）
     retry: # 获取规则的重试策略 (可选)
       attempts: 3 # 重试次数 (有效范围: 1-100)
@@ -116,6 +122,7 @@ remote_rules:
   - type: "url" # 规则类型（必选）
     url: "https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/proxy-list.txt" # 远程规则文件的 URL（必选）
     format: "v2ray" # 规则文件格式（必选）
+    failure_policy: "strict" # strict=无有效快照时终止启动, lenient=允许降级启动（可选，默认值: strict）
     action: "forward" # 应用于此规则列表中所有域名的动作（必选）
     target: "google" # 目标上游组 (当 action 为 forward 时必须提供)（当action为forward时必选）
     retry: # 获取规则的重试策略（可选）

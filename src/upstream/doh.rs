@@ -17,6 +17,7 @@ pub struct DoHClient<'a> {
 }
 
 impl<'a> DoHClient<'a> {
+    /// 创建一个复用现有 HTTP 客户端的 DoH 客户端包装器。
     pub fn new(client: &'a ClientWithMiddleware) -> Self {
         Self {
             client,
@@ -24,7 +25,7 @@ impl<'a> DoHClient<'a> {
         }
     }
 
-    // 发送DoH请求的入口方法
+    // 发送 DoH 请求的统一入口。
     pub async fn send_request(
         &self,
         query: &Message,
@@ -37,7 +38,7 @@ impl<'a> DoHClient<'a> {
         }
     }
 
-    // 发送DoH POST请求
+    // 发送 DoH POST 请求。
     async fn send_doh_request_post(
         &self,
         query: &Message,
@@ -49,9 +50,9 @@ impl<'a> DoHClient<'a> {
         // 根据内容类型处理
         match server.content_type {
             DoHContentType::Message => {
-                // 创建一个可复用的缓冲区
-                let mut buffer = Vec::with_capacity(512); // 512字节对于DNS查询是一个合理的初始容量
-                                                          // 使用二进制编码器将查询消息写入缓冲区
+                // 创建一个可复用的缓冲区。
+                let mut buffer = Vec::with_capacity(512); // 512 字节足以覆盖大多数 DNS 查询负载
+                                                          // 使用二进制编码器将查询消息写入缓冲区。
                 let mut encoder = BinEncoder::new(&mut buffer);
                 query.emit(&mut encoder)?;
 
@@ -84,7 +85,7 @@ impl<'a> DoHClient<'a> {
                 Ok(message)
             }
             DoHContentType::Json => {
-                // JSON格式不支持POST方法，返回错误
+                // JSON 格式不支持 POST 方法，直接返回错误。
                 Err(AppError::Upstream(
                     "JSON content type is not supported with POST method. Use GET method instead."
                         .to_string(),
@@ -93,7 +94,7 @@ impl<'a> DoHClient<'a> {
         }
     }
 
-    // 发送DoH GET请求
+    // 发送 DoH GET 请求。
     async fn send_doh_request_get(
         &self,
         query: &Message,
@@ -111,7 +112,7 @@ impl<'a> DoHClient<'a> {
                 let mut encoder = BinEncoder::new(&mut buffer);
                 query.emit(&mut encoder)?;
 
-                // Base64Url编码
+                // 按 base64url 规则编码查询报文。
                 let b64_data = URL_SAFE_NO_PAD.encode(&buffer);
 
                 // 添加查询参数

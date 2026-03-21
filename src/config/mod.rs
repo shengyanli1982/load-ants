@@ -1,5 +1,6 @@
 use crate::error::ConfigError;
 use crate::r#const::{http_client_limits, retry_limits, upstream_defaults};
+use crate::router::{RoutedRule, Router};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, collections::HashSet, fs, net::SocketAddr, path::Path, str::FromStr};
@@ -202,6 +203,10 @@ pub struct Config {
     #[serde(default)]
     #[validate(nested)]
     pub remote_rules: Vec<RemoteRuleConfig>,
+    // 远程规则快照配置
+    #[serde(default)]
+    #[validate(nested)]
+    pub remote_rule_snapshot: RemoteRuleSnapshotConfig,
 }
 
 impl Config {
@@ -261,6 +266,15 @@ impl Config {
                 "No forward rules configured: please add at least one rule with action 'forward'"
                     .to_string(),
             ));
+        }
+
+        if let Some(static_rules) = &self.static_rules {
+            let routed_rules: Vec<_> = static_rules
+                .iter()
+                .cloned()
+                .map(RoutedRule::from_static)
+                .collect();
+            Router::validate_rule_conflicts(&routed_rules)?;
         }
 
         Ok(())
@@ -344,6 +358,7 @@ impl Default for Config {
                 target: Some(upstream_defaults::DEFAULT_GROUP_NAME.to_string()),
             }]),
             remote_rules: Vec::new(),
+            remote_rule_snapshot: RemoteRuleSnapshotConfig::default(),
         }
     }
 }

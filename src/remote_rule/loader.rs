@@ -37,7 +37,7 @@ impl RemoteRuleLoader {
         })
     }
 
-    /// 创建HTTP客户端
+    /// 创建远程规则下载使用的 HTTP 客户端。
     fn create_http_client(
         config: &HttpClientConfig,
         proxy: Option<&str>,

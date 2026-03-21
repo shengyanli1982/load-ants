@@ -1,4 +1,4 @@
-// src/doh/json.rs
+// DoH JSON 响应序列化支持。
 
 use hickory_proto::op::{Message, Query};
 use hickory_proto::rr::{RData, Record};
@@ -182,13 +182,13 @@ fn rdata_to_string(rdata: Option<&RData>) -> String {
             s
         }
         RData::SVCB(svcb) => {
-            // Handles both SVCB and HTTPS records (RFC 9460).
-            // The format is: SvcPriority SvcDomainName SvcParams...
-            // e.g., "1 example.com alpn=h2,h3 port=443"
-            let mut s = String::with_capacity(svcb.target_name().to_string().len() + 48); // Pre-allocate
+            // 同时处理 SVCB 与 HTTPS 记录（RFC 9460）。
+            // 输出格式为：SvcPriority SvcDomainName SvcParams...
+            // 例如："1 example.com alpn=h2,h3 port=443"
+            let mut s = String::with_capacity(svcb.target_name().to_string().len() + 48); // 预分配常见参数所需空间
             write!(s, "{} {}", svcb.svc_priority(), svcb.target_name()).unwrap();
 
-            // The Display trait for SvcParam is expected to format as "key=value".
+            // `SvcParam` 的显示格式约定为 `key=value`。
             for (key, value) in svcb.svc_params() {
                 // 写入到 String 的 fmt::Write 理论上不会失败，这里保持 unwrap 简化逻辑。
                 write!(s, " {}={}", key, value).unwrap();
@@ -196,7 +196,7 @@ fn rdata_to_string(rdata: Option<&RData>) -> String {
             s
         }
         RData::TXT(txt) => {
-            // from_utf8_lossy 是高效的，只有在需要修复非UTF8序列时才会分配
+            // `from_utf8_lossy` 只有在需要修复非 UTF-8 序列时才会额外分配。
             txt.txt_data()
                 .iter()
                 .map(|bytes| String::from_utf8_lossy(bytes))

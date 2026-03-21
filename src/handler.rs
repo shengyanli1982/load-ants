@@ -1,8 +1,7 @@
 use crate::{
     cache_labels, error_labels,
     metrics::{normalize_query_type_label, METRICS},
-    processing_labels, protocol_labels, AppError, DnsCache, RouteAction, Router,
-    UpstreamManager,
+    processing_labels, protocol_labels, AppError, DnsCache, RouteAction, Router, UpstreamManager,
 };
 use hickory_proto::op::{Message, MessageType, ResponseCode};
 use std::sync::Arc;
@@ -56,7 +55,13 @@ impl RequestHandler {
 
         // 尝试从缓存获取响应
         if let Some(response) = self
-            .check_cache(request, query_name, query_type, query_type_label, &start_time)
+            .check_cache(
+                request,
+                query_name,
+                query_type,
+                query_type_label,
+                &start_time,
+            )
             .await
         {
             return Ok(response);

@@ -1,4 +1,4 @@
-// src/server/admin.rs
+// 管理接口服务器与辅助处理函数。
 
 use crate::cache::DnsCache;
 use crate::error::AppError;

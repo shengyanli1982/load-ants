@@ -4,23 +4,31 @@ use axum::{
     extract::{ConnectInfo, Query, State},
     response::IntoResponse,
 };
-use hickory_proto::rr::RecordType;
+use hickory_proto::rr::{Name, RecordType};
 use loadants::{
     cache::DnsCache,
-    doh::{handlers::{handle_json_get, DohJsonGetParams}, state::AppState},
-    metrics::{normalize_query_type_label, DnsMetrics, METRICS},
+    config::{MatchType, RouteAction, RouteRuleConfig},
+    doh::{
+        handlers::{handle_json_get, DohJsonGetParams},
+        state::AppState,
+    },
     handler::RequestHandler,
-    router::Router,
+    metrics::{normalize_query_type_label, DnsMetrics, METRICS},
+    router::{RoutedRule, Router, RuleMetadata},
     UpstreamManager,
 };
 
 fn count_query_type_series(metrics_output: &str) -> usize {
     metrics_output
         .lines()
-        .filter(|line| {
-            line.starts_with("loadants_dns_query_type_total{") && line.contains("type=")
-        })
+        .filter(|line| line.starts_with("loadants_dns_query_type_total{") && line.contains("type="))
         .count()
+}
+
+fn has_metric_line(metrics_output: &str, metric_name: &str, fragments: &[&str]) -> bool {
+    metrics_output.lines().any(|line| {
+        line.starts_with(metric_name) && fragments.iter().all(|fragment| line.contains(fragment))
+    })
 }
 
 fn create_test_handler() -> Arc<RequestHandler> {
@@ -39,7 +47,10 @@ fn metrics_query_type_labels_collapse_unknown_record_types_into_other() {
         let record_type = RecordType::from(raw);
         let label = normalize_query_type_label(record_type);
 
-        metrics.dns_query_type_total().with_label_values(&[label]).inc();
+        metrics
+            .dns_query_type_total()
+            .with_label_values(&[label])
+            .inc();
     }
 
     let output = metrics.export_metrics();
@@ -84,4 +95,65 @@ async fn metrics_recording_paths_use_bounded_query_type_labels() {
     }
 
     assert!(output.contains("loadants_dns_query_type_total{type=\"OTHER\"}"));
+}
+
+#[test]
+fn metrics_route_rule_source_labels_follow_rule_metadata() {
+    let router = Router::new_with_metadata(vec![
+        RoutedRule::from_static(RouteRuleConfig {
+            match_type: MatchType::Exact,
+            patterns: vec!["static-metrics.example".to_string()],
+            action: RouteAction::Block,
+            target: None,
+        }),
+        RoutedRule::new(
+            RouteRuleConfig {
+                match_type: MatchType::Exact,
+                patterns: vec!["remote-metrics.example".to_string()],
+                action: RouteAction::Forward,
+                target: Some("metrics-upstream".to_string()),
+            },
+            RuleMetadata::remote("https://example.com/metrics-remote.txt"),
+        ),
+    ])
+    .expect("router with metadata should build");
+
+    router
+        .find_match(&Name::from_ascii("static-metrics.example.").unwrap())
+        .expect("static match should succeed");
+    router
+        .find_match(&Name::from_ascii("remote-metrics.example.").unwrap())
+        .expect("remote match should succeed");
+
+    let output = METRICS.export_metrics();
+
+    assert!(has_metric_line(
+        &output,
+        "loadants_route_matches_total{",
+        &[
+            "rule_source=\"static\"",
+            "rule_type=\"exact\"",
+            "action=\"block\"",
+        ],
+    ));
+    assert!(has_metric_line(
+        &output,
+        "loadants_route_matches_total{",
+        &[
+            "rule_source=\"remote\"",
+            "rule_type=\"exact\"",
+            "action=\"forward\"",
+            "target_group=\"metrics-upstream\"",
+        ],
+    ));
+    assert!(has_metric_line(
+        &output,
+        "loadants_route_rules_count{",
+        &["rule_source=\"static\"", "rule_type=\"exact\""],
+    ));
+    assert!(has_metric_line(
+        &output,
+        "loadants_route_rules_count{",
+        &["rule_source=\"remote\"", "rule_type=\"exact\""],
+    ));
 }
