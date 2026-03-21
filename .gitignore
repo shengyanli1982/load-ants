@@ -25,6 +25,7 @@ design/
 .idea/
 .DS_Store
 *.dat
+.serena
 
 # MkDocs build output
 site/
