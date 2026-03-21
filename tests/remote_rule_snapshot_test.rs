@@ -1,24 +1,15 @@
 use loadants::config::{MatchType, RemoteRuleSnapshotConfig, RouteAction, RouteRuleConfig};
 use loadants::remote_rule::RemoteRuleSnapshotStore;
-use serde_json::to_vec_pretty;
-use std::collections::hash_map::DefaultHasher;
 use std::fs;
-use std::hash::{Hash, Hasher};
 use tempfile::tempdir;
 
 fn snapshot_store(enabled: bool) -> (tempfile::TempDir, RemoteRuleSnapshotStore) {
-    let directory = tempdir().expect("应成功创建临时目录");
+    let directory = tempdir().expect("temporary directory should be created");
     let store = RemoteRuleSnapshotStore::new(&RemoteRuleSnapshotConfig {
         enabled,
         path: directory.path().to_string_lossy().to_string(),
     });
     (directory, store)
-}
-
-fn legacy_snapshot_path(directory: &std::path::Path, source_url: &str) -> std::path::PathBuf {
-    let mut hasher = DefaultHasher::new();
-    source_url.hash(&mut hasher);
-    directory.join(format!("{:016x}.json", hasher.finish()))
 }
 
 fn temp_snapshot_path(
@@ -29,7 +20,7 @@ fn temp_snapshot_path(
     let snapshot_path = store.snapshot_path(source_url);
     let stem = snapshot_path
         .file_stem()
-        .expect("快照路径应包含 stem")
+        .expect("snapshot path should contain a file stem")
         .to_string_lossy();
     snapshot_path.with_file_name(format!("{stem}.{pid}.tmp"))
 }
@@ -49,11 +40,13 @@ fn snapshot_store_round_trip() {
     let source_url = "https://example.com/rules.txt";
     let rules = snapshot_rules();
 
-    store.save(source_url, &rules).expect("应成功写入快照");
+    store
+        .save(source_url, &rules)
+        .expect("snapshot should be written");
     let snapshot = store
         .load(source_url)
-        .expect("应成功读取快照")
-        .expect("快照文件应存在");
+        .expect("snapshot should be readable")
+        .expect("snapshot file should exist");
 
     assert_eq!(snapshot.source_url, source_url);
     assert_eq!(snapshot.rules, rules);
@@ -65,82 +58,71 @@ fn snapshot_store_is_noop_when_disabled() {
 
     store
         .save("https://example.com/rules.txt", &[])
-        .expect("禁用快照功能时保存应为无操作");
+        .expect("disabled snapshot store should be a no-op on save");
     assert!(store
         .load("https://example.com/rules.txt")
-        .expect("禁用快照功能时读取不应报错")
+        .expect("disabled snapshot store should not fail on load")
         .is_none());
 }
 
 #[test]
-fn snapshot_path_is_stable_and_human_readable() {
+fn snapshot_path_uses_sha256_hex_name() {
     let (_directory, store) = snapshot_store(true);
     let source_url = "https://rules.example.com/a/b.txt?token=secret";
 
     let path = store.snapshot_path(source_url);
     let file_name = path
         .file_name()
-        .expect("快照路径应包含文件名")
+        .expect("snapshot path should contain a file name")
         .to_string_lossy()
         .to_string();
 
     assert_eq!(path, store.snapshot_path(source_url));
     assert!(file_name.ends_with(".json"));
-    assert!(file_name.contains("rules-example-com-a-b-txt"));
-    assert!(!file_name.contains("secret"));
-}
-
-#[test]
-fn load_falls_back_to_legacy_hashed_snapshot() {
-    let (directory, store) = snapshot_store(true);
-    let source_url = "https://example.com/rules.txt";
-    let rules = snapshot_rules();
-    let payload = to_vec_pretty(&loadants::remote_rule::RemoteRuleSnapshotEnvelope::new(
-        source_url,
-        rules.clone(),
-    ))
-    .expect("应成功序列化快照");
-
-    fs::write(legacy_snapshot_path(directory.path(), source_url), payload)
-        .expect("应成功写入旧格式快照");
-
-    let snapshot = store
-        .load(source_url)
-        .expect("应成功读取旧格式快照")
-        .expect("旧格式快照应存在");
-
-    assert_eq!(snapshot.source_url, source_url);
-    assert_eq!(snapshot.rules, rules);
-}
-
-#[test]
-fn save_replaces_legacy_snapshot_for_same_source() {
-    let (directory, store) = snapshot_store(true);
-    let source_url = "https://example.com/rules.txt";
-    let rules = snapshot_rules();
-    let legacy_path = legacy_snapshot_path(directory.path(), source_url);
-
-    let payload = to_vec_pretty(&loadants::remote_rule::RemoteRuleSnapshotEnvelope::new(
-        source_url,
-        vec![RouteRuleConfig {
-            match_type: MatchType::Exact,
-            patterns: vec!["old.example".to_string()],
-            action: RouteAction::Block,
-            target: None,
-        }],
-    ))
-    .expect("应成功序列化旧快照");
-    fs::write(&legacy_path, payload).expect("应成功写入旧格式快照");
-
-    store.save(source_url, &rules).expect("应成功覆盖保存快照");
-
-    assert!(
-        !legacy_path.exists(),
-        "保存新命名快照后应移除同源旧纯哈希文件"
+    assert_eq!(
+        file_name.len(),
+        69,
+        "file name should be 64 hex characters plus .json"
     );
     assert!(
-        store.snapshot_path(source_url).exists(),
-        "应写入新的可读命名快照文件"
+        file_name
+            .strip_suffix(".json")
+            .expect("file name should end with .json")
+            .chars()
+            .all(|ch| ch.is_ascii_hexdigit() && !ch.is_ascii_uppercase()),
+        "file name body should be lowercase SHA-256 hex"
+    );
+}
+
+#[test]
+fn save_overwrites_same_source_in_place() {
+    let (_directory, store) = snapshot_store(true);
+    let source_url = "https://example.com/rules.txt";
+    let first_path = store.snapshot_path(source_url);
+
+    store
+        .save(source_url, &snapshot_rules())
+        .expect("first save should succeed");
+    store
+        .save(
+            source_url,
+            &[RouteRuleConfig {
+                match_type: MatchType::Exact,
+                patterns: vec!["updated.example".to_string()],
+                action: RouteAction::Block,
+                target: None,
+            }],
+        )
+        .expect("second save should succeed");
+
+    assert_eq!(first_path, store.snapshot_path(source_url));
+    let snapshot = store
+        .load(source_url)
+        .expect("overwritten snapshot should be readable")
+        .expect("overwritten snapshot should exist");
+    assert_eq!(
+        snapshot.rules[0].patterns,
+        vec!["updated.example".to_string()]
     );
 }
 
@@ -152,29 +134,29 @@ fn sync_active_sources_removes_orphan_snapshots_and_tmp_files() {
 
     store
         .save(&active_url, &snapshot_rules())
-        .expect("应成功写入活跃来源快照");
+        .expect("active snapshot should be written");
     store
         .save(&stale_url, &snapshot_rules())
-        .expect("应成功写入陈旧来源快照");
+        .expect("stale snapshot should be written");
 
     let active_tmp = temp_snapshot_path(&store, &active_url, 1001);
     let stale_tmp = temp_snapshot_path(&store, &stale_url, 1002);
-    fs::write(&active_tmp, b"active tmp").expect("应成功写入活跃来源临时文件");
-    fs::write(&stale_tmp, b"stale tmp").expect("应成功写入陈旧来源临时文件");
+    fs::write(&active_tmp, b"active tmp").expect("active temp file should be created");
+    fs::write(&stale_tmp, b"stale tmp").expect("stale temp file should be created");
 
     let extra_file = directory.path().join("notes.txt");
-    fs::write(&extra_file, b"keep").expect("应成功写入额外文件");
+    fs::write(&extra_file, b"keep").expect("extra file should be created");
 
     store
         .sync_active_sources(std::slice::from_ref(&active_url))
-        .expect("应成功同步活跃来源");
+        .expect("active sources should be synchronized");
 
     assert!(store.snapshot_path(&active_url).exists());
-    assert!(active_tmp.exists(), "活跃来源临时文件应被保留");
+    assert!(active_tmp.exists(), "active temp file should be preserved");
     assert!(
         !store.snapshot_path(&stale_url).exists(),
-        "非活跃来源正式快照应被清理"
+        "stale snapshot file should be removed"
     );
-    assert!(!stale_tmp.exists(), "非活跃来源临时文件应被清理");
-    assert!(extra_file.exists(), "非快照文件不应被误删");
+    assert!(!stale_tmp.exists(), "stale temp file should be removed");
+    assert!(extra_file.exists(), "non-snapshot files should not be removed");
 }

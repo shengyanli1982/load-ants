@@ -1,11 +1,10 @@
 use crate::config::{RemoteRuleSnapshotConfig, RouteRuleConfig};
 use crate::error::AppError;
-use reqwest::Url;
 use serde::{Deserialize, Serialize};
-use std::collections::hash_map::DefaultHasher;
+use sha2::{Digest, Sha256};
 use std::collections::HashSet;
+use std::fmt::Write;
 use std::fs;
-use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 
 const SNAPSHOT_SCHEMA_VERSION: u32 = 1;
@@ -56,9 +55,10 @@ impl RemoteRuleSnapshotStore {
             return Ok(None);
         }
 
-        let Some(path) = self.resolve_load_path(source_url) else {
+        let path = self.snapshot_path(source_url);
+        if !path.exists() {
             return Ok(None);
-        };
+        }
 
         let content = fs::read_to_string(&path).map_err(|error| {
             AppError::Cache(format!(
@@ -133,17 +133,6 @@ impl RemoteRuleSnapshotStore {
             return Err(error);
         }
 
-        let legacy_path = self.legacy_snapshot_path(source_url);
-        if legacy_path != path && legacy_path.exists() {
-            fs::remove_file(&legacy_path).map_err(|error| {
-                AppError::Cache(format!(
-                    "failed to remove legacy remote rule snapshot '{}': {}",
-                    legacy_path.display(),
-                    error
-                ))
-            })?;
-        }
-
         Ok(())
     }
 
@@ -164,13 +153,9 @@ impl RemoteRuleSnapshotStore {
         let mut active_json_files = HashSet::new();
         let mut active_tmp_prefixes = HashSet::new();
         for source_url in active_urls {
-            let current_stem = Self::current_snapshot_stem(source_url);
-            let legacy_stem = Self::legacy_snapshot_key(source_url);
-
-            active_json_files.insert(format!("{current_stem}.json"));
-            active_json_files.insert(format!("{legacy_stem}.json"));
-            active_tmp_prefixes.insert(format!("{current_stem}."));
-            active_tmp_prefixes.insert(format!("{legacy_stem}."));
+            let snapshot_key = Self::snapshot_key(source_url);
+            active_json_files.insert(format!("{snapshot_key}.json"));
+            active_tmp_prefixes.insert(format!("{snapshot_key}."));
         }
 
         for entry in fs::read_dir(&self.root_dir).map_err(|error| {
@@ -222,13 +207,14 @@ impl RemoteRuleSnapshotStore {
 
     /// 计算某个来源地址对应的快照文件路径。
     pub fn snapshot_path(&self, source_url: &str) -> PathBuf {
-        self.current_snapshot_path(source_url)
+        self.root_dir
+            .join(format!("{}.json", Self::snapshot_key(source_url)))
     }
 
     fn temp_snapshot_path(&self, source_url: &str) -> PathBuf {
         self.root_dir.join(format!(
             "{}.{}.tmp",
-            Self::current_snapshot_stem(source_url),
+            Self::snapshot_key(source_url),
             std::process::id()
         ))
     }
@@ -261,99 +247,12 @@ impl RemoteRuleSnapshotStore {
         }
     }
 
-    fn resolve_load_path(&self, source_url: &str) -> Option<PathBuf> {
-        let current_path = self.current_snapshot_path(source_url);
-        if current_path.exists() {
-            return Some(current_path);
+    fn snapshot_key(source_url: &str) -> String {
+        let digest = Sha256::digest(source_url.as_bytes());
+        let mut output = String::with_capacity(digest.len() * 2);
+        for byte in digest {
+            let _ = write!(&mut output, "{byte:02x}");
         }
-
-        let legacy_path = self.legacy_snapshot_path(source_url);
-        if legacy_path.exists() {
-            return Some(legacy_path);
-        }
-
-        None
-    }
-
-    fn current_snapshot_path(&self, source_url: &str) -> PathBuf {
-        self.root_dir
-            .join(format!("{}.json", Self::current_snapshot_stem(source_url)))
-    }
-
-    fn legacy_snapshot_path(&self, source_url: &str) -> PathBuf {
-        self.root_dir
-            .join(format!("{}.json", Self::legacy_snapshot_key(source_url)))
-    }
-
-    fn current_snapshot_stem(source_url: &str) -> String {
-        format!(
-            "{}-{}",
-            Self::source_slug(source_url),
-            Self::stable_digest(source_url)
-        )
-    }
-
-    fn source_slug(source_url: &str) -> String {
-        let preferred_text = Url::parse(source_url)
-            .ok()
-            .map(|url| {
-                let mut parts = Vec::new();
-                if let Some(host) = url.host_str() {
-                    parts.push(host.to_string());
-                }
-                if let Some(segments) = url.path_segments() {
-                    for segment in segments {
-                        if !segment.is_empty() {
-                            parts.push(segment.to_string());
-                        }
-                    }
-                }
-                if parts.is_empty() {
-                    source_url.to_string()
-                } else {
-                    parts.join("-")
-                }
-            })
-            .unwrap_or_else(|| source_url.to_string());
-
-        let mut slug = String::with_capacity(preferred_text.len());
-        let mut previous_was_separator = false;
-        for ch in preferred_text.chars() {
-            if ch.is_ascii_alphanumeric() {
-                slug.push(ch.to_ascii_lowercase());
-                previous_was_separator = false;
-            } else if !previous_was_separator {
-                slug.push('-');
-                previous_was_separator = true;
-            }
-        }
-
-        let slug = slug.trim_matches('-');
-        if slug.is_empty() {
-            "remote-rule".to_string()
-        } else if slug.len() > 80 {
-            slug[..80].trim_matches('-').to_string()
-        } else {
-            slug.to_string()
-        }
-    }
-
-    fn stable_digest(source_url: &str) -> String {
-        const FNV_OFFSET_BASIS: u64 = 0xcbf29ce484222325;
-        const FNV_PRIME: u64 = 0x100000001b3;
-
-        let mut hash = FNV_OFFSET_BASIS;
-        for byte in source_url.as_bytes() {
-            hash ^= u64::from(*byte);
-            hash = hash.wrapping_mul(FNV_PRIME);
-        }
-
-        format!("{hash:016x}")
-    }
-
-    fn legacy_snapshot_key(source_url: &str) -> String {
-        let mut hasher = DefaultHasher::new();
-        source_url.hash(&mut hasher);
-        format!("{:016x}", hasher.finish())
+        output
     }
 }
