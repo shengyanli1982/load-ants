@@ -2,7 +2,7 @@
 
 use crate::doh::json::SerializableDnsMessage;
 use crate::doh::state::AppState;
-use crate::metrics::METRICS;
+use crate::metrics::{normalize_query_type_label, METRICS};
 use crate::r#const::{http_headers, processing_labels, protocol_labels};
 use axum::{
     body::Bytes,
@@ -32,21 +32,7 @@ type DohResponseHandlerResult = Result<Response, DohHandlerError>;
 /// 对于不常见的类型，它会分配一个新的字符串。
 #[inline(always)]
 fn record_type_to_cow_str(record_type: RecordType) -> Cow<'static, str> {
-    match record_type {
-        RecordType::A => Cow::Borrowed("A"),
-        RecordType::AAAA => Cow::Borrowed("AAAA"),
-        RecordType::ANAME => Cow::Borrowed("ANAME"),
-        RecordType::CNAME => Cow::Borrowed("CNAME"),
-        RecordType::MX => Cow::Borrowed("MX"),
-        RecordType::NS => Cow::Borrowed("NS"),
-        RecordType::PTR => Cow::Borrowed("PTR"),
-        RecordType::SOA => Cow::Borrowed("SOA"),
-        RecordType::SRV => Cow::Borrowed("SRV"),
-        RecordType::TXT => Cow::Borrowed("TXT"),
-        RecordType::HTTPS => Cow::Borrowed("HTTPS"),
-        RecordType::SVCB => Cow::Borrowed("SVCB"),
-        other => Cow::Owned(other.to_string()),
-    }
+    Cow::Borrowed(normalize_query_type_label(record_type))
 }
 
 /// 定义 `handle_doh_get` 的查询参数结构体

@@ -1,6 +1,8 @@
 use crate::{
-    cache_labels, error_labels, metrics::METRICS, processing_labels, protocol_labels, AppError,
-    DnsCache, RouteAction, Router, UpstreamManager,
+    cache_labels, error_labels,
+    metrics::{normalize_query_type_label, METRICS},
+    processing_labels, protocol_labels, AppError, DnsCache, RouteAction, Router,
+    UpstreamManager,
 };
 use hickory_proto::op::{Message, MessageType, ResponseCode};
 use std::sync::Arc;
@@ -36,12 +38,13 @@ impl RequestHandler {
         let query = self.validate_request(request)?;
         let query_name = query.name();
         let query_type = query.query_type();
+        let query_type_label = normalize_query_type_label(query_type);
         let query_class = query.query_class();
 
         // 记录查询类型指标
         METRICS
             .dns_query_type_total()
-            .with_label_values(&[query_type.to_string().as_str()])
+            .with_label_values(&[query_type_label])
             .inc();
 
         debug!(
@@ -53,7 +56,7 @@ impl RequestHandler {
 
         // 尝试从缓存获取响应
         if let Some(response) = self
-            .check_cache(request, query_name, query_type, &start_time)
+            .check_cache(request, query_name, query_type, query_type_label, &start_time)
             .await
         {
             return Ok(response);
@@ -82,7 +85,7 @@ impl RequestHandler {
         let duration = start_time.elapsed();
         METRICS
             .dns_request_duration_seconds()
-            .with_label_values(&[processing_labels::RESOLVED, query_type.to_string().as_str()])
+            .with_label_values(&[processing_labels::RESOLVED, query_type_label])
             .observe(duration.as_secs_f64());
 
         info!(
@@ -124,6 +127,7 @@ impl RequestHandler {
         request: &Message,
         query_name: &hickory_proto::rr::Name,
         query_type: hickory_proto::rr::RecordType,
+        query_type_label: &'static str,
         start_time: &Instant,
     ) -> Option<Message> {
         if !self.cache.is_enabled() {
@@ -147,7 +151,7 @@ impl RequestHandler {
             let duration = start_time.elapsed();
             METRICS
                 .dns_request_duration_seconds()
-                .with_label_values(&[processing_labels::CACHED, query_type.to_string().as_str()])
+                .with_label_values(&[processing_labels::CACHED, query_type_label])
                 .observe(duration.as_secs_f64());
 
             info!(

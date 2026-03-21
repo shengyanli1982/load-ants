@@ -1,10 +1,28 @@
 use axum::http::{header, StatusCode};
 use axum::{routing::get, Router};
+use hickory_proto::rr::RecordType;
 use once_cell::sync::Lazy;
 use prometheus::{opts, HistogramVec, IntCounterVec, IntGauge, IntGaugeVec, Registry};
 
 // 全局静态指标实例
 pub static METRICS: Lazy<DnsMetrics> = Lazy::new(DnsMetrics::new);
+pub fn normalize_query_type_label(record_type: RecordType) -> &'static str {
+    match record_type {
+        RecordType::A => "A",
+        RecordType::AAAA => "AAAA",
+        RecordType::ANAME => "ANAME",
+        RecordType::CNAME => "CNAME",
+        RecordType::MX => "MX",
+        RecordType::NS => "NS",
+        RecordType::PTR => "PTR",
+        RecordType::SOA => "SOA",
+        RecordType::SRV => "SRV",
+        RecordType::TXT => "TXT",
+        RecordType::HTTPS => "HTTPS",
+        RecordType::SVCB => "SVCB",
+        _ => "OTHER",
+    }
+}
 
 // DNS 代理性能指标
 pub struct DnsMetrics {

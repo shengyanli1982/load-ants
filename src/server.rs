@@ -1,6 +1,6 @@
 use crate::error::AppError;
 use crate::handler::RequestHandler as DnsRequestHandler;
-use crate::metrics::METRICS;
+use crate::metrics::{normalize_query_type_label, METRICS};
 use crate::r#const::{error_labels, protocol_labels};
 use hickory_proto::op::{Header, Message, MessageType, OpCode, ResponseCode};
 use hickory_proto::serialize::binary::{BinEncodable, BinEncoder};
@@ -117,6 +117,7 @@ impl RequestHandler for HandlerAdapter {
         let query = request.query();
         let query_name = query.name();
         let query_type = query.query_type();
+        let query_type_label = normalize_query_type_label(query_type);
 
         debug!(
             "Received query request: {} {:?} from {}",
@@ -147,7 +148,7 @@ impl RequestHandler for HandlerAdapter {
                 let duration = start_time.elapsed();
                 METRICS
                     .dns_request_duration_seconds()
-                    .with_label_values(&[protocol, query_type.to_string().as_str()])
+                    .with_label_values(&[protocol, query_type_label])
                     .observe(duration.as_secs_f64());
 
                 return response_handler
@@ -185,7 +186,7 @@ impl RequestHandler for HandlerAdapter {
                 let duration = start_time.elapsed();
                 METRICS
                     .dns_request_duration_seconds()
-                    .with_label_values(&[protocol, query_type.to_string().as_str()])
+                    .with_label_values(&[protocol, query_type_label])
                     .observe(duration.as_secs_f64());
 
                 response_handler
@@ -219,7 +220,7 @@ impl RequestHandler for HandlerAdapter {
                 let duration = start_time.elapsed();
                 METRICS
                     .dns_request_duration_seconds()
-                    .with_label_values(&[protocol, query_type.to_string().as_str()])
+                    .with_label_values(&[protocol, query_type_label])
                     .observe(duration.as_secs_f64());
 
                 response_handler
