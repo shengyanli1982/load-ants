@@ -29,6 +29,14 @@ pub struct DnsClientConfig {
     // TCP 请求失败后是否丢弃连接并在下一次请求重连
     #[serde(default = "default_dns_client_tcp_reconnect")]
     pub tcp_reconnect: bool,
+    // TCP 连接池空闲超时（秒），连接空闲超过此时间后会自动关闭
+    #[serde(default = "default_dns_client_tcp_idle_timeout")]
+    #[validate(range(
+        min = dns_client_limits::MIN_TCP_IDLE_TIMEOUT,
+        max = dns_client_limits::MAX_TCP_IDLE_TIMEOUT,
+        message = "TCP idle timeout must be between {} and {} seconds"
+    ))]
+    pub tcp_idle_timeout: u64,
 }
 
 fn default_dns_client_prefer_tcp() -> bool {
@@ -39,6 +47,10 @@ fn default_dns_client_tcp_reconnect() -> bool {
     dns_client_limits::DEFAULT_TCP_RECONNECT
 }
 
+fn default_dns_client_tcp_idle_timeout() -> u64 {
+    dns_client_limits::DEFAULT_TCP_IDLE_TIMEOUT
+}
+
 impl Default for DnsClientConfig {
     fn default() -> Self {
         Self {
@@ -46,6 +58,7 @@ impl Default for DnsClientConfig {
             request_timeout: dns_client_limits::DEFAULT_REQUEST_TIMEOUT,
             prefer_tcp: default_dns_client_prefer_tcp(),
             tcp_reconnect: default_dns_client_tcp_reconnect(),
+            tcp_idle_timeout: dns_client_limits::DEFAULT_TCP_IDLE_TIMEOUT,
         }
     }
 }
