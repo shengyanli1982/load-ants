@@ -44,7 +44,7 @@ pub struct DnsClient {
     config: DnsClientConfig,
     connector: GenericConnector<TokioRuntimeProvider>,
     opts: ResolverOpts,
-    tcp_conns: Arc<DashMap<SocketAddr, GenericConnection>>,
+    tcp_conns: Arc<DashMap<SocketAddr, (GenericConnection, Instant)>>,
 }
 
 impl DnsClient {
@@ -180,18 +180,43 @@ impl DnsClient {
     }
 
     async fn send_tcp(&self, addr: SocketAddr, message: &Message) -> Result<Message, AppError> {
+        let idle_timeout = Duration::from_secs(self.config.tcp_idle_timeout);
+
+        // 惰性检查：获取缓存连接时检查是否已空闲超时
         let conn = match self.tcp_conns.get(&addr) {
-            Some(conn) => conn.clone(),
+            Some(entry) => {
+                let (ref cached_conn, last_used) = *entry;
+                if Instant::now().duration_since(last_used) > idle_timeout {
+                    // 连接已超时，丢弃并重新连接
+                    drop(entry);
+                    self.tcp_conns.remove(&addr);
+                    let new_conn = self.connect(addr, Protocol::Tcp).await?;
+                    self.tcp_conns.insert(addr, (new_conn.clone(), Instant::now()));
+                    new_conn
+                } else {
+                    cached_conn.clone()
+                }
+            }
             None => {
                 let conn = self.connect(addr, Protocol::Tcp).await?;
-                self.tcp_conns.insert(addr, conn.clone());
+                self.tcp_conns.insert(addr, (conn.clone(), Instant::now()));
                 conn
             }
         };
 
         let result = self.send_with_conn(conn, message).await;
-        if result.is_err() && self.config.tcp_reconnect {
-            self.tcp_conns.remove(&addr);
+        match &result {
+            Ok(_) => {
+                // 成功时更新最近使用时间
+                if let Some(mut entry) = self.tcp_conns.get_mut(&addr) {
+                    entry.1 = Instant::now();
+                }
+            }
+            Err(_) => {
+                if self.config.tcp_reconnect {
+                    self.tcp_conns.remove(&addr);
+                }
+            }
         }
         result
     }
@@ -207,11 +232,16 @@ impl DnsClient {
         let request = DnsRequest::new(message.clone(), options);
 
         let mut stream = conn.send(request);
-        let response = stream
-            .next()
-            .await
-            .ok_or_else(|| AppError::Upstream("empty response stream".to_string()))?
-            .map_err(|e| AppError::Upstream(e.to_string()))?;
+        let request_timeout = TokioDuration::from_secs(self.config.request_timeout);
+        let response = match time::timeout(request_timeout, stream.next()).await {
+            Ok(Some(result)) => result.map_err(|e| AppError::Upstream(e.to_string()))?,
+            Ok(None) => {
+                return Err(AppError::Upstream(
+                    "empty response stream".to_string(),
+                ))
+            }
+            Err(_) => return Err(AppError::Timeout),
+        };
 
         Ok(response.into_message())
     }

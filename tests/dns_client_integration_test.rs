@@ -4,6 +4,7 @@ use loadants::config::{
     DnsClientConfig, DnsUpstreamServerConfig, HttpClientConfig, LoadBalancingStrategy,
     UpstreamGroupConfig, UpstreamScheme, UpstreamServerConfig,
 };
+use loadants::r#const::dns_client_limits;
 use loadants::upstream::UpstreamManager;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::str::FromStr;
@@ -142,6 +143,7 @@ async fn test_dns_prefer_tcp_true_uses_tcp_only() {
             request_timeout: 2,
             prefer_tcp: true,
             tcp_reconnect: true,
+            tcp_idle_timeout: dns_client_limits::DEFAULT_TCP_IDLE_TIMEOUT,
         },
     )
     .await;
@@ -173,6 +175,7 @@ async fn test_dns_udp_tc_triggers_tcp_retry() {
             request_timeout: 2,
             prefer_tcp: false,
             tcp_reconnect: true,
+            tcp_idle_timeout: dns_client_limits::DEFAULT_TCP_IDLE_TIMEOUT,
         },
     )
     .await;
@@ -201,6 +204,7 @@ async fn test_dns_nxdomain_transparent() {
             request_timeout: 2,
             prefer_tcp: false,
             tcp_reconnect: true,
+            tcp_idle_timeout: dns_client_limits::DEFAULT_TCP_IDLE_TIMEOUT,
         },
     )
     .await;

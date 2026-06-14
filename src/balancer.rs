@@ -3,6 +3,7 @@ use crate::error::AppError;
 use async_trait::async_trait;
 use rand::{seq::SliceRandom, thread_rng};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Mutex;
 
 // 负载均衡器特性
 #[async_trait]
@@ -52,24 +53,24 @@ impl LoadBalancer for RoundRobinBalancer {
 pub struct WeightedBalancer {
     // 服务器列表
     servers: Vec<UpstreamServerConfig>,
-    // 当前权重（原子操作）
-    current_weights: Vec<AtomicUsize>,
+    // 当前权重（Mutex 保护以确保并发安全）
+    current_weights: Mutex<Vec<i64>>,
     // 总权重
-    total_weight: usize,
+    total_weight: i64,
 }
 
 impl WeightedBalancer {
     // 创建新的加权轮询负载均衡器
     pub fn new(servers: Vec<UpstreamServerConfig>) -> Self {
         // 计算权重总和
-        let total_weight = servers.iter().map(|s| s.weight() as usize).sum();
+        let total_weight = servers.iter().map(|s| s.weight() as i64).sum();
 
         // 初始化当前权重为0
-        let current_weights = servers.iter().map(|_| AtomicUsize::new(0)).collect();
+        let current_weights = servers.iter().map(|_| 0i64).collect();
 
         Self {
             servers,
-            current_weights,
+            current_weights: Mutex::new(current_weights),
             total_weight,
         }
     }
@@ -82,25 +83,27 @@ impl LoadBalancer for WeightedBalancer {
             return Err(AppError::NoUpstreamAvailable);
         }
 
+        let mut weights = self.current_weights.lock().unwrap();
+
         // 平滑加权轮询算法实现
-        let mut max_weight = 0;
+        let mut max_weight = i64::MIN;
         let mut max_index = 0;
 
         // 第一步：为每个服务器增加当前权重并选择最大的
-        for (i, weight_atomic) in self.current_weights.iter().enumerate() {
+        for (i, current_weight) in weights.iter_mut().enumerate() {
             // 增加当前权重
-            let weight = self.servers[i].weight() as usize;
-            let current = weight_atomic.fetch_add(weight, Ordering::SeqCst) + weight;
+            let effective_weight = self.servers[i].weight() as i64;
+            *current_weight += effective_weight;
 
             // 查找当前最大权重的服务器
-            if current > max_weight {
-                max_weight = current;
+            if *current_weight > max_weight {
+                max_weight = *current_weight;
                 max_index = i;
             }
         }
 
         // 第二步：减少选中服务器的当前权重
-        self.current_weights[max_index].fetch_sub(self.total_weight, Ordering::SeqCst);
+        weights[max_index] -= self.total_weight;
 
         // 返回选中的服务器
         Ok(&self.servers[max_index])

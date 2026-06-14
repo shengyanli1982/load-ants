@@ -11,7 +11,7 @@ use axum::{
     response::{IntoResponse, Json, Response},
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
-use hickory_proto::op::{Message, MessageType};
+use hickory_proto::op::{Edns, Message, MessageType};
 use hickory_proto::rr::{Name, RecordType};
 use serde::Deserialize;
 use std::borrow::Cow;
@@ -304,7 +304,7 @@ pub async fn handle_json_get(
         };
 
         // 处理 DO 标志。
-        let _dnssec_ok = match params.do_flag.as_deref() {
+        let dnssec_ok = match params.do_flag.as_deref() {
             Some("1") | Some("true") => true,
             Some("0") | Some("false") | None => false,
             _ => false, // 无效值默认为 false
@@ -326,6 +326,13 @@ pub async fn handle_json_get(
 
         let q = hickory_proto::op::Query::query(name_result, record_type);
         query.add_query(q);
+
+        // 设置 EDNS DNSSEC OK 标志
+        if dnssec_ok {
+            let mut edns = Edns::new();
+            edns.set_dnssec_ok(true);
+            query.set_edns(edns);
+        }
 
         // 处理 DNS 请求
         let response = process_dns_message(&state, &query)

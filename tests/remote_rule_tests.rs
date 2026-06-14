@@ -718,37 +718,39 @@ async fn test_build_router_allows_lenient_remote_failures() {
         .mount(&failure_server)
         .await;
 
-    let mut config = Config::default();
-    config.remote_rule_snapshot = RemoteRuleSnapshotConfig {
-        enabled: false,
-        path: ".unused".to_string(),
+    let config = Config {
+        remote_rule_snapshot: RemoteRuleSnapshotConfig {
+            enabled: false,
+            path: ".unused".to_string(),
+        },
+        remote_rules: vec![
+            RemoteRuleConfig {
+                r#type: RemoteRuleType::Url,
+                url: format!("{}/ok.txt", success_server.uri()),
+                format: RuleFormat::V2ray,
+                failure_policy: RemoteRuleFailurePolicy::Strict,
+                action: RouteAction::Block,
+                target: None,
+                auth: None,
+                retry: None,
+                proxy: None,
+                max_size: remote_rule_limits::DEFAULT_MAX_SIZE,
+            },
+            RemoteRuleConfig {
+                r#type: RemoteRuleType::Url,
+                url: format!("{}/missing.txt", failure_server.uri()),
+                format: RuleFormat::V2ray,
+                failure_policy: RemoteRuleFailurePolicy::Lenient,
+                action: RouteAction::Block,
+                target: None,
+                auth: None,
+                retry: None,
+                proxy: None,
+                max_size: remote_rule_limits::DEFAULT_MAX_SIZE,
+            },
+        ],
+        ..Default::default()
     };
-    config.remote_rules = vec![
-        RemoteRuleConfig {
-            r#type: RemoteRuleType::Url,
-            url: format!("{}/ok.txt", success_server.uri()),
-            format: RuleFormat::V2ray,
-            failure_policy: RemoteRuleFailurePolicy::Strict,
-            action: RouteAction::Block,
-            target: None,
-            auth: None,
-            retry: None,
-            proxy: None,
-            max_size: remote_rule_limits::DEFAULT_MAX_SIZE,
-        },
-        RemoteRuleConfig {
-            r#type: RemoteRuleType::Url,
-            url: format!("{}/missing.txt", failure_server.uri()),
-            format: RuleFormat::V2ray,
-            failure_policy: RemoteRuleFailurePolicy::Lenient,
-            action: RouteAction::Block,
-            target: None,
-            auth: None,
-            retry: None,
-            proxy: None,
-            max_size: remote_rule_limits::DEFAULT_MAX_SIZE,
-        },
-    ];
 
     let router = build_router(&config)
         .await
@@ -770,23 +772,25 @@ async fn test_build_router_rejects_strict_remote_failures() {
         .mount(&failure_server)
         .await;
 
-    let mut config = Config::default();
-    config.remote_rule_snapshot = RemoteRuleSnapshotConfig {
-        enabled: false,
-        path: ".unused".to_string(),
+    let config = Config {
+        remote_rule_snapshot: RemoteRuleSnapshotConfig {
+            enabled: false,
+            path: ".unused".to_string(),
+        },
+        remote_rules: vec![RemoteRuleConfig {
+            r#type: RemoteRuleType::Url,
+            url: format!("{}/missing.txt", failure_server.uri()),
+            format: RuleFormat::V2ray,
+            failure_policy: RemoteRuleFailurePolicy::Strict,
+            action: RouteAction::Block,
+            target: None,
+            auth: None,
+            retry: None,
+            proxy: None,
+            max_size: remote_rule_limits::DEFAULT_MAX_SIZE,
+        }],
+        ..Default::default()
     };
-    config.remote_rules = vec![RemoteRuleConfig {
-        r#type: RemoteRuleType::Url,
-        url: format!("{}/missing.txt", failure_server.uri()),
-        format: RuleFormat::V2ray,
-        failure_policy: RemoteRuleFailurePolicy::Strict,
-        action: RouteAction::Block,
-        target: None,
-        auth: None,
-        retry: None,
-        proxy: None,
-        max_size: remote_rule_limits::DEFAULT_MAX_SIZE,
-    }];
 
     let error = match build_router(&config).await {
         Ok(_) => panic!("strict failure should abort router build"),
@@ -827,20 +831,22 @@ async fn test_build_router_allows_strict_remote_failures_with_snapshot_fallback(
         )
         .expect("snapshot should be seeded");
 
-    let mut config = Config::default();
-    config.remote_rule_snapshot = snapshot_config;
-    config.remote_rules = vec![RemoteRuleConfig {
-        r#type: RemoteRuleType::Url,
-        url: remote_url,
-        format: RuleFormat::V2ray,
-        failure_policy: RemoteRuleFailurePolicy::Strict,
-        action: RouteAction::Block,
-        target: None,
-        auth: None,
-        retry: None,
-        proxy: None,
-        max_size: remote_rule_limits::DEFAULT_MAX_SIZE,
-    }];
+    let config = Config {
+        remote_rule_snapshot: snapshot_config,
+        remote_rules: vec![RemoteRuleConfig {
+            r#type: RemoteRuleType::Url,
+            url: remote_url,
+            format: RuleFormat::V2ray,
+            failure_policy: RemoteRuleFailurePolicy::Strict,
+            action: RouteAction::Block,
+            target: None,
+            auth: None,
+            retry: None,
+            proxy: None,
+            max_size: remote_rule_limits::DEFAULT_MAX_SIZE,
+        }],
+        ..Default::default()
+    };
 
     let router = build_router(&config)
         .await

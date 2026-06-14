@@ -1,7 +1,7 @@
 use crate::{
     cache_labels, error_labels,
     metrics::{normalize_query_type_label, METRICS},
-    processing_labels, protocol_labels, AppError, DnsCache, RouteAction, Router, UpstreamManager,
+    processing_labels, AppError, DnsCache, RouteAction, Router, UpstreamManager,
 };
 use hickory_proto::op::{Message, MessageType, ResponseCode};
 use std::sync::Arc;
@@ -328,12 +328,6 @@ pub async fn handle_request(
     handler: &Arc<RequestHandler>,
 ) -> Result<Message, AppError> {
     debug!("Received DNS request: {:?}", request);
-
-    // 记录DNS请求总数
-    METRICS
-        .dns_requests_total()
-        .with_label_values(&[protocol_labels::UNKNOWN]) // 此函数无法获知请求协议
-        .inc();
 
     let response = handler.handle_request(&request).await?;
 

@@ -76,6 +76,12 @@ pub mod dns_client_limits {
     pub const DEFAULT_PREFER_TCP: bool = false;
     // 默认 tcp_reconnect
     pub const DEFAULT_TCP_RECONNECT: bool = true;
+    // 默认 TCP 空闲超时（秒）
+    pub const DEFAULT_TCP_IDLE_TIMEOUT: u64 = 300;
+    // 最小 TCP 空闲超时（秒）
+    pub const MIN_TCP_IDLE_TIMEOUT: u64 = 30;
+    // 最大 TCP 空闲超时（秒）
+    pub const MAX_TCP_IDLE_TIMEOUT: u64 = 3600;
 }
 
 // 重试配置限制

@@ -1,12 +1,10 @@
 use crate::config::{
-    HttpClientConfig, MatchType, RemoteRuleConfig, RetryConfig, RouteRuleConfig, RuleFormat,
+    HttpClientConfig, MatchType, RemoteRuleConfig, RouteRuleConfig, RuleFormat,
 };
-use crate::error::{AppError, HttpClientError, InvalidProxyConfig};
-use crate::r#const::{retry_limits, rule_action_labels};
-use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
-use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
-use retry_policies::Jitter;
-use std::time::Duration;
+use crate::error::AppError;
+use crate::r#const::rule_action_labels;
+use crate::upstream::HttpClient;
+use reqwest_middleware::ClientWithMiddleware;
 use tracing::{debug, info};
 
 use super::parser::{RuleParser, V2RayRuleParser};
@@ -22,7 +20,7 @@ impl RemoteRuleLoader {
     /// 创建新的远程规则加载器
     pub fn new(config: RemoteRuleConfig, http_config: HttpClientConfig) -> Result<Self, AppError> {
         let client =
-            Self::create_http_client(&http_config, config.proxy.as_deref(), config.retry.as_ref())?;
+            HttpClient::create(&http_config, config.proxy.as_deref(), config.retry.as_ref())?;
 
         // 根据配置的格式选择解析器
         let parser: Box<dyn RuleParser> = match config.format {
@@ -35,83 +33,6 @@ impl RemoteRuleLoader {
             config,
             parser,
         })
-    }
-
-    /// 创建远程规则下载使用的 HTTP 客户端。
-    fn create_http_client(
-        config: &HttpClientConfig,
-        proxy: Option<&str>,
-        retry_config: Option<&RetryConfig>,
-    ) -> Result<ClientWithMiddleware, AppError> {
-        debug!(
-            "Creating HTTP client for remote rule, config: {:?}, proxy: {:?}, retry_config: {:?}",
-            config, proxy, retry_config
-        );
-
-        // 创建客户端构建器
-        let mut client_builder = reqwest::ClientBuilder::new()
-            .danger_accept_invalid_certs(true) // 允许无效证书，用于内部自签名证书
-            .connect_timeout(Duration::from_secs(config.connect_timeout))
-            .timeout(Duration::from_secs(config.request_timeout));
-
-        // 配置TCP keepalive
-        if let Some(ref keepalive) = config.keepalive {
-            client_builder = client_builder.tcp_keepalive(Duration::from_secs(*keepalive as u64));
-        }
-
-        // 配置空闲连接超时
-        if let Some(idle_timeout) = config.idle_timeout {
-            client_builder = client_builder.pool_idle_timeout(Duration::from_secs(idle_timeout));
-        }
-
-        // 配置用户代理
-        if let Some(ref agent) = config.agent {
-            client_builder = client_builder.user_agent(agent);
-        }
-
-        // 配置代理
-        if let Some(proxy_url) = proxy {
-            client_builder = client_builder.proxy(reqwest::Proxy::all(proxy_url).map_err(|e| {
-                AppError::InvalidProxy(InvalidProxyConfig(format!(
-                    "Proxy configuration error: {}",
-                    e
-                )))
-            })?);
-        }
-
-        // 创建基础HTTP客户端
-        let client = client_builder.build().map_err(|e| {
-            AppError::HttpError(HttpClientError(format!(
-                "Failed to create HTTP client: {}",
-                e
-            )))
-        })?;
-
-        // 配置重试策略（根据组的重试配置）
-        let middleware_client = if let Some(retry) = retry_config {
-            // 使用指数退避策略，基于组的重试配置
-            let retry_policy = ExponentialBackoff::builder()
-                // 设置重试时间间隔的上下限
-                .retry_bounds(
-                    Duration::from_secs(retry.delay as u64),
-                    Duration::from_secs(retry_limits::MAX_DELAY as u64),
-                )
-                // 设置指数退避的基数, 记得这里一定要大于 1，要不然退避时间会一直不变大
-                .base(2)
-                // 使用有界抖动来避免多个客户端同时重试
-                .jitter(Jitter::Bounded)
-                // 配置最大重试次数
-                .build_with_max_retries(retry.attempts);
-
-            ClientBuilder::new(client)
-                .with(RetryTransientMiddleware::new_with_policy(retry_policy))
-                .build()
-        } else {
-            // 不进行重试
-            ClientBuilder::new(client).build()
-        };
-
-        Ok(middleware_client)
     }
 
     /// 加载远程规则
@@ -145,6 +66,16 @@ impl RemoteRuleLoader {
                 "Failed to fetch remote rules, status: {}",
                 response.status()
             )));
+        }
+
+        // 预检 Content-Length，避免读取过大的响应体
+        if let Some(content_length) = response.content_length() {
+            if content_length as usize > self.config.max_size {
+                return Err(AppError::Upstream(format!(
+                    "Remote rule Content-Length ({}) exceeds configured limit ({})",
+                    content_length, self.config.max_size
+                )));
+            }
         }
 
         // 获取响应内容

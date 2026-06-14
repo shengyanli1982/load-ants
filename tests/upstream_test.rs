@@ -7,9 +7,10 @@ use loadants::config::{
     UpstreamGroupConfig, UpstreamScheme, UpstreamServerConfig,
 };
 use loadants::error::AppError;
+use loadants::r#const::dns_client_limits;
 use loadants::upstream::UpstreamManager;
 use reqwest::Url;
-use std::net::{Ipv4Addr, SocketAddr};
+use std::net::Ipv4Addr;
 use std::str::FromStr;
 use tokio::net::UdpSocket;
 use wiremock::{
@@ -131,7 +132,7 @@ async fn test_dns_scheme_forward_via_udp() {
         scheme: UpstreamScheme::Dns,
         strategy: LoadBalancingStrategy::RoundRobin,
         servers: vec![UpstreamServerConfig::Dns(DnsUpstreamServerConfig {
-            addr: SocketAddr::from(server_addr),
+            addr: server_addr,
             weight: 1,
         })],
         retry: None,
@@ -144,6 +145,7 @@ async fn test_dns_scheme_forward_via_udp() {
         request_timeout: 2,
         prefer_tcp: false,
         tcp_reconnect: true,
+        tcp_idle_timeout: dns_client_limits::DEFAULT_TCP_IDLE_TIMEOUT,
     };
     let manager = UpstreamManager::new(groups, http_config, dns_config)
         .await
