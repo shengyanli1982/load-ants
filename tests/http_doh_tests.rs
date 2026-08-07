@@ -1,9 +1,13 @@
 use std::{collections::HashMap, sync::Arc};
+use tokio::sync::RwLock;
 
 use axum::{
     body::to_bytes,
     extract::{Query as AxumQuery, State},
-    http::{header::CONTENT_TYPE, HeaderMap, StatusCode},
+    http::{
+        header::{CACHE_CONTROL, CONTENT_TYPE},
+        HeaderMap, StatusCode,
+    },
     response::IntoResponse,
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
@@ -24,12 +28,13 @@ use loadants::{
 // 创建测试用的RequestHandler
 fn create_test_handler(_response: Option<Message>) -> Arc<RequestHandler> {
     // 创建mock组件
-    let cache = Arc::new(DnsCache::new(0, 0, None));
+    let cache = Arc::new(DnsCache::new(0, 0, 0, None, None));
 
-    // Router::new返回Result<Router, ConfigError>，我们需要处理这个结果
-    let router = Arc::new(Router::new(Vec::new()).unwrap_or_else(|_| {
-        panic!("Failed to create Router");
-    }));
+    let router = Arc::new(RwLock::new(Arc::new(
+        Router::new(Vec::new()).unwrap_or_else(|_| {
+            panic!("Failed to create Router");
+        }),
+    )));
 
     // 为了避免创建新的tokio运行时，我们创建一个简单的测试替代
     // 这里是一个简化的方式来允许测试继续，实际测试应该使用适当的mock框架
@@ -39,12 +44,12 @@ fn create_test_handler(_response: Option<Message>) -> Arc<RequestHandler> {
         tcp_timeout: 10,
         http_bind_addr: "127.0.0.1:0".parse().unwrap(),
         http_timeout: 30,
+        rate_limiter: None,
+        udp_recv_buffer: 4 * 1024 * 1024,
+        udp_send_buffer: 4 * 1024 * 1024,
+        udp_socket_count: 1,
     };
 
-    // 创建一个传统的处理器 - 但不启动实际的服务
-    let _handler = loadants::handler::handle_request;
-
-    // 返回一个预构建的 RequestHandler (避免测试期间使用真实的上游管理器)
     Arc::new(RequestHandler::new(
         cache,
         router,
@@ -138,7 +143,10 @@ async fn test_handle_doh_get_missing_param() {
 
     // 创建测试处理器
     let handler = create_test_handler(Some(create_test_dns_response()));
-    let app_state = AppState { handler };
+    let app_state = AppState {
+        handler,
+        rate_limiter: None,
+    };
     let addr = "127.0.0.1:8080".parse().unwrap();
 
     // 调用处理器
@@ -163,7 +171,10 @@ async fn test_handle_doh_get_invalid_base64() {
 
     // 创建测试处理器
     let handler = create_test_handler(Some(create_test_dns_response()));
-    let app_state = AppState { handler };
+    let app_state = AppState {
+        handler,
+        rate_limiter: None,
+    };
     let addr = "127.0.0.1:8080".parse().unwrap();
 
     // 调用处理器
@@ -188,7 +199,10 @@ async fn test_handle_doh_get_invalid_dns_message() {
 
     // 创建测试处理器
     let handler = create_test_handler(Some(create_test_dns_response()));
-    let app_state = AppState { handler };
+    let app_state = AppState {
+        handler,
+        rate_limiter: None,
+    };
     let addr = "127.0.0.1:8080".parse().unwrap();
 
     // 调用处理器
@@ -203,20 +217,20 @@ async fn test_handle_doh_get_invalid_dns_message() {
     assert_eq!(response.into_response().status(), StatusCode::BAD_REQUEST);
 }
 
-// 测试DoH GET请求处理器错误
+// 测试DoH GET请求处理器错误（上游失败应返回 HTTP 200 + DNS SERVFAIL per RFC 8484）
 #[tokio::test]
 async fn test_handle_doh_get_handler_error() {
-    // 创建查询参数
     let query_params = AxumQuery(DohGetParams {
         dns: URL_SAFE_NO_PAD.encode(encode_dns_message(&create_test_dns_query())),
     });
 
-    // 创建会返回错误的测试处理器
     let handler = create_test_handler(None);
-    let app_state = AppState { handler };
+    let app_state = AppState {
+        handler,
+        rate_limiter: None,
+    };
     let addr = "127.0.0.1:8080".parse().unwrap();
 
-    // 调用处理器
     let response = handle_doh_get(
         State(app_state),
         axum::extract::ConnectInfo(addr),
@@ -224,11 +238,14 @@ async fn test_handle_doh_get_handler_error() {
     )
     .await;
 
-    // 验证返回错误状态码
-    assert_eq!(
-        response.into_response().status(),
-        StatusCode::INTERNAL_SERVER_ERROR
-    );
+    let resp = response.into_response();
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(resp.headers().get(CACHE_CONTROL).unwrap(), "max-age=0");
+
+    let body = get_response_bytes(resp.into_body()).await;
+    let dns_response = Message::from_vec(&body).expect("Failed to parse DNS response");
+    assert_eq!(dns_response.response_code(), ResponseCode::ServFail);
+    assert_eq!(dns_response.id(), 1234);
 }
 
 // 测试DoH POST请求处理成功
@@ -273,7 +290,10 @@ async fn test_handle_doh_post_missing_content_type() {
 
     // 创建测试处理器
     let handler = create_test_handler(Some(create_test_dns_response()));
-    let app_state = AppState { handler };
+    let app_state = AppState {
+        handler,
+        rate_limiter: None,
+    };
     let addr = "127.0.0.1:8080".parse().unwrap();
 
     // 调用处理器
@@ -302,7 +322,10 @@ async fn test_handle_doh_post_invalid_content_type() {
 
     // 创建测试处理器
     let handler = create_test_handler(Some(create_test_dns_response()));
-    let app_state = AppState { handler };
+    let app_state = AppState {
+        handler,
+        rate_limiter: None,
+    };
     let addr = "127.0.0.1:8080".parse().unwrap();
 
     // 调用处理器
@@ -333,7 +356,10 @@ async fn test_handle_doh_post_invalid_dns_message() {
 
     // 创建测试处理器
     let handler = create_test_handler(Some(create_test_dns_response()));
-    let app_state = AppState { handler };
+    let app_state = AppState {
+        handler,
+        rate_limiter: None,
+    };
     let addr = "127.0.0.1:8080".parse().unwrap();
 
     // 调用处理器
@@ -349,23 +375,22 @@ async fn test_handle_doh_post_invalid_dns_message() {
     assert_eq!(response.into_response().status(), StatusCode::BAD_REQUEST);
 }
 
-// 测试DoH POST请求处理器错误
+// 测试DoH POST请求处理器错误（上游失败应返回 HTTP 200 + DNS SERVFAIL per RFC 8484）
 #[tokio::test]
 async fn test_handle_doh_post_handler_error() {
-    // 创建请求体
     let query = create_test_dns_query();
     let body = Bytes::from(encode_dns_message(&query));
 
-    // 创建请求头
     let mut headers = HeaderMap::new();
     headers.insert(CONTENT_TYPE, "application/dns-message".parse().unwrap());
 
-    // 创建会返回错误的测试处理器
     let handler = create_test_handler(None);
-    let app_state = AppState { handler };
+    let app_state = AppState {
+        handler,
+        rate_limiter: None,
+    };
     let addr = "127.0.0.1:8080".parse().unwrap();
 
-    // 调用处理器
     let response = handle_doh_post(
         State(app_state),
         axum::extract::ConnectInfo(addr),
@@ -374,11 +399,14 @@ async fn test_handle_doh_post_handler_error() {
     )
     .await;
 
-    // 验证返回错误状态码
-    assert_eq!(
-        response.into_response().status(),
-        StatusCode::INTERNAL_SERVER_ERROR
-    );
+    let resp = response.into_response();
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(resp.headers().get(CACHE_CONTROL).unwrap(), "max-age=0");
+
+    let resp_body = get_response_bytes(resp.into_body()).await;
+    let dns_response = Message::from_vec(&resp_body).expect("Failed to parse DNS response");
+    assert_eq!(dns_response.response_code(), ResponseCode::ServFail);
+    assert_eq!(dns_response.id(), 1234);
 }
 
 // 测试JSON GET请求处理成功
@@ -441,11 +469,15 @@ async fn test_handle_json_get_missing_name() {
         cd: None,
         do_flag: None,
         ct: None,
+        ecs: None,
     });
 
     // 创建测试处理器
     let handler = create_test_handler(Some(create_test_dns_response()));
-    let app_state = AppState { handler };
+    let app_state = AppState {
+        handler,
+        rate_limiter: None,
+    };
     let addr = "127.0.0.1:8080".parse().unwrap();
 
     // 调用处理器
@@ -470,11 +502,15 @@ async fn test_handle_json_get_invalid_type() {
         cd: None,
         do_flag: None,
         ct: None,
+        ecs: None,
     });
 
     // 创建测试处理器
     let handler = create_test_handler(Some(create_test_dns_response()));
-    let app_state = AppState { handler };
+    let app_state = AppState {
+        handler,
+        rate_limiter: None,
+    };
     let addr = "127.0.0.1:8080".parse().unwrap();
 
     // 调用处理器
@@ -499,11 +535,15 @@ async fn test_handle_json_get_invalid_domain() {
         cd: None,
         do_flag: None,
         ct: None,
+        ecs: None,
     });
 
     // 创建测试处理器
     let handler = create_test_handler(Some(create_test_dns_response()));
-    let app_state = AppState { handler };
+    let app_state = AppState {
+        handler,
+        rate_limiter: None,
+    };
     let addr = "127.0.0.1:8080".parse().unwrap();
 
     // 调用处理器
@@ -518,24 +558,25 @@ async fn test_handle_json_get_invalid_domain() {
     assert_eq!(response.into_response().status(), StatusCode::BAD_REQUEST);
 }
 
-// 测试JSON GET请求处理器错误
+// 测试JSON GET请求处理器错误（上游失败应返回 HTTP 200 + DNS SERVFAIL per RFC 8484）
 #[tokio::test]
 async fn test_handle_json_get_handler_error() {
-    // 创建查询参数
     let query_params = AxumQuery(DohJsonGetParams {
         name: "example.com".to_string(),
         r#type: Some("A".to_string()),
         cd: None,
         do_flag: None,
         ct: None,
+        ecs: None,
     });
 
-    // 创建会返回错误的测试处理器
     let handler = create_test_handler(None);
-    let app_state = AppState { handler };
+    let app_state = AppState {
+        handler,
+        rate_limiter: None,
+    };
     let addr = "127.0.0.1:8080".parse().unwrap();
 
-    // 调用处理器
     let response = handle_json_get(
         State(app_state),
         axum::extract::ConnectInfo(addr),
@@ -543,9 +584,14 @@ async fn test_handle_json_get_handler_error() {
     )
     .await;
 
-    // 验证返回错误状态码
-    assert_eq!(
-        response.into_response().status(),
-        StatusCode::INTERNAL_SERVER_ERROR
-    );
+    let resp = response.into_response();
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(resp.headers().get(CACHE_CONTROL).unwrap(), "max-age=0");
+
+    // JSON响应（ct默认为None时返回application/dns-json）
+    let resp_body = get_response_bytes(resp.into_body()).await;
+    let json: serde_json::Value =
+        serde_json::from_slice(&resp_body).expect("Failed to parse JSON response");
+    // SERVFAIL = Status 2
+    assert_eq!(json.get("Status").and_then(|s| s.as_u64()), Some(2));
 }

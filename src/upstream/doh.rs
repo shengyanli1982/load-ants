@@ -44,30 +44,30 @@ impl<'a> DoHClient<'a> {
         query: &Message,
         server: &DoHUpstreamServerConfig,
     ) -> Result<Message, AppError> {
+        let original_id = query.id();
+
         // 创建请求URL
         let url = server.url.clone();
 
         // 根据内容类型处理
         match server.content_type {
             DoHContentType::Message => {
+                // RFC 8484 Section 4.1: DoH客户端发送请求时应将DNS ID设置为0，
+                // 以最大化HTTP缓存友好性。
+                let mut query_with_zero_id = query.clone();
+                query_with_zero_id.set_id(0);
+
                 // 创建一个可复用的缓冲区。
-                let mut buffer = Vec::with_capacity(512); // 512 字节足以覆盖大多数 DNS 查询负载
-                                                          // 使用二进制编码器将查询消息写入缓冲区。
+                let mut buffer = Vec::with_capacity(512);
                 let mut encoder = BinEncoder::new(&mut buffer);
-                query.emit(&mut encoder)?;
+                query_with_zero_id.emit(&mut encoder)?;
 
                 // 创建POST请求
                 let mut request = self
                     .client
                     .post(url)
-                    .header(
-                        http_headers::ACCEPT,
-                        http_headers::content_types::DNS_MESSAGE,
-                    )
-                    .header(
-                        http_headers::CONTENT_TYPE,
-                        http_headers::content_types::DNS_MESSAGE,
-                    )
+                    .header("Accept", http_headers::content_types::DNS_MESSAGE)
+                    .header("Content-Type", http_headers::content_types::DNS_MESSAGE)
                     .body(buffer);
 
                 // 添加认证信息
@@ -79,8 +79,8 @@ impl<'a> DoHClient<'a> {
                 // 解析二进制响应为DNS消息
                 let mut message = Message::from_vec(&response_data)?;
 
-                // 复制请求ID
-                message.set_id(query.id());
+                // 恢复原始请求ID
+                message.set_id(original_id);
 
                 Ok(message)
             }
@@ -100,17 +100,23 @@ impl<'a> DoHClient<'a> {
         query: &Message,
         server: &DoHUpstreamServerConfig,
     ) -> Result<Message, AppError> {
+        let original_id = query.id();
+
         // 创建请求URL
         let mut url = server.url.clone();
 
         // 根据内容类型处理
         match server.content_type {
             DoHContentType::Message => {
+                // RFC 8484 Section 4.1: DoH客户端发送请求时应将DNS ID设置为0，
+                // 以最大化HTTP缓存友好性。
+                let mut query_with_zero_id = query.clone();
+                query_with_zero_id.set_id(0);
+
                 // 创建一个可复用的缓冲区
                 let mut buffer = Vec::with_capacity(2048);
-                // 使用二进制编码器将查询消息写入缓冲区
                 let mut encoder = BinEncoder::new(&mut buffer);
-                query.emit(&mut encoder)?;
+                query_with_zero_id.emit(&mut encoder)?;
 
                 // 按 base64url 规则编码查询报文。
                 let b64_data = URL_SAFE_NO_PAD.encode(&buffer);
@@ -119,10 +125,10 @@ impl<'a> DoHClient<'a> {
                 url.query_pairs_mut().append_pair("dns", &b64_data);
 
                 // 创建GET请求
-                let mut request = self.client.get(url).header(
-                    http_headers::ACCEPT,
-                    http_headers::content_types::DNS_MESSAGE,
-                );
+                let mut request = self
+                    .client
+                    .get(url)
+                    .header("Accept", http_headers::content_types::DNS_MESSAGE);
 
                 // 添加认证信息
                 request = HttpClient::add_auth_to_request(request, &server.auth)?;
@@ -133,8 +139,8 @@ impl<'a> DoHClient<'a> {
                 // 解析二进制响应为DNS消息
                 let mut message = Message::from_vec(&response_data)?;
 
-                // 复制请求ID
-                message.set_id(query.id());
+                // 恢复原始请求ID
+                message.set_id(original_id);
 
                 Ok(message)
             }
@@ -150,15 +156,24 @@ impl<'a> DoHClient<'a> {
                     .append_pair("name", &query_param.name().to_string())
                     .append_pair("type", &(u16::from(query_param.query_type())).to_string());
 
-                if u16::from(query_param.query_class()) != 1 {
-                    url.query_pairs_mut().append_pair("dnssec_data", "true");
+                let dnssec_ok = query
+                    .extensions()
+                    .as_ref()
+                    .map(|e| e.flags().dnssec_ok)
+                    .unwrap_or(false);
+                if dnssec_ok {
+                    url.query_pairs_mut().append_pair("do", "true");
+                }
+
+                if query.checking_disabled() {
+                    url.query_pairs_mut().append_pair("cd", "true");
                 }
 
                 // 创建GET请求
                 let mut request = self
                     .client
                     .get(url)
-                    .header(http_headers::ACCEPT, http_headers::content_types::DNS_JSON);
+                    .header("Accept", http_headers::content_types::DNS_JSON);
 
                 // 添加认证信息
                 request = HttpClient::add_auth_to_request(request, &server.auth)?;

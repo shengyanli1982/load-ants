@@ -7,7 +7,11 @@ use serde::{Serialize, Serializer};
 use std::fmt::Write;
 
 /// 序列化 DNS 消息
-pub struct SerializableDnsMessage<'a>(pub &'a Message);
+pub struct SerializableDnsMessage<'a> {
+    pub message: &'a Message,
+    pub comment: Option<&'a str>,
+    pub ecs: Option<&'a str>,
+}
 
 impl Serialize for SerializableDnsMessage<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -16,47 +20,69 @@ impl Serialize for SerializableDnsMessage<'_> {
     {
         // 估算字段数量以进行优化
         let mut field_count = 6;
-        if !self.0.queries().is_empty() {
+        if !self.message.queries().is_empty() {
             field_count += 1;
         }
-        if !self.0.answers().is_empty() {
+        if !self.message.answers().is_empty() {
             field_count += 1;
         }
-        if !self.0.name_servers().is_empty() {
+        if !self.message.name_servers().is_empty() {
             field_count += 1;
         }
-        if !self.0.additionals().is_empty() {
+        if !self.message.additionals().is_empty() {
+            field_count += 1;
+        }
+        if self.comment.is_some() {
+            field_count += 1;
+        }
+        if self.ecs.is_some() {
             field_count += 1;
         }
 
         let mut state = serializer.serialize_struct("DnsJsonResponse", field_count)?;
 
         // 序列化核心状态字段
-        state.serialize_field("Status", &self.0.response_code().low())?;
-        state.serialize_field("TC", &self.0.truncated())?;
-        state.serialize_field("RD", &self.0.recursion_desired())?;
-        state.serialize_field("RA", &self.0.recursion_available())?;
-        state.serialize_field("AD", &self.0.authentic_data())?;
-        state.serialize_field("CD", &self.0.checking_disabled())?;
+        state.serialize_field("Status", &self.message.response_code().low())?;
+        state.serialize_field("TC", &self.message.truncated())?;
+        state.serialize_field("RD", &self.message.recursion_desired())?;
+        state.serialize_field("RA", &self.message.recursion_available())?;
+        state.serialize_field("AD", &self.message.authentic_data())?;
+        state.serialize_field("CD", &self.message.checking_disabled())?;
 
         // 序列化问题部分
-        if !self.0.queries().is_empty() {
-            state.serialize_field("Question", &SerializableQueries(self.0.queries()))?;
+        if !self.message.queries().is_empty() {
+            state.serialize_field("Question", &SerializableQueries(self.message.queries()))?;
         }
 
         // 序列化回答部分
-        if !self.0.answers().is_empty() {
-            state.serialize_field("Answer", &SerializableRecords(self.0.answers()))?;
+        if !self.message.answers().is_empty() {
+            state.serialize_field("Answer", &SerializableRecords(self.message.answers()))?;
         }
 
         // 序列化权威部分
-        if !self.0.name_servers().is_empty() {
-            state.serialize_field("Authority", &SerializableRecords(self.0.name_servers()))?;
+        if !self.message.name_servers().is_empty() {
+            state.serialize_field(
+                "Authority",
+                &SerializableRecords(self.message.name_servers()),
+            )?;
         }
 
         // 序列化附加信息部分
-        if !self.0.additionals().is_empty() {
-            state.serialize_field("Additional", &SerializableRecords(self.0.additionals()))?;
+        if !self.message.additionals().is_empty() {
+            state.serialize_field(
+                "Additional",
+                &SerializableRecords(self.message.additionals()),
+            )?;
+        }
+
+        // 序列化 Comment（仅当存在时）
+        if let Some(comment) = self.comment {
+            state.serialize_field("Comment", comment)?;
+        }
+
+        // 序列化 EDNS Client Subnet（仅当存在时）
+        if let Some(ecs) = self.ecs {
+            state.serialize_field("edns_client_subnet", ecs)?;
         }
 
         state.end()
@@ -87,13 +113,14 @@ impl Serialize for SerializableRecord<'_> {
     where
         S: Serializer,
     {
-        let mut state = serializer.serialize_struct("DnsRecord", 4)?;
+        let mut state = serializer.serialize_struct("DnsRecord", 5)?;
         state.serialize_field("name", &self.0.name().to_string())?;
         state.serialize_field("type", &u16::from(self.0.record_type()))?;
+        state.serialize_field("class", &1)?;
         state.serialize_field("TTL", &self.0.ttl())?;
 
         // 专门处理 RData
-        let rdata_string = rdata_to_string(self.0.data());
+        let rdata_string = rdata_to_string(Some(self.0.data()));
         state.serialize_field("data", &rdata_string)?;
 
         state.end()
@@ -111,9 +138,10 @@ impl Serialize for SerializableQuery<'_> {
     where
         S: Serializer,
     {
-        let mut q_map = serializer.serialize_struct("DnsQuestion", 2)?;
+        let mut q_map = serializer.serialize_struct("DnsQuestion", 3)?;
         q_map.serialize_field("name", &self.0.name().to_string())?;
         q_map.serialize_field("type", &u16::from(self.0.query_type()))?;
+        q_map.serialize_field("class", &1)?;
         q_map.end()
     }
 }

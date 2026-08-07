@@ -1,24 +1,60 @@
-// DoH 请求处理函数与响应转换逻辑。
-
 use crate::doh::json::SerializableDnsMessage;
 use crate::doh::state::AppState;
-use crate::metrics::{normalize_query_type_label, METRICS};
-use crate::r#const::{http_headers, processing_labels, protocol_labels};
+use crate::metrics::{normalize_query_type_label, normalize_response_code, METRICS};
+use crate::r#const::{error_labels, http_headers, processing_labels, protocol_labels};
 use axum::{
     body::Bytes,
     extract::{ConnectInfo, Query, State},
-    http::{header, HeaderMap, StatusCode},
+    http::{header, HeaderMap, HeaderValue, StatusCode},
     response::{IntoResponse, Json, Response},
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
-use hickory_proto::op::{Edns, Message, MessageType};
-use hickory_proto::rr::{Name, RecordType};
+use hickory_proto::op::{Edns, Message, MessageType, ResponseCode};
+use hickory_proto::rr::{
+    rdata::opt::{ClientSubnet, EdnsOption},
+    Name, RData, RecordType,
+};
 use serde::Deserialize;
 use std::borrow::Cow;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::time::Instant;
-use tracing::{error, info, warn};
+use tracing::{debug, error, warn};
+
+const DEFAULT_CACHE_MAX_AGE: u32 = 60;
+
+/// RFC 8484 Section 5.1: 从DNS响应中提取最小TTL，用于设置Cache-Control max-age。
+/// max-age MUST NOT 大于Answer section中的最小TTL。
+fn extract_min_ttl(response: &Message) -> u32 {
+    match response.response_code() {
+        ResponseCode::ServFail
+        | ResponseCode::Refused
+        | ResponseCode::FormErr
+        | ResponseCode::NotImp => return 0,
+        _ => {}
+    }
+
+    let answers = response.answers();
+    if !answers.is_empty() {
+        answers
+            .iter()
+            .map(|r| r.ttl())
+            .min()
+            .unwrap_or(DEFAULT_CACHE_MAX_AGE)
+    } else if !response.name_servers().is_empty() {
+        let soa_min = response
+            .name_servers()
+            .iter()
+            .filter_map(|r| match r.data() {
+                RData::SOA(soa) => Some(soa.minimum()),
+                _ => None,
+            })
+            .min();
+        soa_min.unwrap_or(DEFAULT_CACHE_MAX_AGE)
+    } else {
+        DEFAULT_CACHE_MAX_AGE
+    }
+}
 
 // 定义一个元组来包含错误信息
 type DohError = (StatusCode, &'static str);
@@ -59,6 +95,9 @@ pub struct DohJsonGetParams {
     /// 使用 ct=application/dns-message 接收二进制 DNS 消息；使用 ct=application/x-javascript 或不提供 ct 参数接收 JSON 文本
     #[serde(default)]
     pub ct: Option<String>,
+    /// EDNS Client Subnet 参数（Google JSON API），格式为 IP/prefix（如 1.2.3.4/24）。
+    #[serde(rename = "edns_client_subnet", default)]
+    pub ecs: Option<String>,
 }
 
 /// 处理 DNS 消息并生成响应
@@ -66,22 +105,48 @@ pub struct DohJsonGetParams {
 /// 这是一个内部辅助函数，用于处理 DNS 消息并生成响应，被 GET 和 POST 处理函数共用
 #[inline(always)]
 async fn process_dns_message(state: &AppState, dns_message: &Message) -> Result<Message, DohError> {
-    // 处理 DNS 请求
     match state.handler.handle_request(dns_message).await {
         Ok(resp) => Ok(resp),
-        Err(_) => {
-            // 注意：这里的具体错误已经在 handler 内部记录，这里只向上传递错误类型
-            Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                processing_labels::error_types::UPSTREAM_ERROR,
-            ))
+        Err(e) => {
+            // RFC 8484 Section 4.2.1: DNS 处理失败必须以 HTTP 200 + DNS SERVFAIL 返回，
+            // 而非 HTTP 5xx。HTTP 错误码仅用于 HTTP 协议层面的错误。
+            warn!(
+                request_id = dns_message.id(),
+                error = %e,
+                "Upstream processing failed, returning DNS SERVFAIL per RFC 8484"
+            );
+
+            let mut response = Message::new();
+            response.set_id(dns_message.id());
+            response.set_message_type(MessageType::Response);
+            response.set_op_code(dns_message.op_code());
+            response.set_recursion_desired(dns_message.recursion_desired());
+            response.set_recursion_available(true);
+            response.set_response_code(ResponseCode::ServFail);
+
+            for query in dns_message.queries() {
+                response.add_query(query.clone());
+            }
+
+            // RFC 6891 §7 — 若请求包含 EDNS0 OPT，响应也必须包含 OPT 记录
+            if let Some(req_edns) = dns_message.extensions() {
+                let mut edns = Edns::new();
+                edns.set_max_payload(req_edns.max_payload());
+                edns.set_version(0);
+                // 错误响应不携带 DO bit，不复制 DNSSEC 相关选项
+                response.set_edns(edns);
+            }
+
+            Ok(response)
         }
     }
 }
 
-/// 处理 RFC 8484 DoH GET 请求
-///
-/// 处理 DNS 查询，其中 DNS 消息通过 URL 参数传递（base64url 编码）
+#[tracing::instrument(
+    name = "doh_query",
+    skip(state, params),
+    fields(client_ip = %addr.ip(), method = "GET")
+)]
 pub async fn handle_doh_get(
     State(state): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
@@ -89,8 +154,25 @@ pub async fn handle_doh_get(
 ) -> impl IntoResponse {
     let start_time = Instant::now();
 
+    if let Some(limiter) = &state.rate_limiter {
+        if !limiter.check(addr.ip()) {
+            METRICS
+                .http_request_errors_total
+                .with_label_values(&[error_labels::REQUEST_ERROR])
+                .inc();
+            METRICS
+                .http_requests_total
+                .with_label_values(&[StatusCode::TOO_MANY_REQUESTS.as_str()])
+                .inc();
+            return (
+                StatusCode::TOO_MANY_REQUESTS,
+                [(header::RETRY_AFTER, HeaderValue::from_static("1"))],
+            )
+                .into_response();
+        }
+    }
+
     let result: DohBinaryHandlerResult = async {
-        // 提取 DNS 查询参数
         let dns_param = &params.dns;
 
         // 解码 base64url 编码的 DNS 消息。
@@ -139,8 +221,23 @@ pub async fn handle_doh_get(
             header::HeaderValue::from_static(http_headers::content_types::DNS_MESSAGE),
         );
 
-        // 记录成功的指标
-        record_doh_metrics(start_time, &query_type, addr, &Ok(StatusCode::OK), None);
+        // RFC 8484 Section 5.1: 设置Cache-Control max-age为最小TTL
+        let min_ttl = extract_min_ttl(&response);
+        headers.insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_str(&format!("max-age={}", min_ttl))
+                .unwrap_or_else(|_| HeaderValue::from_static("max-age=60")),
+        );
+
+        let rcode = normalize_response_code(response.response_code());
+        record_doh_metrics(
+            start_time,
+            &query_type,
+            addr,
+            &Ok(StatusCode::OK),
+            None,
+            Some(rcode),
+        );
 
         Ok((headers, response_bytes))
     }
@@ -149,22 +246,24 @@ pub async fn handle_doh_get(
     match result {
         Ok((headers, body)) => (StatusCode::OK, headers, body).into_response(),
         Err((status, error_type, query_type)) => {
-            // 记录失败的指标
             record_doh_metrics(
                 start_time,
                 &query_type,
                 addr,
                 &Err(status),
                 Some(error_type),
+                None,
             );
             status.into_response()
         }
     }
 }
 
-/// 处理 RFC 8484 DoH POST 请求
-///
-/// 处理 DNS 查询，其中 DNS 消息在 HTTP 请求体中传递
+#[tracing::instrument(
+    name = "doh_query",
+    skip(body, state, headers),
+    fields(client_ip = %addr.ip(), method = "POST")
+)]
 pub async fn handle_doh_post(
     State(state): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
@@ -173,8 +272,25 @@ pub async fn handle_doh_post(
 ) -> impl IntoResponse {
     let start_time = Instant::now();
 
+    if let Some(limiter) = &state.rate_limiter {
+        if !limiter.check(addr.ip()) {
+            METRICS
+                .http_request_errors_total
+                .with_label_values(&[error_labels::REQUEST_ERROR])
+                .inc();
+            METRICS
+                .http_requests_total
+                .with_label_values(&[StatusCode::TOO_MANY_REQUESTS.as_str()])
+                .inc();
+            return (
+                StatusCode::TOO_MANY_REQUESTS,
+                [(header::RETRY_AFTER, HeaderValue::from_static("1"))],
+            )
+                .into_response();
+        }
+    }
+
     let result: DohBinaryHandlerResult = async {
-        // 验证内容类型
         if let Some(content_type) = headers.get(header::CONTENT_TYPE) {
             if content_type != http_headers::content_types::DNS_MESSAGE {
                 return Err((
@@ -227,8 +343,24 @@ pub async fn handle_doh_post(
             header::CONTENT_TYPE,
             header::HeaderValue::from_static(http_headers::content_types::DNS_MESSAGE),
         );
-        // 记录成功的指标
-        record_doh_metrics(start_time, &query_type, addr, &Ok(StatusCode::OK), None);
+
+        // RFC 8484 Section 5.1: 设置Cache-Control max-age为最小TTL
+        let min_ttl = extract_min_ttl(&response);
+        headers.insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_str(&format!("max-age={}", min_ttl))
+                .unwrap_or_else(|_| HeaderValue::from_static("max-age=60")),
+        );
+
+        let rcode = normalize_response_code(response.response_code());
+        record_doh_metrics(
+            start_time,
+            &query_type,
+            addr,
+            &Ok(StatusCode::OK),
+            None,
+            Some(rcode),
+        );
 
         Ok((headers, response_bytes))
     }
@@ -237,22 +369,19 @@ pub async fn handle_doh_post(
     match result {
         Ok((headers, body)) => (StatusCode::OK, headers, body).into_response(),
         Err((status, error_type, query_type)) => {
-            // 记录失败的指标
             record_doh_metrics(
                 start_time,
                 &query_type,
                 addr,
                 &Err(status),
                 Some(error_type),
+                None,
             );
             status.into_response()
         }
     }
 }
 
-/// 处理 Google JSON 格式的 DoH GET 请求
-///
-/// 处理 Google 格式的 DNS 查询，参数通过 URL 查询字符串传递
 pub async fn handle_json_get(
     State(state): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
@@ -260,8 +389,25 @@ pub async fn handle_json_get(
 ) -> impl IntoResponse {
     let start_time = Instant::now();
 
+    if let Some(limiter) = &state.rate_limiter {
+        if !limiter.check(addr.ip()) {
+            METRICS
+                .http_request_errors_total
+                .with_label_values(&[error_labels::REQUEST_ERROR])
+                .inc();
+            METRICS
+                .http_requests_total
+                .with_label_values(&[StatusCode::TOO_MANY_REQUESTS.as_str()])
+                .inc();
+            return (
+                StatusCode::TOO_MANY_REQUESTS,
+                [(header::RETRY_AFTER, HeaderValue::from_static("1"))],
+            )
+                .into_response();
+        }
+    }
+
     let result: DohResponseHandlerResult = async {
-        // 提取必要的查询参数
         let name = &params.name;
         if name.is_empty() {
             return Err((
@@ -307,7 +453,7 @@ pub async fn handle_json_get(
         let dnssec_ok = match params.do_flag.as_deref() {
             Some("1") | Some("true") => true,
             Some("0") | Some("false") | None => false,
-            _ => false, // 无效值默认为 false
+            _ => false,
         };
 
         // 创建 DNS 查询消息
@@ -327,10 +473,19 @@ pub async fn handle_json_get(
         let q = hickory_proto::op::Query::query(name_result, record_type);
         query.add_query(q);
 
-        // 设置 EDNS DNSSEC OK 标志
-        if dnssec_ok {
+        let ecs_subnet = params
+            .ecs
+            .as_deref()
+            .and_then(|ecs_str| ClientSubnet::from_str(ecs_str).ok());
+
+        if dnssec_ok || ecs_subnet.is_some() {
             let mut edns = Edns::new();
-            edns.set_dnssec_ok(true);
+            if dnssec_ok {
+                edns.set_dnssec_ok(true);
+            }
+            if let Some(client_subnet) = ecs_subnet {
+                edns.options_mut().insert(EdnsOption::Subnet(client_subnet));
+            }
             query.set_edns(edns);
         }
 
@@ -341,6 +496,19 @@ pub async fn handle_json_get(
 
         // 构建 HTTP 响应
         let mut headers = HeaderMap::new();
+
+        // RFC 8484 Section 5.1: 设置Cache-Control max-age为最小TTL
+        let min_ttl = extract_min_ttl(&response);
+        headers.insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_str(&format!("max-age={}", min_ttl))
+                .unwrap_or_else(|_| HeaderValue::from_static("max-age=60")),
+        );
+
+        // 提取 edns_client_subnet 参数（Google JSON API）
+        let ecs = params.ecs.as_deref();
+
+        let rcode = normalize_response_code(response.response_code());
 
         // 根据内容类型决定返回二进制 DNS 消息还是 JSON 文本。
         let response = match params.ct.as_deref() {
@@ -368,12 +536,26 @@ pub async fn handle_json_get(
                     header::CONTENT_TYPE,
                     header::HeaderValue::from_static(http_headers::content_types::DNS_JSON),
                 );
-                (headers, Json(SerializableDnsMessage(&response))).into_response()
+                (
+                    headers,
+                    Json(SerializableDnsMessage {
+                        message: &response,
+                        comment: None,
+                        ecs,
+                    }),
+                )
+                    .into_response()
             }
         };
 
-        // 记录成功的指标
-        record_doh_metrics(start_time, &query_type, addr, &Ok(StatusCode::OK), None);
+        record_doh_metrics(
+            start_time,
+            &query_type,
+            addr,
+            &Ok(StatusCode::OK),
+            None,
+            Some(rcode),
+        );
 
         Ok(response)
     }
@@ -382,13 +564,13 @@ pub async fn handle_json_get(
     match result {
         Ok(response) => response,
         Err((status, error_type, query_type)) => {
-            // 记录失败的指标
             record_doh_metrics(
                 start_time,
                 &query_type,
                 addr,
                 &Err(status),
                 Some(error_type),
+                None,
             );
             status.into_response()
         }
@@ -403,6 +585,7 @@ fn record_doh_metrics(
     client_addr: SocketAddr,
     result: &Result<StatusCode, StatusCode>,
     error_type: Option<&str>,
+    response_code: Option<&str>,
 ) {
     let duration = start_time.elapsed().as_secs_f64();
     let status_code = match result {
@@ -410,20 +593,26 @@ fn record_doh_metrics(
     };
     let status_str = status_code.as_str();
 
-    // 记录请求总数和时长
     METRICS
-        .http_requests_total()
+        .http_requests_total
         .with_label_values(&[status_str])
         .inc();
 
-    // 根据结果记录日志和错误总数
     match result {
         Ok(status) => {
             METRICS
-                .http_request_duration_seconds()
+                .http_request_duration_seconds
                 .with_label_values(&[query_type, status_str])
                 .observe(duration);
-            info!(
+
+            if let Some(rcode) = response_code {
+                METRICS
+                    .dns_response_codes_total
+                    .with_label_values(&[rcode])
+                    .inc();
+            }
+
+            debug!(
                 client_ip = %client_addr,
                 status_code = %status,
                 duration = ?start_time.elapsed(),
@@ -433,7 +622,7 @@ fn record_doh_metrics(
         Err(status) => {
             if let Some(err_type) = error_type {
                 METRICS
-                    .http_request_errors_total()
+                    .http_request_errors_total
                     .with_label_values(&[err_type])
                     .inc();
                 error!(

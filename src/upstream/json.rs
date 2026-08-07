@@ -1,4 +1,4 @@
-use crate::{error::AppError, r#const::http_headers};
+use crate::error::AppError;
 use hickory_proto::{
     op::{Message, MessageType, Query, ResponseCode},
     rr::{
@@ -6,20 +6,15 @@ use hickory_proto::{
         Name, RData, Record, RecordType,
     },
 };
-use serde_json::{json, Value as JsonValue};
+use serde_json::Value as JsonValue;
 use std::net::{Ipv4Addr, Ipv6Addr};
 use tracing::{debug, warn};
 
 // DNS JSON 字段常量。
 pub mod json_fields {
-    // 请求字段
     pub const NAME: &str = "name";
     pub const TYPE: &str = "type";
-    #[allow(dead_code)]
-    pub const DO: &str = "do";
     pub const CD: &str = "cd";
-    #[allow(dead_code)]
-    pub const CT: &str = "ct";
 
     // 响应字段
     pub const TC: &str = "TC";
@@ -36,10 +31,6 @@ pub mod json_fields {
     pub const DATA: &str = "data";
     pub const EDNS_CLIENT_SUBNET: &str = "edns_client_subnet";
 }
-
-// DNS 常量。
-#[allow(dead_code)]
-pub const DNS_CLASS_IN: u16 = 1;
 
 // DNS 状态码常量。
 pub mod dns_status {
@@ -74,40 +65,6 @@ fn normalize_txt_data(raw: &str) -> String {
 }
 
 impl JsonConverter {
-    // 将 DNS 消息转换为 DNS JSON 格式。
-    // 参考：https://developers.google.com/speed/public-dns/docs/doh/json
-    #[allow(dead_code)]
-    pub fn message_to_json(&self, query: &Message) -> Result<JsonValue, AppError> {
-        // 创建一个 JSON 对象发送给 DoH 服务器。
-        let query_param = match query.queries().first() {
-            Some(q) => q,
-            None => return Err(AppError::Internal("DNS query is empty".to_string())),
-        };
-
-        // 按照 Google DNS-over-HTTPS JSON API 的字段组织请求。
-        let mut json_data = json!({
-            json_fields::NAME: query_param.name().to_string(),
-            json_fields::TYPE: u16::from(query_param.query_type()),
-        });
-
-        // 可选参数：当查询类别不是 IN(1) 时启用 DNSSEC。
-        if u16::from(query_param.query_class()) != DNS_CLASS_IN {
-            // `do` 参数表示 DNSSEC OK 标志。
-            json_data[json_fields::DO] = json!(true);
-        }
-
-        // `cd` 参数表示关闭校验标志，默认 `false` 表示启用 DNSSEC 校验。
-        json_data[json_fields::CD] = json!(false);
-
-        // `ct` 参数声明期望返回 JSON 格式。
-        json_data[json_fields::CT] = json!(http_headers::content_types::DNS_JSON);
-
-        // 不显式添加 `edns_client_subnet`，沿用服务端默认行为。
-        // 这里也不写入 `content-type`，由调用方统一设置 HTTP 头。
-
-        Ok(json_data)
-    }
-
     // 解析 DNS JSON 响应并还原为 DNS 消息。
     // 参考：https://developers.google.com/speed/public-dns/docs/doh/json
     pub fn json_to_message(

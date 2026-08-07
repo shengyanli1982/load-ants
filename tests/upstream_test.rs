@@ -7,7 +7,6 @@ use loadants::config::{
     UpstreamGroupConfig, UpstreamScheme, UpstreamServerConfig,
 };
 use loadants::error::AppError;
-use loadants::r#const::dns_client_limits;
 use loadants::upstream::UpstreamManager;
 use reqwest::Url;
 use std::net::Ipv4Addr;
@@ -47,8 +46,7 @@ fn create_test_dns_response(id: u16) -> Vec<u8> {
     response.add_query(query);
 
     // 添加一个回答记录
-    let mut record = Record::with(name, RecordType::A, 300);
-    record.set_data(Some(RData::A(A(Ipv4Addr::new(93, 184, 216, 34)))));
+    let record = Record::from_rdata(name, 300, RData::A(A(Ipv4Addr::new(93, 184, 216, 34))));
     response.add_answer(record);
 
     // 将响应序列化为二进制
@@ -137,6 +135,10 @@ async fn test_dns_scheme_forward_via_udp() {
         })],
         retry: None,
         proxy: None,
+        tls_verify: None,
+        deny_answers: vec![],
+        case_randomization: false,
+        case_randomization_strict: false,
     }];
 
     let http_config = HttpClientConfig::default();
@@ -144,8 +146,9 @@ async fn test_dns_scheme_forward_via_udp() {
         connect_timeout: 1,
         request_timeout: 2,
         prefer_tcp: false,
+        idle_connection_timeout: 30,
         tcp_reconnect: true,
-        tcp_idle_timeout: dns_client_limits::DEFAULT_TCP_IDLE_TIMEOUT,
+        max_tcp_connections: 256,
     };
     let manager = UpstreamManager::new(groups, http_config, dns_config)
         .await
@@ -225,6 +228,10 @@ async fn test_upstream_manager_creation() {
             ],
             retry: None,
             proxy: None,
+            tls_verify: None,
+            deny_answers: vec![],
+            case_randomization: false,
+            case_randomization_strict: false,
         },
         UpstreamGroupConfig {
             name: "weighted_group".to_string(),
@@ -248,6 +255,10 @@ async fn test_upstream_manager_creation() {
             ],
             retry: None,
             proxy: None,
+            tls_verify: None,
+            deny_answers: vec![],
+            case_randomization: false,
+            case_randomization_strict: false,
         },
     ];
 
@@ -278,6 +289,10 @@ async fn test_upstream_doh_get_message() {
         })],
         retry: None,
         proxy: None,
+        tls_verify: None,
+        deny_answers: vec![],
+        case_randomization: false,
+        case_randomization_strict: false,
     }];
 
     // 设置mock响应
@@ -347,6 +362,10 @@ async fn test_upstream_doh_post_message() {
         })],
         retry: None,
         proxy: None,
+        tls_verify: None,
+        deny_answers: vec![],
+        case_randomization: false,
+        case_randomization_strict: false,
     }];
 
     // 设置mock响应
@@ -404,6 +423,10 @@ async fn test_upstream_doh_get_json() {
         })],
         retry: None,
         proxy: None,
+        tls_verify: None,
+        deny_answers: vec![],
+        case_randomization: false,
+        case_randomization_strict: false,
     }];
 
     // 设置mock响应 - 匹配任何GET请求到/dns-query
@@ -464,6 +487,10 @@ async fn test_upstream_doh_post_json_fails() {
         })],
         retry: None,
         proxy: None,
+        tls_verify: None,
+        deny_answers: vec![],
+        case_randomization: false,
+        case_randomization_strict: false,
     }];
 
     // 创建上游管理器 - 不应该验证配置，因为这里我们直接创建了不合规的配置
@@ -519,6 +546,10 @@ async fn test_upstream_with_auth() {
         })],
         retry: None,
         proxy: None,
+        tls_verify: None,
+        deny_answers: vec![],
+        case_randomization: false,
+        case_randomization_strict: false,
     }];
 
     // 设置mock响应，验证Bearer认证头
@@ -578,6 +609,10 @@ async fn test_basic_auth() {
         })],
         retry: None,
         proxy: None,
+        tls_verify: None,
+        deny_answers: vec![],
+        case_randomization: false,
+        case_randomization_strict: false,
     }];
 
     // 设置mock响应，验证Basic认证头
@@ -641,6 +676,10 @@ async fn test_load_balancing_round_robin() {
         ],
         retry: None,
         proxy: None,
+        tls_verify: None,
+        deny_answers: vec![],
+        case_randomization: false,
+        case_randomization_strict: false,
     }];
 
     // 设置第一个服务器的mock响应
@@ -710,6 +749,10 @@ async fn test_error_handling() {
         })],
         retry: None,
         proxy: None,
+        tls_verify: None,
+        deny_answers: vec![],
+        case_randomization: false,
+        case_randomization_strict: false,
     }];
 
     // 设置错误响应
@@ -761,6 +804,10 @@ async fn test_retry_config() {
             delay: 1,
         }),
         proxy: None,
+        tls_verify: None,
+        deny_answers: vec![],
+        case_randomization: false,
+        case_randomization_strict: false,
     }];
 
     // 创建上游管理器
@@ -800,6 +847,10 @@ async fn test_json_response_parsing() {
         })],
         retry: None,
         proxy: None,
+        tls_verify: None,
+        deny_answers: vec![],
+        case_randomization: false,
+        case_randomization_strict: false,
     }];
 
     // 设置具有多种记录类型的JSON响应，包括Authority和Additional部分
@@ -940,6 +991,10 @@ async fn test_json_error_response() {
         })],
         retry: None,
         proxy: None,
+        tls_verify: None,
+        deny_answers: vec![],
+        case_randomization: false,
+        case_randomization_strict: false,
     }];
 
     // 设置错误响应
@@ -1007,6 +1062,10 @@ async fn test_json_txt_response() {
         })],
         retry: None,
         proxy: None,
+        tls_verify: None,
+        deny_answers: vec![],
+        case_randomization: false,
+        case_randomization_strict: false,
     }];
 
     // 设置TXT记录响应
@@ -1077,6 +1136,10 @@ async fn test_json_edns_client_subnet() {
         })],
         retry: None,
         proxy: None,
+        tls_verify: None,
+        deny_answers: vec![],
+        case_randomization: false,
+        case_randomization_strict: false,
     }];
 
     // 设置包含edns_client_subnet的响应
