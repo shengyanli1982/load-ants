@@ -1,4 +1,4 @@
-use loadants::config::{Config, UpstreamServerConfig};
+use loadants::config::{validate_tls_cert_key_pair, Config, UpstreamServerConfig};
 use loadants::error::ConfigError;
 use std::io::Write;
 use std::path::PathBuf;
@@ -73,7 +73,7 @@ admin:
         assert!(rules.is_empty()); // 默认为空
     }
 
-    assert!(config.remote_rules.is_empty()); // 默认为空
+    assert!(config.remote_rules.sources.is_empty()); // 默认为空
 }
 
 #[test]
@@ -399,7 +399,7 @@ remote_rules:
 
     // 验证规则配置
     assert_eq!(config.static_rules.as_ref().unwrap().len(), 3);
-    assert_eq!(config.remote_rules.len(), 1);
+    assert_eq!(config.remote_rules.sources.len(), 1);
 }
 
 #[test]
@@ -558,12 +558,18 @@ remote_rules:
 
     let file = create_temp_config_file(strict_config);
     let config = Config::from_file(file.path()).expect("strict policy should parse");
-    assert_eq!(config.remote_rules[0].failure_policy.to_string(), "strict");
+    assert_eq!(
+        config.remote_rules.sources[0].failure_policy.to_string(),
+        "strict"
+    );
 
     let lenient_config = strict_config.replace("strict", "lenient");
     let file = create_temp_config_file(&lenient_config);
     let config = Config::from_file(file.path()).expect("lenient policy should parse");
-    assert_eq!(config.remote_rules[0].failure_policy.to_string(), "lenient");
+    assert_eq!(
+        config.remote_rules.sources[0].failure_policy.to_string(),
+        "lenient"
+    );
 
     let invalid_policy_config = strict_config.replace("strict", "best-effort");
     let file = create_temp_config_file(&invalid_policy_config);
@@ -598,7 +604,10 @@ remote_rules:
 
     let file = create_temp_config_file(config_content);
     let config = Config::from_file(file.path()).expect("missing failure_policy should use default");
-    assert_eq!(config.remote_rules[0].failure_policy.to_string(), "strict");
+    assert_eq!(
+        config.remote_rules.sources[0].failure_policy.to_string(),
+        "strict"
+    );
 }
 
 #[test]
@@ -624,9 +633,9 @@ static_rules:
     let file = create_temp_config_file(config_content);
     let config = Config::from_file(file.path()).expect("config should parse");
 
-    assert!(config.remote_rule_snapshot.enabled);
+    assert!(config.remote_rules.snapshot.enabled);
     assert_eq!(
-        config.remote_rule_snapshot.path,
+        config.remote_rules.snapshot.path,
         ".load-ants/remote-rule-snapshots"
     );
 }
@@ -649,16 +658,17 @@ static_rules:
     patterns: ["*"]
     action: "forward"
     target: "default"
-remote_rule_snapshot:
-  enabled: false
-  path: "./custom-snapshots"
+remote_rules:
+  snapshot:
+    enabled: false
+    path: "./custom-snapshots"
 "#;
 
     let file = create_temp_config_file(config_content);
     let config = Config::from_file(file.path()).expect("config should parse");
 
-    assert!(!config.remote_rule_snapshot.enabled);
-    assert_eq!(config.remote_rule_snapshot.path, "./custom-snapshots");
+    assert!(!config.remote_rules.snapshot.enabled);
+    assert_eq!(config.remote_rules.snapshot.path, "./custom-snapshots");
 }
 
 #[test]
@@ -698,4 +708,194 @@ static_rules:
         }
         other => panic!("expected RuleConflict, got {other:?}"),
     }
+}
+
+#[test]
+fn test_tls_cert_key_pair_cert_file_not_found() {
+    let mut config = Config::default();
+    config.server.tls_cert = Some("/nonexistent/path/cert.pem".to_string());
+    config.server.tls_key = Some("/nonexistent/path/key.pem".to_string());
+
+    let err = validate_tls_cert_key_pair(&config).expect_err("cert file missing should fail");
+    assert_eq!(err.code, "tls_cert_file_not_found");
+    assert!(
+        err.message.as_ref().is_some_and(|m| m.contains("cert.pem")),
+        "error message should name the failing file: {:?}",
+        err.message
+    );
+}
+
+#[test]
+fn test_tls_cert_key_pair_key_file_not_found() {
+    let cert_file = NamedTempFile::new().expect("create temp cert file");
+    let mut config = Config::default();
+    config.server.tls_cert = Some(cert_file.path().to_string_lossy().into_owned());
+    config.server.tls_key = Some("/nonexistent/path/key.pem".to_string());
+
+    let err = validate_tls_cert_key_pair(&config).expect_err("key file missing should fail");
+    assert_eq!(err.code, "tls_key_file_not_found");
+    assert!(
+        err.message.as_ref().is_some_and(|m| m.contains("key.pem")),
+        "error message should name the failing file: {:?}",
+        err.message
+    );
+}
+
+#[test]
+fn test_tls_cert_key_pair_both_files_exist() {
+    let cert_file = NamedTempFile::new().expect("create temp cert file");
+    let key_file = NamedTempFile::new().expect("create temp key file");
+
+    let mut config = Config::default();
+    config.server.tls_cert = Some(cert_file.path().to_string_lossy().into_owned());
+    config.server.tls_key = Some(key_file.path().to_string_lossy().into_owned());
+
+    validate_tls_cert_key_pair(&config).expect("both files exist should pass");
+}
+
+#[test]
+fn test_remote_rules_new_object_format_with_reload_interval() {
+    let config_content = r#"
+server:
+  listen_udp: "127.0.0.1:53"
+  listen_tcp: "127.0.0.1:53"
+admin:
+  listen: "127.0.0.1:8080"
+upstream_groups:
+  - name: "default"
+    strategy: "roundrobin"
+    servers:
+      - url: "https://dns.google/dns-query"
+static_rules:
+  - match: "wildcard"
+    patterns: ["*"]
+    action: "forward"
+    target: "default"
+remote_rules:
+  reload_interval_secs: 7200
+  snapshot:
+    enabled: false
+    path: "/tmp/snapshots"
+  sources:
+    - type: "url"
+      url: "https://example.com/list.txt"
+      format: "v2ray"
+      action: "block"
+"#;
+
+    let file = create_temp_config_file(config_content);
+    let config = Config::from_file(file.path()).expect("new object format should parse");
+
+    assert_eq!(config.remote_rules.reload_interval_secs, 7200);
+    assert!(!config.remote_rules.snapshot.enabled);
+    assert_eq!(config.remote_rules.snapshot.path, "/tmp/snapshots");
+    assert_eq!(config.remote_rules.sources.len(), 1);
+    assert_eq!(
+        config.remote_rules.sources[0].url,
+        "https://example.com/list.txt"
+    );
+}
+
+#[test]
+fn test_remote_rules_old_list_format_still_parses() {
+    let config_content = r#"
+server:
+  listen_udp: "127.0.0.1:53"
+  listen_tcp: "127.0.0.1:53"
+admin:
+  listen: "127.0.0.1:8080"
+upstream_groups:
+  - name: "default"
+    strategy: "roundrobin"
+    servers:
+      - url: "https://dns.google/dns-query"
+static_rules:
+  - match: "wildcard"
+    patterns: ["*"]
+    action: "forward"
+    target: "default"
+remote_rules:
+  - type: "url"
+    url: "https://example.com/legacy.txt"
+    format: "v2ray"
+    action: "block"
+"#;
+
+    let file = create_temp_config_file(config_content);
+    let config = Config::from_file(file.path()).expect("old list format should still parse");
+
+    assert_eq!(config.remote_rules.reload_interval_secs, 3600);
+    assert!(config.remote_rules.snapshot.enabled);
+    assert_eq!(config.remote_rules.sources.len(), 1);
+    assert_eq!(
+        config.remote_rules.sources[0].url,
+        "https://example.com/legacy.txt"
+    );
+}
+
+fn config_with_reload_interval(interval: u64) -> String {
+    format!(
+        r#"
+server:
+  listen_udp: "127.0.0.1:53"
+  listen_tcp: "127.0.0.1:53"
+admin:
+  listen: "127.0.0.1:8080"
+remote_rules:
+  reload_interval_secs: {interval}
+"#
+    )
+}
+
+#[test]
+fn test_reload_interval_secs_valid_values_accepted() {
+    for interval in [60u64, 3600, 86400] {
+        let file = create_temp_config_file(&config_with_reload_interval(interval));
+        let config = Config::from_file(file.path())
+            .unwrap_or_else(|e| panic!("reload_interval_secs {interval} should be accepted: {e}"));
+        assert_eq!(config.remote_rules.reload_interval_secs, interval);
+    }
+}
+
+#[test]
+fn test_reload_interval_secs_out_of_range_rejected() {
+    for interval in [0u64, 10, 59, 86401, 90000] {
+        let file = create_temp_config_file(&config_with_reload_interval(interval));
+        let result = Config::from_file(file.path());
+        assert!(
+            result.is_err(),
+            "reload_interval_secs {interval} should be rejected"
+        );
+    }
+}
+
+#[test]
+fn test_config_json_schema_generation() {
+    let schema = schemars::schema_for!(Config);
+    let json = serde_json::to_string_pretty(&schema).expect("schema should serialize to JSON");
+    // Schema must contain "properties" indicating it's an object schema
+    assert!(
+        json.contains("\"properties\""),
+        "JSON Schema should contain a 'properties' key for the Config struct"
+    );
+    // Should contain known Config fields
+    assert!(
+        json.contains("\"server\""),
+        "Schema should include the 'server' field"
+    );
+    assert!(
+        json.contains("\"cache\""),
+        "Schema should include the 'cache' field"
+    );
+    assert!(
+        json.contains("\"admin\""),
+        "Schema should include the 'admin' field"
+    );
+    // Should round-trip through serde_json::Value without error
+    let parsed: serde_json::Value =
+        serde_json::from_str(&json).expect("Schema output should be valid JSON");
+    assert!(
+        parsed.get("properties").is_some(),
+        "Parsed schema must have 'properties' field"
+    );
 }

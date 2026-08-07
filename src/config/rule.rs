@@ -1,6 +1,8 @@
 use crate::config::validate_url;
 use crate::r#const::remote_rule_limits;
 use regex::Regex;
+use schemars::JsonSchema;
+use serde::de::Deserializer;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::fmt;
@@ -8,23 +10,15 @@ use validator::{Validate, ValidationError};
 
 use super::common::{AuthConfig, RetryConfig};
 
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
-pub enum RuleFormat {
-    V2ray,
+fn default_rule_format() -> String {
+    "v2ray".to_string()
 }
 
-fn default_rule_format() -> RuleFormat {
-    RuleFormat::V2ray
+fn default_remote_rule_type() -> String {
+    "url".to_string()
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
-pub enum RemoteRuleType {
-    Url,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum RemoteRuleFailurePolicy {
     Strict,
@@ -56,8 +50,22 @@ fn default_remote_rule_snapshot_path() -> String {
     ".load-ants/remote-rule-snapshots".to_string()
 }
 
-fn validate_forward_target(rule: &RemoteRuleConfig) -> Result<(), ValidationError> {
-    if matches!(rule.action, RouteAction::Forward) && rule.target.is_none() {
+pub trait HasForwardTarget {
+    fn action(&self) -> &RouteAction;
+    fn target(&self) -> Option<&String>;
+}
+
+impl<T: HasForwardTarget + ?Sized> HasForwardTarget for &T {
+    fn action(&self) -> &RouteAction {
+        (**self).action()
+    }
+    fn target(&self) -> Option<&String> {
+        (**self).target()
+    }
+}
+
+pub fn validate_forward_target<T: HasForwardTarget>(rule: &T) -> Result<(), ValidationError> {
+    if matches!(rule.action(), RouteAction::Forward) && rule.target().is_none() {
         return Err(ValidationError::new("missing_target_for_forward"));
     }
     Ok(())
@@ -77,7 +85,7 @@ fn validate_snapshot_path(path: &str) -> Result<(), ValidationError> {
     Ok(())
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Validate)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Validate, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub struct RemoteRuleSnapshotConfig {
     #[serde(default = "default_remote_rule_snapshot_enabled")]
@@ -99,20 +107,89 @@ impl Default for RemoteRuleSnapshotConfig {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Validate)]
+const MIN_RELOAD_INTERVAL_SECS: u64 = 60;
+const MAX_RELOAD_INTERVAL_SECS: u64 = 86400;
+
+fn default_reload_interval_secs() -> u64 {
+    3600
+}
+
+#[derive(Debug, Serialize, Clone, PartialEq, Eq, Validate, JsonSchema)]
+pub struct RemoteRulesConfig {
+    #[serde(default = "default_reload_interval_secs")]
+    #[validate(range(
+        min = "MIN_RELOAD_INTERVAL_SECS",
+        max = "MAX_RELOAD_INTERVAL_SECS",
+        message = "Reload interval must be between {} and {} seconds"
+    ))]
+    pub reload_interval_secs: u64,
+    #[validate(nested)]
+    #[serde(default)]
+    pub snapshot: RemoteRuleSnapshotConfig,
+    #[validate(nested)]
+    #[serde(default)]
+    pub sources: Vec<RemoteRuleConfig>,
+}
+
+impl Default for RemoteRulesConfig {
+    fn default() -> Self {
+        Self {
+            reload_interval_secs: default_reload_interval_secs(),
+            snapshot: RemoteRuleSnapshotConfig::default(),
+            sources: Vec::new(),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for RemoteRulesConfig {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        struct FullFormat {
+            #[serde(default = "default_reload_interval_secs")]
+            reload_interval_secs: u64,
+            #[serde(default)]
+            snapshot: RemoteRuleSnapshotConfig,
+            #[serde(default)]
+            sources: Vec<RemoteRuleConfig>,
+        }
+
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Format {
+            List(Vec<RemoteRuleConfig>),
+            Full(FullFormat),
+        }
+
+        match Format::deserialize(deserializer)? {
+            Format::List(sources) => Ok(Self {
+                reload_interval_secs: default_reload_interval_secs(),
+                snapshot: RemoteRuleSnapshotConfig::default(),
+                sources,
+            }),
+            Format::Full(full) => Ok(Self {
+                reload_interval_secs: full.reload_interval_secs,
+                snapshot: full.snapshot,
+                sources: full.sources,
+            }),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Validate, JsonSchema)]
 #[validate(schema(
     function = "validate_forward_target",
     message = "Forward action requires target field"
 ))]
 #[serde(rename_all = "lowercase")]
 pub struct RemoteRuleConfig {
-    pub r#type: RemoteRuleType,
+    #[serde(default = "default_remote_rule_type")]
+    pub r#type: String,
     #[validate(custom(function = "validate_url", message = "Invalid URL format"))]
     pub url: String,
     #[validate(nested)]
     pub auth: Option<AuthConfig>,
     #[serde(default = "default_rule_format")]
-    pub format: RuleFormat,
+    pub format: String,
     #[serde(default = "default_remote_rule_failure_policy")]
     pub failure_policy: RemoteRuleFailurePolicy,
     pub action: RouteAction,
@@ -126,9 +203,20 @@ pub struct RemoteRuleConfig {
         message = "Invalid rule file size limit"
     ))]
     pub max_size: usize,
+    #[serde(default)]
+    pub tls_verify: Option<bool>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+impl HasForwardTarget for RemoteRuleConfig {
+    fn action(&self) -> &RouteAction {
+        &self.action
+    }
+    fn target(&self) -> Option<&String> {
+        self.target.as_ref()
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum MatchType {
     Exact,
@@ -136,7 +224,7 @@ pub enum MatchType {
     Regex,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Copy)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Copy, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum RouteAction {
     Forward,
@@ -196,16 +284,9 @@ fn validate_route_rule_patterns(rule: &RouteRuleConfig) -> Result<(), Validation
     }
 }
 
-fn validate_static_forward_target(rule: &RouteRuleConfig) -> Result<(), ValidationError> {
-    if matches!(rule.action, RouteAction::Forward) && rule.target.is_none() {
-        return Err(ValidationError::new("missing_target_for_forward"));
-    }
-    Ok(())
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Validate)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Validate, JsonSchema)]
 #[validate(schema(
-    function = "validate_static_forward_target",
+    function = "validate_forward_target",
     message = "Forward action requires target field"
 ))]
 #[validate(schema(
@@ -223,4 +304,13 @@ pub struct RouteRuleConfig {
     pub patterns: Vec<String>,
     pub action: RouteAction,
     pub target: Option<String>,
+}
+
+impl HasForwardTarget for RouteRuleConfig {
+    fn action(&self) -> &RouteAction {
+        &self.action
+    }
+    fn target(&self) -> Option<&String> {
+        self.target.as_ref()
+    }
 }

@@ -1,5 +1,6 @@
 use crate::r#const::weight_limits;
 use reqwest::Url;
+use schemars::JsonSchema;
 use serde::{
     de::{self, Deserializer},
     Deserialize, Serialize,
@@ -11,7 +12,7 @@ use validator::{Validate, ValidationError, ValidationErrors};
 use super::common::{AuthConfig, RetryConfig};
 
 // 负载均衡策略枚举
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum LoadBalancingStrategy {
     // 轮询策略
@@ -23,7 +24,7 @@ pub enum LoadBalancingStrategy {
 }
 
 // 上游组 scheme
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum UpstreamScheme {
     Doh,
@@ -35,7 +36,7 @@ fn default_upstream_scheme() -> UpstreamScheme {
 }
 
 // DoH请求方法枚举
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum DoHMethod {
     // GET请求方法
@@ -45,7 +46,7 @@ pub enum DoHMethod {
 }
 
 // DoH内容类型枚举
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum DoHContentType {
     // application/dns-message格式
@@ -111,10 +112,11 @@ fn default_us_weight() -> u32 {
 }
 
 // DoH 上游服务器配置
-#[derive(Debug, Serialize, Deserialize, Validate)]
+#[derive(Debug, Serialize, Deserialize, Validate, JsonSchema)]
 #[serde(rename_all = "lowercase", deny_unknown_fields)]
 pub struct DoHUpstreamServerConfig {
     // DoH服务器URL
+    #[schemars(with = "String")]
     #[serde(deserialize_with = "deserialize_url")]
     #[validate(custom(
         function = "validate_url_scheme",
@@ -176,9 +178,10 @@ impl PartialEq for DoHUpstreamServerConfig {
 impl Eq for DoHUpstreamServerConfig {}
 
 // DNS（UDP/TCP）上游服务器配置
-#[derive(Debug, Serialize, Deserialize, Validate, Clone, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Validate, Clone, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "lowercase", deny_unknown_fields)]
 pub struct DnsUpstreamServerConfig {
+    #[schemars(with = "String")]
     pub addr: SocketAddr,
 
     #[serde(default = "default_us_weight")]
@@ -189,7 +192,7 @@ pub struct DnsUpstreamServerConfig {
     pub weight: u32,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, JsonSchema)]
 #[serde(untagged)]
 pub enum UpstreamServerConfig {
     Doh(DoHUpstreamServerConfig),
@@ -240,10 +243,23 @@ fn validate_group_scheme(group: &UpstreamGroupConfig) -> Result<(), ValidationEr
     match group.scheme {
         UpstreamScheme::Doh => {
             for server in &group.servers {
-                if server.as_doh().is_none() {
-                    let mut err = ValidationError::new("invalid_server_variant_for_scheme");
+                let doh_server = match server.as_doh() {
+                    Some(s) => s,
+                    None => {
+                        let mut err = ValidationError::new("invalid_server_variant_for_scheme");
+                        err.message = Some(Cow::from(
+                            "Upstream group scheme 'doh' requires servers to use 'url' entries"
+                                .to_string(),
+                        ));
+                        return Err(err);
+                    }
+                };
+                if matches!(doh_server.method, DoHMethod::Post)
+                    && matches!(doh_server.content_type, DoHContentType::Json)
+                {
+                    let mut err = ValidationError::new("doh_post_json_incompatible");
                     err.message = Some(Cow::from(
-                        "Upstream group scheme 'doh' requires servers to use 'url' entries"
+                        "DoH content type 'json' is not compatible with POST method; use GET method or 'message' content type instead"
                             .to_string(),
                     ));
                     return Err(err);
@@ -282,7 +298,7 @@ fn validate_group_scheme(group: &UpstreamGroupConfig) -> Result<(), ValidationEr
 }
 
 // 上游组配置
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Validate)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Validate, JsonSchema)]
 #[validate(schema(
     function = "validate_group_scheme",
     message = "Upstream group scheme validation failed"
@@ -314,4 +330,25 @@ pub struct UpstreamGroupConfig {
 
     // 代理（可选）
     pub proxy: Option<String>,
+
+    // TLS 证书验证（可选，默认 None 表示启用验证）
+    #[serde(default)]
+    pub tls_verify: Option<bool>,
+
+    /// 过滤响应中的已知污染 IP 段（CIDR 格式）。
+    /// 如果过滤后 A/AAAA 记录全部被移除，返回 SERVFAIL。
+    /// 示例：["1.1.1.1/32", "10.0.0.0/8"]
+    #[serde(default)]
+    pub deny_answers: Vec<String>,
+
+    /// 是否对传统 DNS 上游（scheme: dns）启用 0x20 大小写随机化防响应伪造。
+    /// 默认 false，需显式启用。注意：部分上游不保留大小写，启用后可能导致验证失败。
+    #[serde(default)]
+    pub case_randomization: bool,
+
+    /// 0x20 验证严格模式。仅在 case_randomization=true 时生效。
+    /// - true：UDP 响应 0x20 验证失败时丢弃响应并回退到 TCP（触发 TCP fallback）。
+    /// - false（默认）：验证失败时仅记录警告日志，仍接受 UDP 响应。
+    #[serde(default)]
+    pub case_randomization_strict: bool,
 }
