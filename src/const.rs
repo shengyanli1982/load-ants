@@ -16,18 +16,14 @@ pub mod shutdown_timeout {
 
 // 缓存配置限制
 pub mod cache_limits {
-    // 默认缓存大小
     pub const DEFAULT_SIZE: usize = 10000;
-    // 最小缓存大小
     pub const MIN_SIZE: usize = 10;
-    // 最大缓存大小
     pub const MAX_SIZE: usize = 1000000;
-    // 默认负面缓存TTL值（秒）
     pub const DEFAULT_NEGATIVE_TTL: u32 = 300;
-    // 最小TTL值（秒）
     pub const MIN_TTL: u32 = 1;
-    // 最大TTL值（秒）
     pub const MAX_TTL: u32 = 86400;
+    pub const DEFAULT_STALE_WHILE_REVALIDATE: u64 = 0;
+    pub const MAX_STALE_WHILE_REVALIDATE: u64 = 86400;
 }
 
 // HTTP客户端配置限制
@@ -60,28 +56,21 @@ pub mod http_client_limits {
 
 // DNS Client（传统 UDP/TCP 上游）配置限制
 pub mod dns_client_limits {
-    // 默认连接超时（秒）
     pub const DEFAULT_CONNECT_TIMEOUT: u64 = 2;
-    // 最小连接超时（秒）
     pub const MIN_CONNECT_TIMEOUT: u64 = 1;
-    // 最大连接超时（秒）
     pub const MAX_CONNECT_TIMEOUT: u64 = 120;
-    // 默认请求超时（秒）
     pub const DEFAULT_REQUEST_TIMEOUT: u64 = 3;
-    // 最小请求超时（秒）
     pub const MIN_REQUEST_TIMEOUT: u64 = 1;
-    // 最大请求超时（秒）
     pub const MAX_REQUEST_TIMEOUT: u64 = 1200;
-    // 默认 prefer_tcp
     pub const DEFAULT_PREFER_TCP: bool = false;
-    // 默认 tcp_reconnect
+    pub const DEFAULT_IDLE_CONNECTION_TIMEOUT: u64 = 30;
+    pub const MIN_IDLE_CONNECTION_TIMEOUT: u64 = 5;
+    pub const MAX_IDLE_CONNECTION_TIMEOUT: u64 = 1800;
     pub const DEFAULT_TCP_RECONNECT: bool = true;
-    // 默认 TCP 空闲超时（秒）
-    pub const DEFAULT_TCP_IDLE_TIMEOUT: u64 = 300;
-    // 最小 TCP 空闲超时（秒）
-    pub const MIN_TCP_IDLE_TIMEOUT: u64 = 30;
-    // 最大 TCP 空闲超时（秒）
-    pub const MAX_TCP_IDLE_TIMEOUT: u64 = 3600;
+    pub const CLEANUP_INTERVAL_SECS: u64 = 60;
+    pub const DEFAULT_MAX_TCP_CONNECTIONS: usize = 256;
+    pub const MIN_MAX_TCP_CONNECTIONS: usize = 1;
+    pub const MAX_MAX_TCP_CONNECTIONS: usize = 65535;
 }
 
 // 重试配置限制
@@ -137,7 +126,6 @@ pub mod protocol_labels {
     // TCP协议
     pub const TCP: &str = "tcp";
     // 未知协议
-    #[allow(dead_code)]
     pub const UNKNOWN: &str = "unknown";
 }
 
@@ -187,44 +175,25 @@ pub mod error_labels {
 
 // 缓存操作标签
 pub mod cache_labels {
-    // 缓存命中
     pub const HIT: &str = "hit";
-    // 缓存未命中
-    #[allow(dead_code)]
     pub const MISS: &str = "miss";
-    // 插入错误
     pub const INSERT_ERROR: &str = "insert_error";
-    // 插入成功
     pub const INSERT: &str = "insert";
-    // 清空缓存
-    #[allow(dead_code)]
     pub const CLEAR: &str = "clear";
-    // 原始TTL
-    #[allow(dead_code)]
-    pub const ORIGINAL: &str = "original";
-    // 调整后TTL
-    pub const ADJUSTED: &str = "adjusted";
+    pub const STALE: &str = "stale";
 }
 
-// TTL源标签
 pub mod ttl_source_labels {
-    // 记录原始TTL
     pub const ORIGINAL: &str = "original";
-    // 最小TTL配置
     pub const MIN_TTL: &str = "min_ttl";
-    // TTL已调整
+    pub const MAX_TTL: &str = "max_ttl";
     pub const ADJUSTED: &str = "adjusted";
-    // 负面缓存TTL
     pub const NEGATIVE_TTL: &str = "negative_ttl";
 }
 
 // 上游标签
 pub mod upstream_labels {
-    // 未知上游
     pub const UNKNOWN: &str = "unknown";
-    // 重试
-    #[allow(dead_code)]
-    pub const RETRY: &str = "retry";
 }
 
 // 上游协议标签
@@ -287,6 +256,18 @@ pub mod subsystem_names {
     pub const DOH_SERVER: &str = "doh_server";
 }
 
+// 速率限制配置常量
+pub mod rate_limit_defaults {
+    // 默认每秒最大请求数
+    pub const DEFAULT_MAX_REQUESTS_PER_SECOND: u32 = 100;
+    // 最小每秒请求数
+    pub const MIN_MAX_REQUESTS_PER_SECOND: u32 = 1;
+    // 最大每秒请求数
+    pub const MAX_MAX_REQUESTS_PER_SECOND: u32 = 100000;
+    // 默认单IP每秒最大请求数
+    pub const DEFAULT_PER_IP_MAX_REQUESTS_PER_SECOND: u32 = 100;
+}
+
 // 服务器默认值
 pub mod server_defaults {
     // 默认TCP超时（秒）
@@ -299,6 +280,10 @@ pub mod server_defaults {
     pub const DEFAULT_HTTP_LISTEN: &str = "127.0.0.1:8080";
     // 默认管理服务器监听地址
     pub const DEFAULT_ADMIN_LISTEN: &str = "127.0.0.1:9000";
+    pub const DEFAULT_UDP_RECV_BUFFER: usize = 4 * 1024 * 1024;
+    pub const DEFAULT_UDP_SEND_BUFFER: usize = 4 * 1024 * 1024;
+    // 默认UDP socket数量（1）
+    pub const DEFAULT_UDP_SOCKET_COUNT: usize = 1;
 }
 
 // 上游默认值
@@ -326,14 +311,6 @@ pub mod router {
 
 // HTTP头常量
 pub mod http_headers {
-    // Content-Type 头
-    pub const CONTENT_TYPE: &str = "Content-Type";
-    // Accept 头
-    pub const ACCEPT: &str = "Accept";
-    // Authorization 头
-    pub const AUTHORIZATION: &str = "Authorization";
-
-    // 内容类型常量
     pub mod content_types {
         // DNS消息内容类型
         pub const DNS_MESSAGE: &str = "application/dns-message";

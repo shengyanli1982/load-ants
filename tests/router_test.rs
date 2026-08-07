@@ -405,4 +405,44 @@ mod tests {
         assert_eq!(matched.action, RouteAction::Forward);
         assert_eq!(matched.rule_type, "regex");
     }
+
+    fn build_regex_only_router(pattern: &str, action: RouteAction) -> Router {
+        let rules = vec![RouteRuleConfig {
+            match_type: MatchType::Regex,
+            patterns: vec![pattern.to_string()],
+            action,
+            target: match action {
+                RouteAction::Forward => Some("google_public".to_string()),
+                RouteAction::Block => None,
+            },
+        }];
+        Router::new(rules).expect("regex-only router should build")
+    }
+
+    #[test]
+    fn test_regex_match_keyword_is_substring_of_hyphenated_label() {
+        let router = build_regex_only_router(".*my-tracking\\.com$", RouteAction::Block);
+
+        let query_name = Name::from_str("x.my-tracking.com.").expect("Invalid name");
+        let matched = router
+            .find_match(&query_name)
+            .expect("regex rule must match when keyword is a substring of a hyphenated label");
+
+        assert_eq!(matched.action, RouteAction::Block);
+        assert_eq!(matched.rule_type, "regex");
+    }
+
+    #[test]
+    fn test_regex_forward_match_keyword_is_substring_of_long_label() {
+        let router = build_regex_only_router(".*admanager\\.com$", RouteAction::Forward);
+
+        let query_name = Name::from_str("googleadmanager.com.").expect("Invalid name");
+        let matched = router
+            .find_match(&query_name)
+            .expect("regex rule must match when keyword is a substring of a longer label");
+
+        assert_eq!(matched.action, RouteAction::Forward);
+        assert_eq!(matched.rule_type, "regex");
+        assert_eq!(matched.target, Some("google_public".to_string()));
+    }
 }

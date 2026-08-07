@@ -87,7 +87,10 @@ pub async fn load_and_merge_rules(
         .map(|config| config.url.clone())
         .collect::<Vec<_>>();
 
-    if let Err(snapshot_error) = snapshot_store.sync_active_sources(&active_source_urls) {
+    if let Err(snapshot_error) = snapshot_store
+        .sync_active_sources(&active_source_urls)
+        .await
+    {
         warn!(
             error = %snapshot_error,
             "Failed to synchronize remote rule snapshot directory"
@@ -108,7 +111,9 @@ pub async fn load_and_merge_rules(
                             .map(|rule| RoutedRule::new(rule, source_metadata.clone())),
                     );
 
-                    if let Err(snapshot_error) = snapshot_store.save(&source_url, &remote_rules) {
+                    if let Err(snapshot_error) =
+                        snapshot_store.save(&source_url, &remote_rules).await
+                    {
                         warn!(
                             url = %source_url,
                             error = %snapshot_error,
@@ -127,7 +132,7 @@ pub async fn load_and_merge_rules(
                         fallback_hint: None,
                     };
 
-                    match snapshot_store.load(&source_url) {
+                    match snapshot_store.load(&source_url).await {
                         Ok(Some(snapshot)) => {
                             merged_rules.extend(
                                 snapshot
@@ -169,7 +174,7 @@ pub async fn load_and_merge_rules(
                     fallback_hint: None,
                 };
 
-                match snapshot_store.load(&source_url) {
+                match snapshot_store.load(&source_url).await {
                     Ok(Some(snapshot)) => {
                         merged_rules.extend(
                             snapshot

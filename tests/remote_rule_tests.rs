@@ -1,8 +1,8 @@
 use loadants::build_router;
 use loadants::config::{
     AuthConfig, AuthType, Config, HttpClientConfig, MatchType, RemoteRuleConfig,
-    RemoteRuleFailurePolicy, RemoteRuleSnapshotConfig, RemoteRuleType, RetryConfig, RouteAction,
-    RouteRuleConfig, RuleFormat,
+    RemoteRuleFailurePolicy, RemoteRuleSnapshotConfig, RemoteRulesConfig, RetryConfig, RouteAction,
+    RouteRuleConfig,
 };
 use loadants::error::AppError;
 use loadants::r#const::remote_rule_limits;
@@ -86,9 +86,9 @@ sub.domain.org
         .await;
 
     let config = RemoteRuleConfig {
-        r#type: RemoteRuleType::Url,
+        r#type: "url".to_string(),
         url: format!("{}/rules.txt", mock_server.uri()),
-        format: RuleFormat::V2ray,
+        format: "v2ray".to_string(),
         failure_policy: RemoteRuleFailurePolicy::Strict,
         action: RouteAction::Block,
         target: None,
@@ -99,6 +99,7 @@ sub.domain.org
         }),
         proxy: None,
         max_size: remote_rule_limits::DEFAULT_MAX_SIZE,
+        tls_verify: None,
     };
 
     let http_config = HttpClientConfig {
@@ -166,9 +167,9 @@ async fn test_remote_rule_with_auth() {
         .await;
 
     let config = RemoteRuleConfig {
-        r#type: RemoteRuleType::Url,
+        r#type: "url".to_string(),
         url: format!("{}/auth-rules.txt", mock_server.uri()),
-        format: RuleFormat::V2ray,
+        format: "v2ray".to_string(),
         failure_policy: RemoteRuleFailurePolicy::Strict,
         action: RouteAction::Forward,
         target: Some("test-target".to_string()),
@@ -181,6 +182,7 @@ async fn test_remote_rule_with_auth() {
         retry: None,
         proxy: None,
         max_size: remote_rule_limits::DEFAULT_MAX_SIZE,
+        tls_verify: None,
     };
 
     let loader = RemoteRuleLoader::new(config, HttpClientConfig::default()).unwrap();
@@ -215,9 +217,9 @@ async fn test_load_and_merge_rules() {
 
     let remote_configs = vec![
         RemoteRuleConfig {
-            r#type: RemoteRuleType::Url,
+            r#type: "url".to_string(),
             url: format!("{}/block-rules.txt", mock_server1.uri()),
-            format: RuleFormat::V2ray,
+            format: "v2ray".to_string(),
             failure_policy: RemoteRuleFailurePolicy::Strict,
             action: RouteAction::Block,
             target: None,
@@ -225,11 +227,12 @@ async fn test_load_and_merge_rules() {
             retry: None,
             proxy: None,
             max_size: remote_rule_limits::DEFAULT_MAX_SIZE,
+            tls_verify: None,
         },
         RemoteRuleConfig {
-            r#type: RemoteRuleType::Url,
+            r#type: "url".to_string(),
             url: format!("{}/forward-rules.txt", mock_server2.uri()),
-            format: RuleFormat::V2ray,
+            format: "v2ray".to_string(),
             failure_policy: RemoteRuleFailurePolicy::Strict,
             action: RouteAction::Forward,
             target: Some("test-target".to_string()),
@@ -237,6 +240,7 @@ async fn test_load_and_merge_rules() {
             retry: None,
             proxy: None,
             max_size: remote_rule_limits::DEFAULT_MAX_SIZE,
+            tls_verify: None,
         },
     ];
 
@@ -317,9 +321,9 @@ async fn test_error_handling() {
         .await;
 
     let not_found_config = RemoteRuleConfig {
-        r#type: RemoteRuleType::Url,
+        r#type: "url".to_string(),
         url: format!("{}/not-found.txt", mock_server.uri()),
-        format: RuleFormat::V2ray,
+        format: "v2ray".to_string(),
         failure_policy: RemoteRuleFailurePolicy::Strict,
         action: RouteAction::Block,
         target: None,
@@ -327,6 +331,7 @@ async fn test_error_handling() {
         retry: None,
         proxy: None,
         max_size: remote_rule_limits::DEFAULT_MAX_SIZE,
+        tls_verify: None,
     };
 
     let loader = RemoteRuleLoader::new(not_found_config, HttpClientConfig::default()).unwrap();
@@ -334,9 +339,9 @@ async fn test_error_handling() {
     assert!(result.is_err());
 
     let large_file_config = RemoteRuleConfig {
-        r#type: RemoteRuleType::Url,
+        r#type: "url".to_string(),
         url: format!("{}/large-file.txt", mock_server.uri()),
-        format: RuleFormat::V2ray,
+        format: "v2ray".to_string(),
         failure_policy: RemoteRuleFailurePolicy::Strict,
         action: RouteAction::Block,
         target: None,
@@ -344,6 +349,7 @@ async fn test_error_handling() {
         retry: None,
         proxy: None,
         max_size: 100,
+        tls_verify: None,
     };
 
     let loader = RemoteRuleLoader::new(large_file_config, HttpClientConfig::default()).unwrap();
@@ -383,9 +389,9 @@ async fn test_load_and_merge_rules_reports_lenient_failures() {
 
     let remote_configs = vec![
         RemoteRuleConfig {
-            r#type: RemoteRuleType::Url,
+            r#type: "url".to_string(),
             url: format!("{}/ok.txt", success_server.uri()),
-            format: RuleFormat::V2ray,
+            format: "v2ray".to_string(),
             failure_policy: RemoteRuleFailurePolicy::Strict,
             action: RouteAction::Block,
             target: None,
@@ -393,11 +399,12 @@ async fn test_load_and_merge_rules_reports_lenient_failures() {
             retry: None,
             proxy: None,
             max_size: remote_rule_limits::DEFAULT_MAX_SIZE,
+            tls_verify: None,
         },
         RemoteRuleConfig {
-            r#type: RemoteRuleType::Url,
+            r#type: "url".to_string(),
             url: format!("{}/missing.txt", failure_server.uri()),
-            format: RuleFormat::V2ray,
+            format: "v2ray".to_string(),
             failure_policy: RemoteRuleFailurePolicy::Lenient,
             action: RouteAction::Block,
             target: None,
@@ -405,6 +412,7 @@ async fn test_load_and_merge_rules_reports_lenient_failures() {
             retry: None,
             proxy: None,
             max_size: remote_rule_limits::DEFAULT_MAX_SIZE,
+            tls_verify: None,
         },
     ];
 
@@ -462,9 +470,9 @@ async fn test_evaluate_remote_rule_startup_rejects_strict_failures() {
 
     let remote_configs = vec![
         RemoteRuleConfig {
-            r#type: RemoteRuleType::Url,
+            r#type: "url".to_string(),
             url: format!("{}/ok.txt", success_server.uri()),
-            format: RuleFormat::V2ray,
+            format: "v2ray".to_string(),
             failure_policy: RemoteRuleFailurePolicy::Lenient,
             action: RouteAction::Block,
             target: None,
@@ -472,11 +480,12 @@ async fn test_evaluate_remote_rule_startup_rejects_strict_failures() {
             retry: None,
             proxy: None,
             max_size: remote_rule_limits::DEFAULT_MAX_SIZE,
+            tls_verify: None,
         },
         RemoteRuleConfig {
-            r#type: RemoteRuleType::Url,
+            r#type: "url".to_string(),
             url: format!("{}/missing.txt", failure_server.uri()),
-            format: RuleFormat::V2ray,
+            format: "v2ray".to_string(),
             failure_policy: RemoteRuleFailurePolicy::Strict,
             action: RouteAction::Forward,
             target: Some("test-target".to_string()),
@@ -484,6 +493,7 @@ async fn test_evaluate_remote_rule_startup_rejects_strict_failures() {
             retry: None,
             proxy: None,
             max_size: remote_rule_limits::DEFAULT_MAX_SIZE,
+            tls_verify: None,
         },
     ];
 
@@ -531,9 +541,9 @@ async fn test_load_and_merge_rules_writes_snapshot_on_success() {
         .await;
 
     let remote_configs = vec![RemoteRuleConfig {
-        r#type: RemoteRuleType::Url,
+        r#type: "url".to_string(),
         url: format!("{}/rules.txt", mock_server.uri()),
-        format: RuleFormat::V2ray,
+        format: "v2ray".to_string(),
         failure_policy: RemoteRuleFailurePolicy::Strict,
         action: RouteAction::Block,
         target: None,
@@ -541,6 +551,7 @@ async fn test_load_and_merge_rules_writes_snapshot_on_success() {
         retry: None,
         proxy: None,
         max_size: remote_rule_limits::DEFAULT_MAX_SIZE,
+        tls_verify: None,
     }];
 
     let summary = load_and_merge_rules(
@@ -555,6 +566,7 @@ async fn test_load_and_merge_rules_writes_snapshot_on_success() {
     assert!(summary.failed_sources.is_empty());
     let snapshot = snapshot_store
         .load(&remote_configs[0].url)
+        .await
         .expect("snapshot should be readable")
         .expect("snapshot should exist");
     assert_eq!(snapshot.rules.len(), 1);
@@ -591,15 +603,16 @@ async fn test_load_and_merge_rules_prunes_stale_snapshot_files() {
                 target: None,
             }],
         )
+        .await
         .expect("stale snapshot should be seeded");
     let stale_snapshot_path = snapshot_store.snapshot_path(&stale_url);
     let stale_tmp_path = snapshot_temp_path(&snapshot_store, &stale_url, 2001);
     fs::write(&stale_tmp_path, b"stale tmp").expect("stale tmp should be created");
 
     let remote_configs = vec![RemoteRuleConfig {
-        r#type: RemoteRuleType::Url,
+        r#type: "url".to_string(),
         url: format!("{}/rules.txt", active_server.uri()),
-        format: RuleFormat::V2ray,
+        format: "v2ray".to_string(),
         failure_policy: RemoteRuleFailurePolicy::Strict,
         action: RouteAction::Block,
         target: None,
@@ -607,6 +620,7 @@ async fn test_load_and_merge_rules_prunes_stale_snapshot_files() {
         retry: None,
         proxy: None,
         max_size: remote_rule_limits::DEFAULT_MAX_SIZE,
+        tls_verify: None,
     }];
 
     let summary = load_and_merge_rules(
@@ -659,12 +673,13 @@ async fn test_load_and_merge_rules_uses_snapshot_fallback_for_strict_failures() 
                 target: None,
             }],
         )
+        .await
         .expect("snapshot should be seeded");
 
     let remote_configs = vec![RemoteRuleConfig {
-        r#type: RemoteRuleType::Url,
+        r#type: "url".to_string(),
         url: remote_url.clone(),
-        format: RuleFormat::V2ray,
+        format: "v2ray".to_string(),
         failure_policy: RemoteRuleFailurePolicy::Strict,
         action: RouteAction::Block,
         target: None,
@@ -672,6 +687,7 @@ async fn test_load_and_merge_rules_uses_snapshot_fallback_for_strict_failures() 
         retry: None,
         proxy: None,
         max_size: remote_rule_limits::DEFAULT_MAX_SIZE,
+        tls_verify: None,
     }];
 
     let summary = load_and_merge_rules(
@@ -719,36 +735,41 @@ async fn test_build_router_allows_lenient_remote_failures() {
         .await;
 
     let config = Config {
-        remote_rule_snapshot: RemoteRuleSnapshotConfig {
-            enabled: false,
-            path: ".unused".to_string(),
+        remote_rules: RemoteRulesConfig {
+            reload_interval_secs: 3600,
+            snapshot: RemoteRuleSnapshotConfig {
+                enabled: false,
+                path: ".unused".to_string(),
+            },
+            sources: vec![
+                RemoteRuleConfig {
+                    r#type: "url".to_string(),
+                    url: format!("{}/ok.txt", success_server.uri()),
+                    format: "v2ray".to_string(),
+                    failure_policy: RemoteRuleFailurePolicy::Strict,
+                    action: RouteAction::Block,
+                    target: None,
+                    auth: None,
+                    retry: None,
+                    proxy: None,
+                    max_size: remote_rule_limits::DEFAULT_MAX_SIZE,
+                    tls_verify: None,
+                },
+                RemoteRuleConfig {
+                    r#type: "url".to_string(),
+                    url: format!("{}/missing.txt", failure_server.uri()),
+                    format: "v2ray".to_string(),
+                    failure_policy: RemoteRuleFailurePolicy::Lenient,
+                    action: RouteAction::Block,
+                    target: None,
+                    auth: None,
+                    retry: None,
+                    proxy: None,
+                    max_size: remote_rule_limits::DEFAULT_MAX_SIZE,
+                    tls_verify: None,
+                },
+            ],
         },
-        remote_rules: vec![
-            RemoteRuleConfig {
-                r#type: RemoteRuleType::Url,
-                url: format!("{}/ok.txt", success_server.uri()),
-                format: RuleFormat::V2ray,
-                failure_policy: RemoteRuleFailurePolicy::Strict,
-                action: RouteAction::Block,
-                target: None,
-                auth: None,
-                retry: None,
-                proxy: None,
-                max_size: remote_rule_limits::DEFAULT_MAX_SIZE,
-            },
-            RemoteRuleConfig {
-                r#type: RemoteRuleType::Url,
-                url: format!("{}/missing.txt", failure_server.uri()),
-                format: RuleFormat::V2ray,
-                failure_policy: RemoteRuleFailurePolicy::Lenient,
-                action: RouteAction::Block,
-                target: None,
-                auth: None,
-                retry: None,
-                proxy: None,
-                max_size: remote_rule_limits::DEFAULT_MAX_SIZE,
-            },
-        ],
         ..Default::default()
     };
 
@@ -756,6 +777,8 @@ async fn test_build_router_allows_lenient_remote_failures() {
         .await
         .expect("lenient failure should still build router");
     let matched = router
+        .read()
+        .await
         .find_match(&hickory_proto::rr::Name::from_ascii("lenient-ok.example.").unwrap())
         .expect("successful remote rule should be compiled into router");
     assert_eq!(matched.action, RouteAction::Block);
@@ -773,22 +796,26 @@ async fn test_build_router_rejects_strict_remote_failures() {
         .await;
 
     let config = Config {
-        remote_rule_snapshot: RemoteRuleSnapshotConfig {
-            enabled: false,
-            path: ".unused".to_string(),
+        remote_rules: RemoteRulesConfig {
+            reload_interval_secs: 3600,
+            snapshot: RemoteRuleSnapshotConfig {
+                enabled: false,
+                path: ".unused".to_string(),
+            },
+            sources: vec![RemoteRuleConfig {
+                r#type: "url".to_string(),
+                url: format!("{}/missing.txt", failure_server.uri()),
+                format: "v2ray".to_string(),
+                failure_policy: RemoteRuleFailurePolicy::Strict,
+                action: RouteAction::Block,
+                target: None,
+                auth: None,
+                retry: None,
+                proxy: None,
+                max_size: remote_rule_limits::DEFAULT_MAX_SIZE,
+                tls_verify: None,
+            }],
         },
-        remote_rules: vec![RemoteRuleConfig {
-            r#type: RemoteRuleType::Url,
-            url: format!("{}/missing.txt", failure_server.uri()),
-            format: RuleFormat::V2ray,
-            failure_policy: RemoteRuleFailurePolicy::Strict,
-            action: RouteAction::Block,
-            target: None,
-            auth: None,
-            retry: None,
-            proxy: None,
-            max_size: remote_rule_limits::DEFAULT_MAX_SIZE,
-        }],
         ..Default::default()
     };
 
@@ -829,22 +856,27 @@ async fn test_build_router_allows_strict_remote_failures_with_snapshot_fallback(
                 target: None,
             }],
         )
+        .await
         .expect("snapshot should be seeded");
 
     let config = Config {
-        remote_rule_snapshot: snapshot_config,
-        remote_rules: vec![RemoteRuleConfig {
-            r#type: RemoteRuleType::Url,
-            url: remote_url,
-            format: RuleFormat::V2ray,
-            failure_policy: RemoteRuleFailurePolicy::Strict,
-            action: RouteAction::Block,
-            target: None,
-            auth: None,
-            retry: None,
-            proxy: None,
-            max_size: remote_rule_limits::DEFAULT_MAX_SIZE,
-        }],
+        remote_rules: RemoteRulesConfig {
+            reload_interval_secs: 3600,
+            snapshot: snapshot_config,
+            sources: vec![RemoteRuleConfig {
+                r#type: "url".to_string(),
+                url: remote_url,
+                format: "v2ray".to_string(),
+                failure_policy: RemoteRuleFailurePolicy::Strict,
+                action: RouteAction::Block,
+                target: None,
+                auth: None,
+                retry: None,
+                proxy: None,
+                max_size: remote_rule_limits::DEFAULT_MAX_SIZE,
+                tls_verify: None,
+            }],
+        },
         ..Default::default()
     };
 
@@ -852,6 +884,8 @@ async fn test_build_router_allows_strict_remote_failures_with_snapshot_fallback(
         .await
         .expect("strict remote failure should recover from snapshot");
     let matched = router
+        .read()
+        .await
         .find_match(&hickory_proto::rr::Name::from_ascii("strict-fallback.example.").unwrap())
         .expect("snapshot-backed remote rule should be compiled into router");
     assert_eq!(matched.action, RouteAction::Block);

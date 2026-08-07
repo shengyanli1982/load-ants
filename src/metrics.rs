@@ -1,10 +1,11 @@
 use axum::http::{header, StatusCode};
 use axum::{routing::get, Router};
+use hickory_proto::op::ResponseCode;
 use hickory_proto::rr::RecordType;
 use once_cell::sync::Lazy;
 use prometheus::{opts, HistogramVec, IntCounterVec, IntGauge, IntGaugeVec, Registry};
+use tracing::error;
 
-// 全局静态指标实例
 pub static METRICS: Lazy<DnsMetrics> = Lazy::new(DnsMetrics::new);
 pub fn normalize_query_type_label(record_type: RecordType) -> &'static str {
     match record_type {
@@ -24,36 +25,67 @@ pub fn normalize_query_type_label(record_type: RecordType) -> &'static str {
     }
 }
 
-// DNS 代理性能指标
+pub fn normalize_response_code(rc: ResponseCode) -> &'static str {
+    match rc {
+        ResponseCode::NoError => "NOERROR",
+        ResponseCode::FormErr => "FORMERR",
+        ResponseCode::ServFail => "SERVFAIL",
+        ResponseCode::NXDomain => "NXDOMAIN",
+        ResponseCode::NotImp => "NOTIMP",
+        ResponseCode::Refused => "REFUSED",
+        _ => "OTHER",
+    }
+}
+
 pub struct DnsMetrics {
-    registry: Registry,
-
-    // 1. 请求处理和性能指标
-    dns_requests_total: IntCounterVec,
-    dns_request_duration_seconds: HistogramVec,
-    dns_request_errors_total: IntCounterVec,
-    http_requests_total: IntCounterVec,
-    http_request_duration_seconds: HistogramVec,
-    http_request_errors_total: IntCounterVec,
-
-    // 2. 缓存效率和状态指标
-    cache_entries: IntGauge,
-    cache_capacity: IntGauge,
-    cache_operations_total: IntCounterVec,
-    cache_ttl_seconds: HistogramVec,
-
-    // 3. DNS 查询统计指标
-    dns_query_type_total: IntCounterVec,
-    dns_response_codes_total: IntCounterVec,
-
-    // 4. 上游解析器指标（DoH / DNS）
-    upstream_requests_total: IntCounterVec,
-    upstream_errors_total: IntCounterVec,
-    upstream_duration_seconds: HistogramVec,
-
-    // 5. 路由策略指标
-    route_matches_total: IntCounterVec,
-    route_rules_count: IntGaugeVec,
+    #[doc(hidden)]
+    pub registry: Registry,
+    #[doc(hidden)]
+    pub dns_requests_total: IntCounterVec,
+    #[doc(hidden)]
+    pub dns_request_duration_seconds: HistogramVec,
+    #[doc(hidden)]
+    pub dns_request_processing_duration_seconds: HistogramVec,
+    #[doc(hidden)]
+    pub dns_request_errors_total: IntCounterVec,
+    #[doc(hidden)]
+    pub http_requests_total: IntCounterVec,
+    #[doc(hidden)]
+    pub http_request_duration_seconds: HistogramVec,
+    #[doc(hidden)]
+    pub http_request_errors_total: IntCounterVec,
+    #[doc(hidden)]
+    pub cache_entries: IntGauge,
+    #[doc(hidden)]
+    pub cache_capacity: IntGauge,
+    #[doc(hidden)]
+    pub cache_operations_total: IntCounterVec,
+    #[doc(hidden)]
+    pub cache_ttl_seconds: HistogramVec,
+    #[doc(hidden)]
+    pub dns_query_type_total: IntCounterVec,
+    #[doc(hidden)]
+    pub dns_response_codes_total: IntCounterVec,
+    #[doc(hidden)]
+    pub upstream_requests_total: IntCounterVec,
+    #[doc(hidden)]
+    pub upstream_errors_total: IntCounterVec,
+    #[doc(hidden)]
+    pub upstream_duration_seconds: HistogramVec,
+    #[doc(hidden)]
+    pub route_matches_total: IntCounterVec,
+    #[doc(hidden)]
+    pub route_rules_count: IntGaugeVec,
+    #[doc(hidden)]
+    pub circuit_breaker_transitions_total: IntCounterVec,
+    #[doc(hidden)]
+    pub upstream_health_state: IntGaugeVec,
+    #[doc(hidden)]
+    pub inflight_requests: IntGauge,
+    #[doc(hidden)]
+    pub stale_fallback_total: IntCounterVec,
+    #[doc(hidden)]
+    pub tcp_pool_connections: IntGauge,
 }
 
 impl Default for DnsMetrics {
@@ -63,11 +95,9 @@ impl Default for DnsMetrics {
 }
 
 impl DnsMetrics {
-    // 创建新的指标收集器
     pub fn new() -> Self {
         let registry = Registry::new();
 
-        // 1. 请求处理和性能指标
         let dns_requests_total = IntCounterVec::new(
             opts!(
                 "loadants_dns_requests_total",
@@ -75,7 +105,7 @@ impl DnsMetrics {
             ),
             &["protocol"],
         )
-        .unwrap();
+        .expect("metric name format valid");
 
         let dns_request_duration_seconds = HistogramVec::new(
             prometheus::histogram_opts!(
@@ -85,7 +115,17 @@ impl DnsMetrics {
             ),
             &["protocol", "query_type"],
         )
-        .unwrap();
+        .expect("metric name format valid");
+
+        let dns_request_processing_duration_seconds = HistogramVec::new(
+            prometheus::histogram_opts!(
+                "loadants_dns_request_processing_duration_seconds",
+                "DNS request processing duration in seconds by processing stage (cached, resolved) and query type",
+                vec![0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0]
+            ),
+            &["processing_stage", "query_type"],
+        )
+        .expect("metric name format valid");
 
         let dns_request_errors_total = IntCounterVec::new(
             opts!(
@@ -94,7 +134,7 @@ impl DnsMetrics {
             ),
             &["error_type"],
         )
-        .unwrap();
+        .expect("metric name format valid");
 
         let http_requests_total = IntCounterVec::new(
             opts!(
@@ -103,7 +143,7 @@ impl DnsMetrics {
             ),
             &["status_code"],
         )
-        .unwrap();
+        .expect("metric name format valid");
 
         let http_request_duration_seconds = HistogramVec::new(
             prometheus::histogram_opts!(
@@ -113,7 +153,7 @@ impl DnsMetrics {
             ),
             &["query_type", "status_code"],
         )
-        .unwrap();
+        .expect("metric name format valid");
 
         let http_request_errors_total = IntCounterVec::new(
             opts!(
@@ -122,28 +162,27 @@ impl DnsMetrics {
             ),
             &["error_type"],
         )
-        .unwrap();
+        .expect("metric name format valid");
 
-        // 2. 缓存效率和状态指标
         let cache_entries = IntGauge::new(
             "loadants_cache_entries",
             "Current number of DNS cache entries",
         )
-        .unwrap();
+        .expect("metric name format valid");
 
         let cache_capacity = IntGauge::new(
             "loadants_cache_capacity",
             "Maximum capacity of the DNS cache",
         )
-        .unwrap();
+        .expect("metric name format valid");
 
         let cache_operations_total = IntCounterVec::new(
             opts!(
                 "loadants_cache_operations_total",
-                "Total cache operations, classified by operation type (hit, miss, insert, insert_error, clear)"
+                "Total cache operations, classified by operation type (hit, miss, stale, insert, insert_error, clear)"
             ),
             &["operation"]
-        ).unwrap();
+        ).expect("metric name format valid");
 
         let cache_ttl_seconds = HistogramVec::new(
             prometheus::histogram_opts!(
@@ -153,9 +192,8 @@ impl DnsMetrics {
             ),
             &["source"],
         )
-        .unwrap();
+        .expect("metric name format valid");
 
-        // 3. DNS 查询统计指标
         let dns_query_type_total = IntCounterVec::new(
             opts!(
                 "loadants_dns_query_type_total",
@@ -163,7 +201,7 @@ impl DnsMetrics {
             ),
             &["type"],
         )
-        .unwrap();
+        .expect("metric name format valid");
 
         let dns_response_codes_total = IntCounterVec::new(
             opts!(
@@ -172,9 +210,8 @@ impl DnsMetrics {
             ),
             &["rcode"],
         )
-        .unwrap();
+        .expect("metric name format valid");
 
-        // 4. 上游解析器指标（DoH / DNS）
         let upstream_requests_total = IntCounterVec::new(
             opts!(
                 "loadants_upstream_requests_total",
@@ -182,7 +219,7 @@ impl DnsMetrics {
             ),
             &["upstream_protocol", "upstream_transport", "group", "server"],
         )
-        .unwrap();
+        .expect("metric name format valid");
 
         let upstream_errors_total = IntCounterVec::new(
             opts!(
@@ -197,7 +234,7 @@ impl DnsMetrics {
                 "server",
             ],
         )
-        .unwrap();
+        .expect("metric name format valid");
 
         let upstream_duration_seconds = HistogramVec::new(
             prometheus::histogram_opts!(
@@ -207,13 +244,12 @@ impl DnsMetrics {
             ),
             &["upstream_protocol", "upstream_transport", "group", "server"],
         )
-        .unwrap();
+        .expect("metric name format valid");
 
-        // 5. 路由策略指标
         let route_matches_total = IntCounterVec::new(
             opts!("loadants_route_matches_total", "Total routing rule matches, classified by rule type, target group, rule source and action"),
             &["rule_type", "target_group", "rule_source", "action"]
-        ).unwrap();
+        ).expect("metric name format valid");
 
         let route_rules_count = IntGaugeVec::new(
             opts!(
@@ -222,13 +258,52 @@ impl DnsMetrics {
             ),
             &["rule_type", "rule_source"],
         )
-        .unwrap();
+        .expect("metric name format valid");
 
-        // 创建指标实例
+        let circuit_breaker_transitions_total = IntCounterVec::new(
+            opts!(
+                "loadants_circuit_breaker_transitions_total",
+                "Total state transitions (Healthy->Unhealthy, Unhealthy->HalfOpen, HalfOpen->Healthy/Unhealthy) per upstream group"
+            ),
+            &["group", "state_from", "state_to"],
+        )
+        .expect("metric name format valid");
+
+        let upstream_health_state = IntGaugeVec::new(
+            opts!(
+                "loadants_upstream_health_state",
+                "Current health state of upstream server (0=Unhealthy, 1=HalfOpen, 2=Healthy)"
+            ),
+            &["group", "server"],
+        )
+        .expect("metric name format valid");
+
+        let inflight_requests = IntGauge::new(
+            "loadants_inflight_requests",
+            "Current number of in-flight DNS requests being processed",
+        )
+        .expect("metric name format valid");
+
+        let stale_fallback_total = IntCounterVec::new(
+            opts!(
+                "loadants_stale_fallback_total",
+                "Total stale cache responses served when upstream forwarding failed"
+            ),
+            &["group"],
+        )
+        .expect("metric name format valid");
+
+        let tcp_pool_connections = IntGauge::new(
+            "loadants_tcp_pool_connections",
+            "Current number of pooled TCP connections",
+        )
+        .expect("metric name format valid");
+
         let metrics = DnsMetrics {
             registry,
             dns_requests_total,
             dns_request_duration_seconds,
+            dns_request_processing_duration_seconds,
             dns_request_errors_total,
             http_requests_total,
             http_request_duration_seconds,
@@ -244,166 +319,62 @@ impl DnsMetrics {
             upstream_duration_seconds,
             route_matches_total,
             route_rules_count,
+            circuit_breaker_transitions_total,
+            upstream_health_state,
+            inflight_requests,
+            stale_fallback_total,
+            tcp_pool_connections,
         };
 
-        // 注册所有指标
-        metrics.register_all_metrics();
+        let collectors: Vec<Box<dyn prometheus::core::Collector + Send + Sync>> = vec![
+            Box::new(metrics.dns_requests_total.clone()),
+            Box::new(metrics.dns_request_duration_seconds.clone()),
+            Box::new(metrics.dns_request_processing_duration_seconds.clone()),
+            Box::new(metrics.dns_request_errors_total.clone()),
+            Box::new(metrics.http_requests_total.clone()),
+            Box::new(metrics.http_request_duration_seconds.clone()),
+            Box::new(metrics.http_request_errors_total.clone()),
+            Box::new(metrics.cache_entries.clone()),
+            Box::new(metrics.cache_capacity.clone()),
+            Box::new(metrics.cache_operations_total.clone()),
+            Box::new(metrics.cache_ttl_seconds.clone()),
+            Box::new(metrics.dns_query_type_total.clone()),
+            Box::new(metrics.dns_response_codes_total.clone()),
+            Box::new(metrics.upstream_requests_total.clone()),
+            Box::new(metrics.upstream_errors_total.clone()),
+            Box::new(metrics.upstream_duration_seconds.clone()),
+            Box::new(metrics.route_matches_total.clone()),
+            Box::new(metrics.route_rules_count.clone()),
+            Box::new(metrics.circuit_breaker_transitions_total.clone()),
+            Box::new(metrics.upstream_health_state.clone()),
+            Box::new(metrics.inflight_requests.clone()),
+            Box::new(metrics.stale_fallback_total.clone()),
+            Box::new(metrics.tcp_pool_connections.clone()),
+        ];
+        for m in collectors {
+            metrics
+                .registry
+                .register(m)
+                .expect("metric registration failed");
+        }
 
         metrics
     }
 
-    // 注册所有指标
-    fn register_all_metrics(&self) {
-        // 1. 请求处理和性能指标
-        self.registry
-            .register(Box::new(self.dns_requests_total.clone()))
-            .unwrap();
-        self.registry
-            .register(Box::new(self.dns_request_duration_seconds.clone()))
-            .unwrap();
-        self.registry
-            .register(Box::new(self.dns_request_errors_total.clone()))
-            .unwrap();
-        self.registry
-            .register(Box::new(self.http_requests_total.clone()))
-            .unwrap();
-        self.registry
-            .register(Box::new(self.http_request_duration_seconds.clone()))
-            .unwrap();
-        self.registry
-            .register(Box::new(self.http_request_errors_total.clone()))
-            .unwrap();
-
-        // 2. 缓存效率和状态指标
-        self.registry
-            .register(Box::new(self.cache_entries.clone()))
-            .unwrap();
-        self.registry
-            .register(Box::new(self.cache_capacity.clone()))
-            .unwrap();
-        self.registry
-            .register(Box::new(self.cache_operations_total.clone()))
-            .unwrap();
-        self.registry
-            .register(Box::new(self.cache_ttl_seconds.clone()))
-            .unwrap();
-
-        // 3. DNS 查询统计指标
-        self.registry
-            .register(Box::new(self.dns_query_type_total.clone()))
-            .unwrap();
-        self.registry
-            .register(Box::new(self.dns_response_codes_total.clone()))
-            .unwrap();
-
-        // 4. 上游 DoH 解析器指标
-        self.registry
-            .register(Box::new(self.upstream_requests_total.clone()))
-            .unwrap();
-        self.registry
-            .register(Box::new(self.upstream_errors_total.clone()))
-            .unwrap();
-        self.registry
-            .register(Box::new(self.upstream_duration_seconds.clone()))
-            .unwrap();
-
-        // 5. 路由策略指标
-        self.registry
-            .register(Box::new(self.route_matches_total.clone()))
-            .unwrap();
-        self.registry
-            .register(Box::new(self.route_rules_count.clone()))
-            .unwrap();
-    }
-
-    // 获取 Prometheus 注册表
     pub fn registry(&self) -> &Registry {
         &self.registry
     }
 
-    // 导出所有指标为输出字符串
-    #[allow(dead_code)]
     pub fn export_metrics(&self) -> String {
         let encoder = prometheus::TextEncoder::new();
         let metric_families = self.registry.gather();
         let mut buffer = String::new();
-        encoder.encode_utf8(&metric_families, &mut buffer).unwrap();
+        encoder
+            .encode_utf8(&metric_families, &mut buffer)
+            .unwrap_or_else(|e| {
+                error!("Failed to encode Prometheus metrics: {}", e);
+            });
         buffer
-    }
-
-    // 下面是各个指标的getter方法，用于其他模块增加计数或设置值
-
-    // 1. 请求处理和性能指标
-    pub fn dns_requests_total(&self) -> &IntCounterVec {
-        &self.dns_requests_total
-    }
-
-    pub fn dns_request_duration_seconds(&self) -> &HistogramVec {
-        &self.dns_request_duration_seconds
-    }
-
-    pub fn dns_request_errors_total(&self) -> &IntCounterVec {
-        &self.dns_request_errors_total
-    }
-
-    pub fn http_requests_total(&self) -> &IntCounterVec {
-        &self.http_requests_total
-    }
-
-    pub fn http_request_duration_seconds(&self) -> &HistogramVec {
-        &self.http_request_duration_seconds
-    }
-
-    pub fn http_request_errors_total(&self) -> &IntCounterVec {
-        &self.http_request_errors_total
-    }
-
-    // 2. 缓存效率和状态指标
-    pub fn cache_entries(&self) -> &IntGauge {
-        &self.cache_entries
-    }
-
-    pub fn cache_capacity(&self) -> &IntGauge {
-        &self.cache_capacity
-    }
-
-    pub fn cache_operations_total(&self) -> &IntCounterVec {
-        &self.cache_operations_total
-    }
-
-    pub fn cache_ttl_seconds(&self) -> &HistogramVec {
-        &self.cache_ttl_seconds
-    }
-
-    // 3. DNS 查询统计指标
-    pub fn dns_query_type_total(&self) -> &IntCounterVec {
-        &self.dns_query_type_total
-    }
-
-    pub fn dns_response_codes_total(&self) -> &IntCounterVec {
-        &self.dns_response_codes_total
-    }
-
-    // 4. 上游 DoH 解析器指标
-    pub fn upstream_requests_total(&self) -> &IntCounterVec {
-        &self.upstream_requests_total
-    }
-
-    pub fn upstream_errors_total(&self) -> &IntCounterVec {
-        &self.upstream_errors_total
-    }
-
-    pub fn upstream_duration_seconds(&self) -> &HistogramVec {
-        &self.upstream_duration_seconds
-    }
-
-    // 5. 路由策略指标
-    pub fn route_matches_total(&self) -> &IntCounterVec {
-        &self.route_matches_total
-    }
-
-    pub fn route_rules_count(&self) -> &IntGaugeVec {
-        &self.route_rules_count
     }
 }
 
@@ -413,15 +384,14 @@ pub fn metrics_routes() -> Router {
         "/metrics",
         get(|| async {
             let encoder = prometheus::TextEncoder::new();
-
-            // 直接从全局METRICS获取所有注册的指标
             let metric_families = METRICS.registry().gather();
-
-            // 编码为文本格式
             let mut buffer = String::new();
-            encoder.encode_utf8(&metric_families, &mut buffer).unwrap();
-
-            // 返回响应
+            encoder
+                .encode_utf8(&metric_families, &mut buffer)
+                .unwrap_or_else(|e| {
+                    error!("Failed to encode Prometheus metrics: {}", e);
+                    buffer = String::new();
+                });
             (
                 StatusCode::OK,
                 [(header::CONTENT_TYPE, prometheus::TEXT_FORMAT)],

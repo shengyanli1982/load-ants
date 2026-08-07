@@ -1,4 +1,4 @@
-use hickory_proto::error::ProtoError;
+use hickory_proto::ProtoError;
 use std::io;
 use std::net::AddrParseError;
 use thiserror::Error;
@@ -34,15 +34,10 @@ pub enum AppError {
     #[error("Upstream error: {0}")]
     Upstream(String),
 
-    #[error("Router error: {0}")]
-    #[allow(dead_code)]
-    Router(String),
-
     #[error("Cache error: {0}")]
     Cache(String),
 
     #[error("Timeout error")]
-    #[allow(dead_code)]
     Timeout,
 
     #[error("No available upstream servers")]
@@ -65,14 +60,6 @@ pub enum AppError {
 
     #[error("HTTP client error: {0}")]
     HttpError(#[from] HttpClientError),
-
-    #[error("Missing required configuration: {0}")]
-    #[allow(dead_code)]
-    MissingRequiredConfig(String),
-
-    #[error("Invalid load balancing strategy: {0}")]
-    #[allow(dead_code)]
-    InvalidLoadBalancingStrategy(String),
 
     #[error("Invalid shutdown timeout: must be between minimum and maximum values")]
     InvalidShutdownTimeout,
@@ -134,10 +121,6 @@ pub enum ConfigError {
 
     #[error("Route rule conflict: {0}")]
     RuleConflict(String),
-
-    #[error("Invalid pattern: {0}")]
-    #[allow(dead_code)]
-    InvalidPattern(String),
 
     #[error("Invalid regular expression: {0}")]
     InvalidRegex(#[from] regex::Error),

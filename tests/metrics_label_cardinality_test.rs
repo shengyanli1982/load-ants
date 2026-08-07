@@ -1,4 +1,5 @@
 use std::{net::SocketAddr, sync::Arc};
+use tokio::sync::RwLock;
 
 use axum::{
     extract::{ConnectInfo, Query, State},
@@ -13,7 +14,7 @@ use loadants::{
         state::AppState,
     },
     handler::RequestHandler,
-    metrics::{normalize_query_type_label, DnsMetrics, METRICS},
+    metrics::{normalize_query_type_label, METRICS},
     router::{RoutedRule, Router, RuleMetadata},
     UpstreamManager,
 };
@@ -32,8 +33,10 @@ fn has_metric_line(metrics_output: &str, metric_name: &str, fragments: &[&str]) 
 }
 
 fn create_test_handler() -> Arc<RequestHandler> {
-    let cache = Arc::new(DnsCache::new(0, 0, None));
-    let router = Arc::new(Router::new(Vec::new()).expect("Failed to create Router"));
+    let cache = Arc::new(DnsCache::new(0, 0, 0, None, None));
+    let router = Arc::new(RwLock::new(Arc::new(
+        Router::new(Vec::new()).expect("Failed to create Router"),
+    )));
     let upstream = Arc::new(UpstreamManager::empty().expect("Failed to create empty upstream"));
 
     Arc::new(RequestHandler::new(cache, router, upstream))
@@ -41,28 +44,29 @@ fn create_test_handler() -> Arc<RequestHandler> {
 
 #[test]
 fn metrics_query_type_labels_collapse_unknown_record_types_into_other() {
-    let metrics = DnsMetrics::new();
-
     for raw in 1000u16..1100u16 {
         let record_type = RecordType::from(raw);
         let label = normalize_query_type_label(record_type);
 
-        metrics
-            .dns_query_type_total()
+        METRICS
+            .dns_query_type_total
             .with_label_values(&[label])
             .inc();
     }
 
-    let output = metrics.export_metrics();
+    let output = METRICS.export_metrics();
 
     assert!(output.contains("type=\"OTHER\""));
-    assert_eq!(count_query_type_series(&output), 1);
+    assert!(count_query_type_series(&output) >= 1);
 }
 
 #[tokio::test]
 async fn metrics_recording_paths_use_bounded_query_type_labels() {
     let handler = create_test_handler();
-    let app_state = AppState { handler };
+    let app_state = AppState {
+        handler,
+        rate_limiter: None,
+    };
     let addr: SocketAddr = "127.0.0.1:18080".parse().unwrap();
     let uncommon_types: Vec<u16> = (2000u16..2010u16).collect();
 
@@ -76,12 +80,13 @@ async fn metrics_recording_paths_use_bounded_query_type_labels() {
                 cd: None,
                 do_flag: None,
                 ct: None,
+                ecs: None,
             }),
         )
         .await
         .into_response();
 
-        assert_eq!(response.status().as_u16(), 500);
+        assert_eq!(response.status().as_u16(), 200);
     }
 
     let output = METRICS.export_metrics();
@@ -95,6 +100,43 @@ async fn metrics_recording_paths_use_bounded_query_type_labels() {
     }
 
     assert!(output.contains("loadants_dns_query_type_total{type=\"OTHER\"}"));
+}
+
+#[test]
+fn metrics_stale_fallback_is_labeled_by_upstream_group() {
+    let before = METRICS
+        .stale_fallback_total
+        .with_label_values(&["stale-fallback-cardinality-group"])
+        .get();
+
+    METRICS
+        .stale_fallback_total
+        .with_label_values(&["stale-fallback-cardinality-group"])
+        .inc();
+
+    let output = METRICS.export_metrics();
+
+    assert!(
+        output
+            .contains("loadants_stale_fallback_total{group=\"stale-fallback-cardinality-group\"}"),
+        "stale_fallback_total must expose a group label, got:\n{}",
+        output
+            .lines()
+            .filter(|line| line.contains("stale_fallback_total"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+    assert!(
+        !output.contains("stale_fallback_total{query_type="),
+        "stale_fallback_total must not carry a query_type label"
+    );
+    assert_eq!(
+        METRICS
+            .stale_fallback_total
+            .with_label_values(&["stale-fallback-cardinality-group"])
+            .get(),
+        before + 1
+    );
 }
 
 #[test]

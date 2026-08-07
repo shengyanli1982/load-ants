@@ -1,8 +1,7 @@
 use crate::{config::MatchType, error::AppError};
 
 /// 规则解析器特征，定义解析不同格式规则文件的接口
-pub trait RuleParser {
-    /// 解析规则内容，返回(域名模式, 匹配类型)的列表
+pub trait RuleParser: Send + Sync {
     fn parse(&self, content: &str) -> Result<Vec<(String, MatchType)>, AppError>;
 }
 

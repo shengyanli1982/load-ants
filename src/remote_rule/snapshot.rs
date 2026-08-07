@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 use std::fmt::Write;
-use std::fs;
 use std::path::{Path, PathBuf};
+use tokio::fs;
 
 const SNAPSHOT_SCHEMA_VERSION: u32 = 1;
 
@@ -50,7 +50,10 @@ impl RemoteRuleSnapshotStore {
     }
 
     /// 按来源地址加载最近一次成功快照。
-    pub fn load(&self, source_url: &str) -> Result<Option<RemoteRuleSnapshotEnvelope>, AppError> {
+    pub async fn load(
+        &self,
+        source_url: &str,
+    ) -> Result<Option<RemoteRuleSnapshotEnvelope>, AppError> {
         if !self.enabled {
             return Ok(None);
         }
@@ -60,7 +63,7 @@ impl RemoteRuleSnapshotStore {
             return Ok(None);
         }
 
-        let content = fs::read_to_string(&path).map_err(|error| {
+        let content = fs::read_to_string(&path).await.map_err(|error| {
             AppError::Cache(format!(
                 "failed to read remote rule snapshot '{}': {}",
                 path.display(),
@@ -97,12 +100,12 @@ impl RemoteRuleSnapshotStore {
     }
 
     /// 将指定来源的规则保存为最近一次成功快照。
-    pub fn save(&self, source_url: &str, rules: &[RouteRuleConfig]) -> Result<(), AppError> {
+    pub async fn save(&self, source_url: &str, rules: &[RouteRuleConfig]) -> Result<(), AppError> {
         if !self.enabled {
             return Ok(());
         }
 
-        fs::create_dir_all(&self.root_dir).map_err(|error| {
+        fs::create_dir_all(&self.root_dir).await.map_err(|error| {
             AppError::Cache(format!(
                 "failed to create remote rule snapshot directory '{}': {}",
                 self.root_dir.display(),
@@ -120,7 +123,7 @@ impl RemoteRuleSnapshotStore {
 
         let path = self.snapshot_path(source_url);
         let temp_path = self.temp_snapshot_path(source_url);
-        fs::write(&temp_path, payload).map_err(|error| {
+        fs::write(&temp_path, payload).await.map_err(|error| {
             AppError::Cache(format!(
                 "failed to write remote rule snapshot '{}': {}",
                 temp_path.display(),
@@ -128,8 +131,8 @@ impl RemoteRuleSnapshotStore {
             ))
         })?;
 
-        if let Err(error) = self.promote_snapshot(&temp_path, &path) {
-            let _ = fs::remove_file(&temp_path);
+        if let Err(error) = self.promote_snapshot(&temp_path, &path).await {
+            let _ = fs::remove_file(&temp_path).await;
             return Err(error);
         }
 
@@ -137,12 +140,12 @@ impl RemoteRuleSnapshotStore {
     }
 
     /// 根据当前活跃来源同步快照目录，删除孤儿快照与遗留临时文件。
-    pub fn sync_active_sources(&self, active_urls: &[String]) -> Result<(), AppError> {
+    pub async fn sync_active_sources(&self, active_urls: &[String]) -> Result<(), AppError> {
         if !self.enabled {
             return Ok(());
         }
 
-        fs::create_dir_all(&self.root_dir).map_err(|error| {
+        fs::create_dir_all(&self.root_dir).await.map_err(|error| {
             AppError::Cache(format!(
                 "failed to create remote rule snapshot directory '{}': {}",
                 self.root_dir.display(),
@@ -158,20 +161,21 @@ impl RemoteRuleSnapshotStore {
             active_tmp_prefixes.insert(format!("{snapshot_key}."));
         }
 
-        for entry in fs::read_dir(&self.root_dir).map_err(|error| {
+        let mut entries = fs::read_dir(&self.root_dir).await.map_err(|error| {
             AppError::Cache(format!(
                 "failed to read remote rule snapshot directory '{}': {}",
                 self.root_dir.display(),
                 error
             ))
+        })?;
+
+        while let Some(entry) = entries.next_entry().await.map_err(|error| {
+            AppError::Cache(format!(
+                "failed to inspect remote rule snapshot directory '{}': {}",
+                self.root_dir.display(),
+                error
+            ))
         })? {
-            let entry = entry.map_err(|error| {
-                AppError::Cache(format!(
-                    "failed to inspect remote rule snapshot directory '{}': {}",
-                    self.root_dir.display(),
-                    error
-                ))
-            })?;
             let path = entry.path();
             if !path.is_file() {
                 continue;
@@ -192,7 +196,7 @@ impl RemoteRuleSnapshotStore {
             };
 
             if !should_keep {
-                fs::remove_file(&path).map_err(|error| {
+                fs::remove_file(&path).await.map_err(|error| {
                     AppError::Cache(format!(
                         "failed to remove stale remote rule snapshot '{}': {}",
                         path.display(),
@@ -219,18 +223,18 @@ impl RemoteRuleSnapshotStore {
         ))
     }
 
-    fn promote_snapshot(&self, temp_path: &Path, final_path: &Path) -> Result<(), AppError> {
-        match fs::rename(temp_path, final_path) {
+    async fn promote_snapshot(&self, temp_path: &Path, final_path: &Path) -> Result<(), AppError> {
+        match fs::rename(temp_path, final_path).await {
             Ok(()) => Ok(()),
             Err(rename_error) if final_path.exists() => {
-                fs::remove_file(final_path).map_err(|error| {
+                fs::remove_file(final_path).await.map_err(|error| {
                     AppError::Cache(format!(
                         "failed to replace remote rule snapshot '{}': {}",
                         final_path.display(),
                         error
                     ))
                 })?;
-                fs::rename(temp_path, final_path).map_err(|error| {
+                fs::rename(temp_path, final_path).await.map_err(|error| {
                     AppError::Cache(format!(
                         "failed to promote remote rule snapshot '{}' after replacement fallback: {} (initial rename error: {})",
                         final_path.display(),

@@ -1,9 +1,9 @@
-use crate::config::{
-    HttpClientConfig, MatchType, RemoteRuleConfig, RouteRuleConfig, RuleFormat,
-};
+use crate::config::{HttpClientConfig, MatchType, RemoteRuleConfig, RouteRuleConfig};
 use crate::error::AppError;
 use crate::r#const::rule_action_labels;
 use crate::upstream::HttpClient;
+use bytes::BytesMut;
+use futures_util::StreamExt;
 use reqwest_middleware::ClientWithMiddleware;
 use tracing::{debug, info};
 
@@ -19,14 +19,14 @@ pub struct RemoteRuleLoader {
 impl RemoteRuleLoader {
     /// 创建新的远程规则加载器
     pub fn new(config: RemoteRuleConfig, http_config: HttpClientConfig) -> Result<Self, AppError> {
-        let client =
-            HttpClient::create(&http_config, config.proxy.as_deref(), config.retry.as_ref())?;
+        let client = HttpClient::create(
+            &http_config,
+            config.proxy.as_deref(),
+            config.retry.as_ref(),
+            config.tls_verify,
+        )?;
 
-        // 根据配置的格式选择解析器
-        let parser: Box<dyn RuleParser> = match config.format {
-            RuleFormat::V2ray => Box::new(V2RayRuleParser),
-            // RuleFormat::Clash => Box::new(ClashRuleParser),
-        };
+        let parser: Box<dyn RuleParser> = Box::new(V2RayRuleParser);
 
         Ok(Self {
             client,
@@ -68,27 +68,34 @@ impl RemoteRuleLoader {
             )));
         }
 
-        // 预检 Content-Length，避免读取过大的响应体
+        // 先检查 Content-Length header，如果存在且超限则提前拒绝，避免发起下载
         if let Some(content_length) = response.content_length() {
             if content_length as usize > self.config.max_size {
                 return Err(AppError::Upstream(format!(
-                    "Remote rule Content-Length ({}) exceeds configured limit ({})",
+                    "Remote rule file too large: Content-Length {} exceeds max_size {} bytes",
                     content_length, self.config.max_size
                 )));
             }
         }
 
-        // 获取响应内容
-        let content = response.text().await?;
-
-        // 检查规则文件大小
-        let content_size = content.len();
-        if content_size > self.config.max_size {
-            return Err(AppError::Upstream(format!(
-                "Remote rule file size ({} bytes) exceeds configured limit ({} bytes)",
-                content_size, self.config.max_size
-            )));
+        // 流式读取响应体，逐块累积并在超限时立即中止，防止 OOM
+        let mut body = BytesMut::new();
+        let mut stream = response.bytes_stream();
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk
+                .map_err(|e| AppError::Upstream(format!("Failed to read response chunk: {}", e)))?;
+            body.extend_from_slice(&chunk);
+            if body.len() > self.config.max_size {
+                return Err(AppError::Upstream(format!(
+                    "Remote rule file too large: size exceeds max_size {} bytes",
+                    self.config.max_size
+                )));
+            }
         }
+
+        let content = String::from_utf8(body.freeze().to_vec()).map_err(|e| {
+            AppError::Upstream(format!("Invalid UTF-8 in remote rule response: {}", e))
+        })?;
 
         // 解析规则
         let parsed_rules = self.parser.parse(&content)?;
