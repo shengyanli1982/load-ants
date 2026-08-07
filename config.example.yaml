@@ -7,12 +7,23 @@ server:
   listen_udp: "0.0.0.0:53" # UDP 监听地址和端口 (有效格式: IP:端口)（必选）
   listen_tcp: "0.0.0.0:53" # TCP 监听地址和端口 (有效格式: IP:端口)（必选）
   listen_http: "0.0.0.0:8080" # DoH 监听地址和端口 (有效格式: IP:端口)（可选）
+  # tls_cert: "/path/to/cert.pem" # TLS 证书文件路径（可选，配置后 DoH 入站使用 HTTPS）
+  # tls_key: "/path/to/key.pem" # TLS 私钥文件路径（可选，需与 tls_cert 同时配置）
   tcp_timeout: 10 # TCP 连接空闲超时（秒）(有效范围: 1-65535)（可选，默认值: 10）
   http_timeout: 30 # HTTP 连接空闲超时（秒）(有效范围: 1-65535)（可选，默认值: 30）
+  # udp: # UDP 配置（可选，不配置则使用默认值）
+  #   recv_buffer: 4194304 # UDP 接收缓冲区大小（字节）(有效范围: 1-67108864)（可选，默认值: 4194304 即 4MB）
+  #   send_buffer: 4194304 # UDP 发送缓冲区大小（字节）(有效范围: 1-67108864)（可选，默认值: 4194304 即 4MB）
+  #   socket_count: 1 # UDP socket 数量，>1 时启用 SO_REUSEPORT 并行接收 (有效范围: 1-256)（可选，默认值: 1）
+  # rate_limit: # 速率限制配置（可选，不配置则不限制）
+  #   max_requests_per_second: 100 # 每秒最大请求数 (有效范围: 1-100000)（可选，默认值: 100）
+  #   per_ip_max_requests_per_second: 100 # 单 IP 每秒最大请求数 (有效范围: 1-100000)（可选，默认值: 100）
 
 # 管理服务器设置（可选）
 admin:
-  listen: "0.0.0.0:9000" # 管理服务监听地址和端口 (有效格式: IP:端口)（必选，如果提供 admin 部分）
+  listen: "127.0.0.1:9000" # 管理服务监听地址和端口 (有效格式: IP:端口)（必选，如果提供 admin 部分）
+  # auth: # 认证配置（可选，配置后管理端点需要 Bearer token）
+  #   token: "your_secret_token" # Bearer token（必选，如果提供 auth 部分）
 
 # 缓存设置（可选）
 cache:
@@ -21,6 +32,7 @@ cache:
   min_ttl: 60 # 最小 TTL（秒），会覆盖原始响应中更小的 TTL 值 (有效范围: 1-86400)（必选，如果提供 cache 部分）
   max_ttl: 3600 # 所有缓存条目的最大生存时间上限（秒）(有效范围: 1-86400)（必选，如果提供 cache 部分）
   negative_ttl: 300 # 负向缓存 TTL（秒），用于缓存错误、不存在域名等响应 (有效范围: 1-86400)（必选，如果提供 cache 部分）
+  stale_while_revalidate: 0 # 过期缓存宽限时间（秒），>0 时启用 stale-while-revalidate 策略 (有效范围: 0-86400)（可选，默认值: 0，表示禁用）
 
 # HTTP 客户端设置 (全局)（可选）
 http_client:
@@ -35,6 +47,7 @@ dns_client:
   connect_timeout: 2 # TCP 连接超时（秒）(有效范围: 1-120)（必选，如果提供 dns_client 部分）
   request_timeout: 3 # DNS 请求超时（秒）(有效范围: 1-1200)（必选，如果提供 dns_client 部分）
   prefer_tcp: false # true=默认使用上游 TCP；false=默认使用上游 UDP，收到 TC=1 时切换 TCP 重试（可选，默认值: false）
+  idle_connection_timeout: 30 # 空闲连接超时（秒），用于传统 DNS (UDP/TCP) 上游的 TCP 长连接回收 (有效范围: 5-1800)（可选，默认值: 30）
   tcp_reconnect: true # TCP 请求失败后丢弃连接，下次请求重连（可选，默认值: true）
 
 # 上游 DoH 服务器组（条件必选：只要存在任何 forward 规则，就必须配置 upstream_groups）
@@ -49,6 +62,10 @@ upstream_groups:
       #   method: "get"
       #   content_type: "json" # 使用 application/dns-json 内容类型 (可选，默认 message)
     proxy: "http://127.0.0.1:7890" # 访问此组服务器时使用的代理 (可选)
+    # tls_verify: false # 是否跳过 TLS 证书验证（可选，默认 true 验证证书，仅设为 false 时跳过验证）
+    # deny_answers: ["1.1.1.1/32", "10.0.0.0/8"] # 过滤响应中的已知污染 IP 段（CIDR 格式），过滤后若 A/AAAA 记录全部为空则返回 SERVFAIL（可选，默认空列表）
+    # case_randomization: false # 是否启用 0x20 大小写随机化防响应伪造（可选，默认 false，仅对 scheme: dns 生效，部分上游 DNS 不保留大小写会导致验证失败）
+    # case_randomization_strict: false # 0x20 验证严格模式（可选，默认 false，仅在 case_randomization=true 时生效：true=验证失败丢弃 UDP 响应并回退 TCP；false=仅记录警告）
 
   - name: "public" # 组名称 (必选, 需唯一)
     scheme: "doh" # 上游组类型：doh(DoH), dns(UDP/TCP DNS)（可选，默认值: doh）
@@ -73,6 +90,9 @@ upstream_groups:
     servers:
       - addr: 223.5.5.5:53 # DNS 服务器地址 (必选, 格式: IP:端口)
       - addr: 223.6.6.6:53
+    # deny_answers: ["1.1.1.1/32", "10.0.0.0/8"] # 过滤响应中的已知污染 IP 段（CIDR 格式）（可选，默认空列表）
+    # case_randomization: false # 是否启用 0x20 大小写随机化防响应伪造（可选，默认 false）
+    # case_randomization_strict: false # 0x20 验证严格模式（可选，默认 false）
 
 # 路由规则（静态配置）（可选，但必须至少配置 static_rules 或 remote_rules 之一）
 static_rules:
@@ -99,37 +119,41 @@ static_rules:
     action: "forward" # 路由动作：block(阻止), forward(转发)（必选）
     target: "public" # 目标上游组（当action为forward时必选）
 
-# 远程规则快照（可选）
-remote_rule_snapshot:
-  enabled: true # 是否启用远程规则的 last-known-good 快照恢复（可选，默认值: true）
-  path: ".load-ants/remote-rule-snapshots" # 快照目录；每个远程 URL 会派生为独立文件（可选）
-
-# 远程规则配置（可选，但必须至少配置 static_rules 或 remote_rules 之一）
+# 远程规则（可选）
+# 支持两种格式：
+# 1) 旧格式（直接列表）：remote_rules: - type: "url" ...
+# 2) 新格式（对象）：remote_rules: { reload_interval_secs: N, snapshot: {...}, sources: [...] }
 remote_rules:
-  # 从URL获取阻止列表
-  - type: "url" # 规则类型，目前仅支持 "url"（必选）
-    url: "https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/reject-list.txt" # 远程规则文件的 URL (必选)
-    format: "v2ray" # 规则文件格式: v2ray (必选)
-    failure_policy: "strict" # strict=无有效快照时终止启动, lenient=允许降级启动（可选，默认值: strict）
-    action: "block" # 应用于此规则列表中所有域名的动作: block(阻止), forward(转发)（必选）
-    retry: # 获取规则的重试策略 (可选)
-      attempts: 3 # 重试次数 (有效范围: 1-100)
-      delay: 1 # 初始延迟（秒）(有效范围: 1-120)
-    # proxy: "http://127.0.0.1:7890" # 获取规则时使用的 HTTP/SOCKS5 代理 (可选)
-    max_size: 1048576 # 远程规则文件的最大大小 (字节), 1048576 表示 1MB（可选，默认值: 10MB）
+  reload_interval_secs: 3600 # 定时重新加载远程规则的间隔（秒）（可选，默认值: 3600）
+  snapshot: # 远程规则的 last-known-good 快照配置（可选）
+    enabled: true # 是否启用快照恢复（可选，默认值: true）
+    path: ".load-ants/remote-rule-snapshots" # 快照目录；每个远程 URL 会派生为独立文件（可选）
+  sources:
+    # 从URL获取阻止列表
+    - type: "url" # 规则类型，目前仅支持 "url"（必选）
+      url: "https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/reject-list.txt" # 远程规则文件的 URL (必选)
+      format: "v2ray" # 规则文件格式: v2ray (必选)
+      failure_policy: "strict" # strict=无有效快照时终止启动, lenient=允许降级启动（可选，默认值: strict）
+      action: "block" # 应用于此规则列表中所有域名的动作: block(阻止), forward(转发)（必选）
+      retry: # 获取规则的重试策略 (可选)
+        attempts: 3 # 重试次数 (有效范围: 1-100)
+        delay: 1 # 初始延迟（秒）(有效范围: 1-120)
+      # proxy: "http://127.0.0.1:7890" # 获取规则时使用的 HTTP 代理（仅支持 http/https）(可选)
+      max_size: 1048576 # 远程规则文件的最大大小 (字节), 1048576 表示 1MB（可选，默认值: 10MB）
+      # tls_verify: false # 是否跳过 TLS 证书验证（可选，默认 true 验证证书，仅设为 false 时跳过验证）
 
-  # 从URL获取代理列表
-  - type: "url" # 规则类型（必选）
-    url: "https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/proxy-list.txt" # 远程规则文件的 URL（必选）
-    format: "v2ray" # 规则文件格式（必选）
-    failure_policy: "strict" # strict=无有效快照时终止启动, lenient=允许降级启动（可选，默认值: strict）
-    action: "forward" # 应用于此规则列表中所有域名的动作（必选）
-    target: "google" # 目标上游组 (当 action 为 forward 时必须提供)（当action为forward时必选）
-    retry: # 获取规则的重试策略（可选）
-      attempts: 3 # 重试次数
-      delay: 1 # 初始延迟（秒）
-    # proxy: "http://127.0.0.1:7890" # 获取规则时使用的代理 (可选)
-    max_size: 1048576 # 远程规则文件的最大大小 (字节), 1048576 表示 1MB（可选，默认值: 10MB）
-    # auth: # 访问远程规则 URL 的认证配置 (可选)
-    #   type: "bearer" # 认证类型: basic, bearer
-    #   token: "your_secure_token" # 令牌 (当 type 为 bearer 时使用)
+    # 从URL获取代理列表
+    - type: "url" # 规则类型（必选）
+      url: "https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/proxy-list.txt" # 远程规则文件的 URL（必选）
+      format: "v2ray" # 规则文件格式（必选）
+      failure_policy: "strict" # strict=无有效快照时终止启动, lenient=允许降级启动（可选，默认值: strict）
+      action: "forward" # 应用于此规则列表中所有域名的动作（必选）
+      target: "google" # 目标上游组 (当 action 为 forward 时必须提供)（当action为forward时必选）
+      retry: # 获取规则的重试策略（可选）
+        attempts: 3 # 重试次数
+        delay: 1 # 初始延迟（秒）
+      # proxy: "http://127.0.0.1:7890" # 获取规则时使用的代理 (可选)
+      max_size: 1048576 # 远程规则文件的最大大小 (字节), 1048576 表示 1MB（可选，默认值: 10MB）
+      # auth: # 访问远程规则 URL 的认证配置 (可选)
+      #   type: "bearer" # 认证类型: basic, bearer
+      #   token: "your_secure_token" # 令牌 (当 type 为 bearer 时使用)

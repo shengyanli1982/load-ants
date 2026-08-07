@@ -7,10 +7,17 @@ server:
   listen_udp: "0.0.0.0:53" # UDP 监听地址和端口
   listen_tcp: "0.0.0.0:53" # TCP 监听地址和端口
   listen_http: "0.0.0.0:8080" # DOH 监听地址和端口
+  # udp: # UDP 配置（可选，不配置则使用默认值）
+  #   recv_buffer: 4194304 # UDP 接收缓冲区大小（字节）（可选，默认 4MB）
+  #   send_buffer: 4194304 # UDP 发送缓冲区大小（字节）（可选，默认 4MB）
+  #   socket_count: 1 # UDP socket 数量，>1 启用 SO_REUSEPORT（可选，默认 1）
+  # rate_limit: # 速率限制配置（可选，不配置则不限制）
+  #   max_requests_per_second: 100 # 每秒最大请求数（启用 rate_limit 时必填，有效范围: 1-100000）
+  #   per_ip_max_requests_per_second: 100 # 单 IP 每秒最大请求数 (有效范围: 1-100000)（可选，默认值: 100）
 
 # 管理服务器设置
 admin:
-  listen: "0.0.0.0:9000" # 管理服务器监听地址和端口
+  listen: "127.0.0.1:9000" # 管理服务器监听地址和端口
 
 # 缓存设置
 cache:
@@ -19,6 +26,7 @@ cache:
   min_ttl: 60 # 缓存条目最小 TTL（秒）(有效范围: 1-86400)
   max_ttl: 3600 # 缓存条目最大 TTL（秒）(有效范围: 1-86400)
   negative_ttl: 60 # 负面缓存 TTL（秒）(有效范围: 1-86400)
+  # stale_while_revalidate: 0 # 过期缓存宽限时间（秒）(有效范围: 0-86400)（可选，默认值: 0，表示禁用）
 
 # 所有上游请求共享的 HTTP 客户端设置
 http_client:
@@ -33,6 +41,7 @@ dns_client:
   connect_timeout: 2 # TCP 连接超时（秒）(有效范围: 1-120)
   request_timeout: 3 # DNS 请求超时（秒）(有效范围: 1-1200)
   prefer_tcp: false # true=默认使用上游 TCP；false=默认使用上游 UDP，收到 TC=1 时切换 TCP 重试
+  idle_connection_timeout: 30 # 空闲连接超时（秒）(有效范围: 5-1800)（可选，默认值: 30）
   tcp_reconnect: true # TCP 请求失败后丢弃连接，下次请求重连
 
 # 上游 DoH 服务器组
@@ -65,6 +74,9 @@ upstream_groups:
       - url: "https://120.53.53.53/dns-query"
         method: "get"
         content_type: "message" # 使用 application/dns-message 内容类型
+    # deny_answers: ["1.1.1.1/32", "10.0.0.0/8"] # 过滤响应中的已知污染 IP 段（CIDR 格式）（可选，默认空）
+    # case_randomization: false # 是否启用 0x20 大小写随机化防响应伪造（可选，默认 false，仅对 scheme: dns 生效）
+    # case_randomization_strict: false # 0x20 验证严格模式，仅在 case_randomization=true 时生效（可选，默认 false）
 
   - name: "public_dns"
     scheme: "dns"
@@ -72,6 +84,9 @@ upstream_groups:
     servers:
       - addr: 223.5.5.5:53
       - addr: 223.6.6.6:53
+    # deny_answers: ["1.1.1.1/32", "10.0.0.0/8"] # 过滤响应中的已知污染 IP 段（CIDR 格式）（可选，默认空）
+    # case_randomization: false # 是否启用 0x20 大小写随机化防响应伪造（可选，默认 false）
+    # case_randomization_strict: false # 0x20 验证严格模式，仅对 DNS (UDP) 生效（可选，默认 false）
 
 # 路由规则（静态配置）
 static_rules:
@@ -86,31 +101,32 @@ static_rules:
     action: "forward"
     target: "public" # 默认上游
 
-# 远程规则快照（last-known-good）
-remote_rule_snapshot:
-  enabled: true # 是否启用远程规则快照与启动期恢复
-  path: ".load-ants/remote-rule-snapshots" # 快照目录；每个 remote_rules.url 会派生为独立文件
-
+# 远程规则（last-known-good 快照 + 定时刷新）
 remote_rules:
-  # 从URL获取阻止列表
-  - type: "url" # URL规则类型，从外部URL获取规则
-    url: "https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/reject-list.txt"
-    format: "v2ray" # 当前仅支持 v2ray
-    failure_policy: "strict" # 启动期失败策略: strict=无有效快照则终止启动, lenient=允许降级启动
-    action: "block" # 阻止列表中的所有域名
-    retry: # 获取规则的重试策略
-      attempts: 3
-      delay: 1
-    proxy: "http://127.0.0.1:7890"
+  reload_interval_secs: 3600 # 定时重新加载远程规则的间隔（秒）
+  snapshot:
+    enabled: true # 是否启用远程规则快照与启动期恢复
+    path: ".load-ants/remote-rule-snapshots" # 快照目录；每个 remote_rules.sources.url 会派生为独立文件
+  sources:
+    # 从URL获取阻止列表
+    - type: "url" # URL规则类型，从外部URL获取规则
+      url: "https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/reject-list.txt"
+      format: "v2ray" # 当前仅支持 v2ray
+      failure_policy: "strict" # 启动期失败策略: strict=无有效快照则终止启动, lenient=允许降级启动
+      action: "block" # 阻止列表中的所有域名
+      retry: # 获取规则的重试策略
+        attempts: 3
+        delay: 1
+      proxy: "http://127.0.0.1:7890"
 
-  # 从URL获取代理列表
-  - type: "url"
-    url: "https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/proxy-list.txt"
-    format: "v2ray" # 当前仅支持 v2ray
-    failure_policy: "strict" # 如远程失败且无有效快照，strict 会阻止启动
-    action: "forward" # 转发列表中的所有域名
-    target: "google" # 转发目标上游组
-    retry:
-      attempts: 3
-      delay: 1
-    proxy: "http://127.0.0.1:7890"
+    # 从URL获取代理列表
+    - type: "url"
+      url: "https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/proxy-list.txt"
+      format: "v2ray" # 当前仅支持 v2ray
+      failure_policy: "strict" # 如远程失败且无有效快照，strict 会阻止启动
+      action: "forward" # 转发列表中的所有域名
+      target: "google" # 转发目标上游组
+      retry:
+        attempts: 3
+        delay: 1
+      proxy: "http://127.0.0.1:7890"

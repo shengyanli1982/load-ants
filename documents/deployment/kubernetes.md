@@ -1,20 +1,23 @@
 # 在 Kubernetes 上部署
 
-对于需要高可用、可扩展和易于管理的生产环境，将 Load Ants 部署到 Kubernetes 是理想的选择。本指南将引导你完成在 Kubernetes 集群中部署 Load Ants 的完整流程。
+对于需要高可用、可扩展和集中管理的生产环境，可以将 Load Ants 部署到 Kubernetes。本指南覆盖完整的部署流程。
 
-### 先决条件
+## 先决条件
 
 - 一个正在运行的 Kubernetes 集群。
 - `kubectl` 命令行工具已配置并连接到你的集群。
-- 一个 Docker 镜像仓库（如 Docker Hub, GHCR, ECR）的账户，用于存放你的自定义镜像（如果需要）。
+- 一个 Docker 镜像仓库（如 Docker Hub、GHCR、ECR）的账户，用于存放你的自定义镜像（如果需要）。
 
 ---
 
-### 步骤一：创建 Docker 镜像 (可选)
+## 步骤一：创建 Docker 镜像（可选）
 
-官方在 `ghcr.io` 上提供了预构建的 Load Ants 镜像 (`ghcr.io/shengyanli1982/load-ants-<arch>:latest`)。在大多数情况下，你可以直接使用此镜像。
+官方在 `ghcr.io` 上提供了预构建的 Load Ants 镜像：
 
-但是，如果你对代码进行了自定义修改，你需要构建自己的 Docker 镜像并将其推送到镜像仓库。
+- amd64 架构：`ghcr.io/shengyanli1982/load-ants-x64`
+- arm64 架构：`ghcr.io/shengyanli1982/load-ants-arm64`
+
+这些镜像可以直接使用。如果你修改过代码，则需要构建自己的 Docker 镜像并推送到镜像仓库。
 
 ```bash
 # 假设你的项目根目录有 Dockerfile
@@ -25,13 +28,13 @@ docker build -t your-repo/load-ants:latest .
 docker push your-repo/load-ants:latest
 ```
 
-> **注意**: 请将 `your-repo/load-ants:latest` 替换为你的实际镜像仓库地址和标签。
+> **注意**：请将 `your-repo/load-ants:latest` 替换为你的实际镜像仓库地址和标签。
 
 ---
 
-### 步骤二：创建命名空间
+## 步骤二：创建命名空间
 
-为了更好地组织和隔离资源，建议为 DNS 服务创建一个专用的命名空间。
+建议为 DNS 服务创建一个专用的命名空间，以便组织和隔离资源。
 
 ```bash
 kubectl create namespace dns
@@ -41,9 +44,9 @@ kubectl create namespace dns
 
 ---
 
-### 步骤三：创建 ConfigMap
+## 步骤三：创建 ConfigMap
 
-Kubernetes 的 `ConfigMap` 用于将配置文件与应用程序解耦。我们将使用它来存储 `config.yaml`。
+Kubernetes 的 `ConfigMap` 用于将配置文件与应用程序解耦。这里使用它来存储 `config.yaml`。
 
 1.  创建一个名为 `load-ants-configmap.yaml` 的文件：
 
@@ -62,11 +65,14 @@ Kubernetes 的 `ConfigMap` 用于将配置文件与应用程序解耦。我们�
               listen_tcp: "0.0.0.0:53"
 
             admin:
-              listen: "0.0.0.0:9000"
+              listen: "0.0.0.0:9000" # 容器内必须显式覆盖默认的 127.0.0.1，否则探针与集群内访问不可达
               
             cache:
               enabled: true
               max_size: 10000
+              min_ttl: 60
+              max_ttl: 3600
+              negative_ttl: 60
 
             upstream_groups:
               - name: "google_public"
@@ -82,14 +88,14 @@ Kubernetes 的 `ConfigMap` 用于将配置文件与应用程序解耦。我们�
                 target: "google_public"
     ```
 
-2.  应用此 `ConfigMap` 到你的集群：
+2.  将此 `ConfigMap` 应用到你的集群：
     ```bash
     kubectl apply -f load-ants-configmap.yaml
     ```
 
 ---
 
-### 步骤四：创建 Deployment
+## 步骤四：创建 Deployment
 
 `Deployment` 负责管理 Load Ants Pod 的生命周期，确保指定数量的副本正在运行。
 
@@ -116,7 +122,7 @@ Kubernetes 的 `ConfigMap` 用于将配置文件与应用程序解耦。我们�
             spec:
                 containers:
                     - name: load-ants
-                      image: ghcr.io/shengyanli1982/load-ants-<arch>:latest # 使用官方或你自己的镜像
+                      image: ghcr.io/shengyanli1982/load-ants-x64:latest # arm64 节点请改用 ghcr.io/shengyanli1982/load-ants-arm64:latest
                       args: ["-c", "/etc/load-ants/config.yaml"]
                       ports:
                           - containerPort: 53
@@ -137,15 +143,15 @@ Kubernetes 的 `ConfigMap` 用于将配置文件与应用程序解耦。我们�
                           requests:
                               memory: "128Mi"
                               cpu: "100m"
-                      livenessProbe: # 健康检查: 如果探测失败，K8s会重启容器
+                      livenessProbe: # 存活探针: 如果探测失败，K8s 会重启容器
                           httpGet:
-                              path: /health
+                              path: /health/live
                               port: http-admin
                           initialDelaySeconds: 15
                           periodSeconds: 20
-                      readinessProbe: # 就绪探针: 如果探测失败，K8s会停止向此Pod发送流量
+                      readinessProbe: # 就绪探针: 如果探测失败，K8s 会停止向此 Pod 发送流量
                           httpGet:
-                              path: /health
+                              path: /health/ready
                               port: http-admin
                           initialDelaySeconds: 5
                           periodSeconds: 10
@@ -155,16 +161,16 @@ Kubernetes 的 `ConfigMap` 用于将配置文件与应用程序解耦。我们�
                           name: load-ants-config # 引用上面创建的 ConfigMap
     ```
 
-2.  应用此 `Deployment` 到你的集群：
+2.  将此 `Deployment` 应用到你的集群：
     ```bash
     kubectl apply -f load-ants-deployment.yaml
     ```
 
 ---
 
-### 步骤五：创建 Service
+## 步骤五：创建 Service
 
-`Service` 为一组 Pod 提供了一个稳定的网络端点（IP 地址和 DNS 名称），以便其他应用可以访问它们。
+`Service` 为一组 Pod 提供固定的访问端点（IP 地址和 DNS 名称），其他应用通过该端点访问服务。
 
 1.  创建一个名为 `load-ants-service.yaml` 的文件：
 
@@ -192,25 +198,25 @@ Kubernetes 的 `ConfigMap` 用于将配置文件与应用程序解耦。我们�
               protocol: TCP
               targetPort: http-admin
         # 根据你的需求选择暴露服务的方式
-        type: ClusterIP # (默认) 仅集群内部访问。集群内其他Pod可通过 `load-ants-svc.dns:53` 访问
+        type: ClusterIP # (默认) 仅集群内部访问。集群内其他 Pod 可通过 `load-ants-svc.dns:53` 访问
         # type: LoadBalancer # 如果需要从外部访问，并且你的云提供商支持 (会自动分配公网IP)
         # type: NodePort # 如果需要在每个节点的特定端口上暴露服务
     ```
 
-    > **提示**: `ClusterIP` 是最常见的选择，用于集群内部的 DNS 服务。如果你希望将此 DNS 服务暴露给 VPC 网络或公网，`LoadBalancer` 是更好的选择。
+    > **提示**：`ClusterIP` 是最常见的选择，用于集群内部的 DNS 服务。如果你希望将此 DNS 服务暴露给 VPC 网络或公网，`LoadBalancer` 是更好的选择。
 
-2.  应用此 `Service` 到你的集群：
+2.  将此 `Service` 应用到你的集群：
     ```bash
     kubectl apply -f load-ants-service.yaml
     ```
 
 ---
 
-### 步骤六：验证部署
+## 步骤六：验证部署
 
-完成以上步骤后，你可以检查所有资源是否正常运行。
+完成以上步骤后，检查所有资源是否正常运行。
 
-1.  **检查 Pod 状态**:
+1.  **检查 Pod 状态**：
 
     ```bash
     # 查看 dns 命名空间下的所有 Pod
@@ -222,7 +228,7 @@ Kubernetes 的 `ConfigMap` 用于将配置文件与应用程序解耦。我们�
     load-ants-5f768f4f6-fghij   1/1     Running   0          2m
     ```
 
-2.  **检查 Service 状态**:
+2.  **检查 Service 状态**：
 
     ```bash
     kubectl -n dns get svc load-ants-svc
@@ -232,23 +238,23 @@ Kubernetes 的 `ConfigMap` 用于将配置文件与应用程序解耦。我们�
     load-ants-svc   ClusterIP   10.96.100.200   <none>        53/UDP,53/TCP,9000/TCP                5m
     ```
 
-3.  **查看实时日志**:
+3.  **查看实时日志**：
 
     ```bash
     # 查看所有 Load Ants Pod 的聚合日志
     kubectl -n dns logs -l app=load-ants -f
     ```
 
-4.  **从集群内部测试 DNS 解析**:
-    你可以启动一个临时的 Pod 来测试 DNS 服务是否正常工作。
+4.  **从集群内部测试 DNS 解析**：
+    启动一个临时的 Pod，测试 DNS 服务是否正常工作。
     ```bash
     kubectl run -it --rm --image=busybox:1.28 dns-test --restart=Never -- nslookup kubernetes.default.svc.cluster.local load-ants-svc.dns
     ```
-    如果一切正常，你应该会收到 `kubernetes.default` 的 IP 地址。
+    解析成功时，命令输出 `kubernetes.default` 的 IP 地址。
 
 ---
 
-### 下一步
+## 下一步
 
 - [➡️ 了解安全注意事项](./security.md)
 - [➡️ 了解如何监控服务](./monitoring.md)
