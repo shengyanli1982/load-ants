@@ -3,24 +3,24 @@ use crate::error::AppError;
 use crate::remote_rule::{evaluate_remote_rule_startup, load_and_merge_rules};
 use crate::Router;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 use tracing::{info, warn};
 
-/// 根据配置构建路由器，并在需要时加载远程规则。
-pub async fn build_router(config: &Config) -> Result<Arc<Router>, AppError> {
+pub async fn build_router(config: &Config) -> Result<Arc<RwLock<Arc<Router>>>, AppError> {
     let http_client_config = config.http_client.clone().unwrap_or_default();
     let static_rules = config.static_rules.clone().unwrap_or_default();
 
-    if !config.remote_rules.is_empty() {
+    if !config.remote_rules.sources.is_empty() {
         // 存在远程规则源时，先拉取并与本地静态规则合并。
         info!(
             "Loading {} remote rule sources...",
-            config.remote_rules.len()
+            config.remote_rules.sources.len()
         );
         let load_summary = load_and_merge_rules(
-            &config.remote_rules,
+            &config.remote_rules.sources,
             &static_rules,
             &http_client_config,
-            &config.remote_rule_snapshot,
+            &config.remote_rules.snapshot,
         )
         .await?;
 
@@ -50,14 +50,13 @@ pub async fn build_router(config: &Config) -> Result<Arc<Router>, AppError> {
             static_rules.len(),
             remote_rules_count
         );
-        Ok(Arc::new(router))
+        Ok(Arc::new(RwLock::new(Arc::new(router))))
     } else {
-        // 没有远程规则时直接使用静态规则初始化路由器。
         let router = Router::new(static_rules.clone())?;
         info!(
             "Routing engine initialized successfully with {} static rules",
             static_rules.len()
         );
-        Ok(Arc::new(router))
+        Ok(Arc::new(RwLock::new(Arc::new(router))))
     }
 }

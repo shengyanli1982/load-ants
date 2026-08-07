@@ -1,11 +1,13 @@
 use crate::error::AppError;
 use crate::handler::RequestHandler as DnsRequestHandler;
-use crate::metrics::{normalize_query_type_label, METRICS};
+use crate::metrics::{normalize_query_type_label, normalize_response_code, METRICS};
 use crate::r#const::{error_labels, protocol_labels};
+use crate::rate_limit::RateLimiter;
 use hickory_proto::op::{Header, Message, MessageType, OpCode, ResponseCode};
-use hickory_proto::serialize::binary::{BinEncodable, BinEncoder};
+use hickory_proto::rr::RecordType;
 use hickory_server::authority::MessageResponseBuilder;
 use hickory_server::server::{Request, RequestHandler, ResponseHandler, ResponseInfo};
+use socket2::{Domain, Protocol, Socket, Type as SocketType};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Instant;
@@ -13,32 +15,55 @@ use tokio::net::{TcpListener, UdpSocket};
 use tokio_graceful_shutdown::{IntoSubsystem, SubsystemHandle};
 use tracing::{debug, error, info, warn};
 
-// DNS 服务器请求处理适配器
-// 将我们的 RequestHandler 适配到 hickory-server 的 RequestHandler trait
 pub struct HandlerAdapter {
-    // 内部请求处理器
     handler: Arc<DnsRequestHandler>,
+    rate_limiter: Option<Arc<RateLimiter>>,
 }
 
 #[doc(hidden)]
 pub fn parse_request_message(request: &Request) -> Result<Message, AppError> {
-    let mut buffer = Vec::with_capacity(512);
-    {
-        let mut encoder = BinEncoder::new(&mut buffer);
-        request.emit(&mut encoder)?;
+    let mut message = Message::new();
+    message.set_id(request.id());
+    message.set_message_type(request.message_type());
+    message.set_op_code(request.op_code());
+    message.set_authoritative(request.authoritative());
+    message.set_authentic_data(request.authentic_data());
+    message.set_checking_disabled(request.checking_disabled());
+    message.set_recursion_desired(request.recursion_desired());
+    message.set_recursion_available(request.recursion_available());
+    message.set_truncated(request.truncated());
+
+    if let Some(first_query) = request.queries().first() {
+        message.add_query(first_query.original().clone());
     }
-    Ok(Message::from_vec(&buffer)?)
+
+    if let Some(edns) = request.edns() {
+        message.set_edns(edns.clone());
+    }
+
+    Ok(message)
 }
 
 impl HandlerAdapter {
-    // 创建新的处理器适配器
-    pub fn new(handler: Arc<DnsRequestHandler>) -> Self {
-        Self { handler }
+    pub fn new(handler: Arc<DnsRequestHandler>, rate_limiter: Option<Arc<RateLimiter>>) -> Self {
+        Self {
+            handler,
+            rate_limiter,
+        }
     }
 }
 
 #[async_trait::async_trait]
 impl RequestHandler for HandlerAdapter {
+    #[tracing::instrument(
+        name = "dns_query",
+        skip(self, request, response_handler),
+        fields(
+            client_ip = %request.src().ip(),
+            query = %request.queries().first().map(|q| q.name().to_utf8()).unwrap_or_default(),
+            qtype = %request.queries().first().map(|q| q.query_type()).unwrap_or(RecordType::A)
+        )
+    )]
     async fn handle_request<R: ResponseHandler>(
         &self,
         request: &Request,
@@ -49,14 +74,31 @@ impl RequestHandler for HandlerAdapter {
 
         // 记录协议类型
         let protocol = match request.protocol() {
-            hickory_server::server::Protocol::Udp => protocol_labels::UDP,
-            hickory_server::server::Protocol::Tcp => protocol_labels::TCP,
-            _ => "unknown", // 添加通配符匹配
+            hickory_proto::xfer::Protocol::Udp => protocol_labels::UDP,
+            hickory_proto::xfer::Protocol::Tcp => protocol_labels::TCP,
+            _ => "unknown",
         };
 
-        // 增加请求计数
+        if let Some(limiter) = &self.rate_limiter {
+            let src_ip = request.src().ip();
+            if !limiter.check(src_ip) {
+                warn!(
+                    client_ip = %request.src(),
+                    "DNS request rate limited"
+                );
+                METRICS
+                    .dns_request_errors_total
+                    .with_label_values(&[error_labels::REQUEST_ERROR])
+                    .inc();
+                let mut header = Header::new();
+                header.set_id(request.id());
+                header.set_response_code(ResponseCode::Refused);
+                return ResponseInfo::from(header);
+            }
+        }
+
         METRICS
-            .dns_requests_total()
+            .dns_requests_total
             .with_label_values(&[protocol])
             .inc();
 
@@ -66,7 +108,7 @@ impl RequestHandler for HandlerAdapter {
 
             // 记录错误
             METRICS
-                .dns_request_errors_total()
+                .dns_request_errors_total
                 .with_label_values(&[error_labels::UNSUPPORTED_OPCODE])
                 .inc();
 
@@ -92,7 +134,7 @@ impl RequestHandler for HandlerAdapter {
 
             // 记录错误
             METRICS
-                .dns_request_errors_total()
+                .dns_request_errors_total
                 .with_label_values(&[error_labels::UNSUPPORTED_MESSAGE_TYPE])
                 .inc();
 
@@ -114,16 +156,18 @@ impl RequestHandler for HandlerAdapter {
         }
 
         // 获取请求的查询
-        let query = request.query();
-        let query_name = query.name();
-        let query_type = query.query_type();
+        let query_type = request
+            .queries()
+            .first()
+            .map(|q| q.query_type())
+            .unwrap_or(RecordType::A);
         let query_type_label = normalize_query_type_label(query_type);
 
         debug!(
-            "Received query request: {} {:?} from {}",
-            query_name,
-            query_type,
-            request.src()
+            protocol = %protocol,
+            client = %request.src(),
+            query_type = %query_type,
+            "DNS query request received"
         );
 
         let message = match parse_request_message(request) {
@@ -132,7 +176,7 @@ impl RequestHandler for HandlerAdapter {
                 error!("Failed to parse request message: {}", e);
 
                 METRICS
-                    .dns_request_errors_total()
+                    .dns_request_errors_total
                     .with_label_values(&[error_labels::REQUEST_ERROR])
                     .inc();
 
@@ -147,7 +191,7 @@ impl RequestHandler for HandlerAdapter {
                 // 记录处理时间
                 let duration = start_time.elapsed();
                 METRICS
-                    .dns_request_duration_seconds()
+                    .dns_request_duration_seconds
                     .with_label_values(&[protocol, query_type_label])
                     .observe(duration.as_secs_f64());
 
@@ -169,23 +213,34 @@ impl RequestHandler for HandlerAdapter {
 
                 // 记录响应码指标
                 METRICS
-                    .dns_response_codes_total()
-                    .with_label_values(&[header.response_code().to_string().as_str()])
+                    .dns_response_codes_total
+                    .with_label_values(&[normalize_response_code(header.response_code())])
                     .inc();
 
-                let builder = MessageResponseBuilder::from_message_request(request);
+                let mut builder = MessageResponseBuilder::from_message_request(request);
+
+                if let Some(response_edns) = result.extensions() {
+                    builder.edns(response_edns.clone());
+                }
+
+                let additionals: Vec<&hickory_proto::rr::Record> = result
+                    .additionals()
+                    .iter()
+                    .filter(|r| r.record_type() != RecordType::OPT)
+                    .collect();
+
                 let response = builder.build(
                     header,
                     result.answers().iter(),
                     result.name_servers().iter(),
-                    result.additionals().iter(),
-                    None, // 不传递扩展信息
+                    additionals,
+                    None,
                 );
 
                 // 记录处理时间
                 let duration = start_time.elapsed();
                 METRICS
-                    .dns_request_duration_seconds()
+                    .dns_request_duration_seconds
                     .with_label_values(&[protocol, query_type_label])
                     .observe(duration.as_secs_f64());
 
@@ -204,7 +259,7 @@ impl RequestHandler for HandlerAdapter {
 
                 // 记录错误
                 METRICS
-                    .dns_request_errors_total()
+                    .dns_request_errors_total
                     .with_label_values(&[error_labels::HANDLER_ERROR])
                     .inc();
 
@@ -219,7 +274,7 @@ impl RequestHandler for HandlerAdapter {
                 // 记录处理时间
                 let duration = start_time.elapsed();
                 METRICS
-                    .dns_request_duration_seconds()
+                    .dns_request_duration_seconds
                     .with_label_values(&[protocol, query_type_label])
                     .observe(duration.as_secs_f64());
 
@@ -237,28 +292,39 @@ impl RequestHandler for HandlerAdapter {
 
 // DNS 服务器配置
 pub struct DnsServerConfig {
-    // UDP绑定地址
     pub udp_bind_addr: SocketAddr,
-    // TCP绑定地址
     pub tcp_bind_addr: SocketAddr,
-    // HTTP绑定地址
     pub http_bind_addr: SocketAddr,
-    // TCP空闲超时时间（秒）
     pub tcp_timeout: u64,
-    // HTTP空闲超时时间（秒）
     pub http_timeout: u64,
+    pub rate_limiter: Option<Arc<RateLimiter>>,
+    pub udp_recv_buffer: usize,
+    pub udp_send_buffer: usize,
+    pub udp_socket_count: usize,
 }
 
-// DNS 服务器
+impl Default for DnsServerConfig {
+    fn default() -> Self {
+        Self {
+            udp_bind_addr: "127.0.0.1:53".parse().unwrap(),
+            tcp_bind_addr: "127.0.0.1:53".parse().unwrap(),
+            http_bind_addr: "127.0.0.1:8080".parse().unwrap(),
+            tcp_timeout: 10,
+            http_timeout: 10,
+            rate_limiter: None,
+            udp_recv_buffer: 4 * 1024 * 1024,
+            udp_send_buffer: 4 * 1024 * 1024,
+            udp_socket_count: 1,
+        }
+    }
+}
+
 pub struct DnsServer {
-    // 服务器配置
     config: DnsServerConfig,
-    // 请求处理器
     handler: Arc<DnsRequestHandler>,
 }
 
 impl DnsServer {
-    // 创建新的 DNS 服务器
     pub fn new(config: DnsServerConfig, handler: Arc<DnsRequestHandler>) -> Self {
         Self { config, handler }
     }
@@ -267,24 +333,75 @@ impl DnsServer {
 #[async_trait::async_trait]
 impl IntoSubsystem<AppError> for DnsServer {
     async fn run(self, subsys: SubsystemHandle) -> Result<(), AppError> {
-        // 创建处理器适配器
-        let adapter = HandlerAdapter::new(self.handler.clone());
+        let adapter = HandlerAdapter::new(self.handler.clone(), self.config.rate_limiter.clone());
 
-        // 创建服务器实例
         let mut server = hickory_server::ServerFuture::new(adapter);
 
-        // 绑定 UDP 端口
-        let udp_socket = match UdpSocket::bind(self.config.udp_bind_addr).await {
-            Ok(socket) => {
-                info!("DNS server UDP listening on {}", self.config.udp_bind_addr);
-                socket
+        let socket_count = self.config.udp_socket_count.max(1);
+
+        for i in 0..socket_count {
+            let addr = self.config.udp_bind_addr;
+            let domain = if addr.is_ipv4() {
+                Domain::IPV4
+            } else {
+                Domain::IPV6
+            };
+            let s = Socket::new(domain, SocketType::DGRAM, Some(Protocol::UDP)).map_err(|e| {
+                error!("Failed to create UDP socket with socket2: {}", e);
+                AppError::Io(e)
+            })?;
+            s.set_recv_buffer_size(self.config.udp_recv_buffer)
+                .map_err(|e| {
+                    error!("Failed to set recv buffer size: {}", e);
+                    AppError::Io(e)
+                })?;
+            s.set_send_buffer_size(self.config.udp_send_buffer)
+                .map_err(|e| {
+                    error!("Failed to set send buffer size: {}", e);
+                    AppError::Io(e)
+                })?;
+            if socket_count > 1 {
+                s.set_reuse_address(true).map_err(|e| {
+                    error!("Failed to set SO_REUSEADDR: {}", e);
+                    AppError::Io(e)
+                })?;
+                #[cfg(unix)]
+                s.set_reuse_port(true).map_err(|e| {
+                    error!("Failed to set SO_REUSEPORT: {}", e);
+                    AppError::Io(e)
+                })?;
             }
-            Err(e) => {
+            s.bind(&addr.into()).map_err(|e| {
                 error!("Failed to bind UDP socket: {}", e);
-                return Err(AppError::Io(e));
+                AppError::Io(e)
+            })?;
+            s.set_nonblocking(true).map_err(|e| {
+                error!("Failed to set nonblocking: {}", e);
+                AppError::Io(e)
+            })?;
+            let std_socket: std::net::UdpSocket = s.into();
+            let socket = UdpSocket::from_std(std_socket);
+
+            match socket {
+                Ok(s) => {
+                    info!(
+                        "DNS server UDP socket {}/{} listening on {}",
+                        i + 1,
+                        socket_count,
+                        addr
+                    );
+                    server.register_socket(s);
+                }
+                Err(e) => {
+                    error!("Failed to bind UDP socket: {}", e);
+                    return Err(AppError::Io(e));
+                }
             }
-        };
-        server.register_socket(udp_socket);
+        }
+        info!(
+            "DNS server UDP listening on {} with {} socket(s)",
+            self.config.udp_bind_addr, socket_count
+        );
 
         // 绑定 TCP 端口
         let tcp_listener = match TcpListener::bind(self.config.tcp_bind_addr).await {
