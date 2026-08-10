@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.2">
     
     
       
@@ -1706,52 +1706,64 @@
 
 
 <h1 id="_1">从源码构建<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
-<p>对于希望深入了解项目、进行二次开发或在特定平台（官方未提供预编译版本）上运行 Load Ants 的开发者来说，从源码构建是一个很好的选择。</p>
-<p>本指南将引导你完成从克隆仓库到生成可执行文件的完整过程。</p>
+<p>若你要深入了解项目、二次开发，或在官方未提供预编译版本的平台上运行 Load Ants，可以从源码构建。</p>
+<p>本指南覆盖从克隆仓库到生成可执行文件的完整流程。</p>
 <hr />
-<h3 id="_2">环境要求<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h3>
+<h2 id="_2">环境要求<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h2>
 <p>在开始之前，请确保你的系统满足以下条件：</p>
 <ul>
-<li><strong>Git</strong>: 用于克隆项目源代码。</li>
+<li><strong>Git</strong>：用于克隆项目源代码。</li>
 <li>
-<p><strong>Rust 工具链</strong>: 这是构建项目的核心。建议使用与项目 CI 构建一致的版本：</p>
+<p><strong>Rust 工具链</strong>：建议使用与项目 CI 构建一致的版本：</p>
 <ul>
 <li>Rust <code>1.93.1</code> 或更高版本。</li>
 </ul>
-</li>
-<li>
-<p><strong>系统编译环境</strong>: 需要可用的 C/C++ 工具链（例如 Linux 的 <code>gcc/clang</code>、Windows 的 MinGW/MSVC、macOS 的 Xcode Command Line Tools）。若遇到 <code>openssl-sys</code> 相关编译/链接错误，请按平台安装 OpenSSL 与 <code>pkg-config</code>（或参考项目 CI 的构建脚本）。</p>
-<p>如果你尚未安装 Rust，我们强烈建议通过 <a href="https://rustup.rs/">rustup</a> 官方安装脚本来安装和管理你的 Rust 版本。<code>rustup</code> 会自动处理好编译器、包管理器 (<code>cargo</code>) 和标准库。</p>
+<p>如果你尚未安装 Rust，强烈建议通过 <a href="https://rustup.rs/">rustup</a> 官方安装脚本来安装和管理你的 Rust 版本。<code>rustup</code> 会自动处理好编译器、包管理器（<code>cargo</code>）和标准库。</p>
 <div class="highlight"><pre><span></span><code><span class="c1"># 通过 rustup 安装 Rust</span>
 curl<span class="w"> </span>--proto<span class="w"> </span><span class="s1">&#39;=https&#39;</span><span class="w"> </span>--tlsv1.2<span class="w"> </span>-sSf<span class="w"> </span>https://sh.rustup.rs<span class="w"> </span><span class="p">|</span><span class="w"> </span>sh
 </code></pre></div>
 </li>
+<li>
+<p><strong>系统编译环境</strong>：需要可用的 C/C++ 工具链（例如 Linux 的 <code>gcc/clang</code>、Windows 的 MinGW/MSVC、macOS 的 Xcode Command Line Tools）。若遇到 <code>openssl-sys</code> 相关编译/链接错误，请按平台安装 OpenSSL 与 <code>pkg-config</code>（或参考项目 CI 的构建脚本）。</p>
+</li>
 </ul>
-<h3 id="_3">步骤一：获取源代码<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h3>
+<h2 id="_3">步骤一：获取源代码<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h2>
 <p>使用 <code>git</code> 从 GitHub 克隆 Load Ants 的官方仓库。</p>
 <div class="highlight"><pre><span></span><code>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/shengyanli1982/load-ants.git
 <span class="nb">cd</span><span class="w"> </span>load-ants
 </code></pre></div>
-<h3 id="_4">步骤二：构建项目<a class="headerlink" href="#_4" title="Permanent link">&para;</a></h3>
-<p>进入项目根目录后，使用 <code>cargo</code>（Rust 的包管理器和构建工具）来编译项目。</p>
-<p>我们推荐构建<strong>发布版本</strong>（release build），这会应用大量优化，使最终生成的可执行文件性能更高。</p>
+<h2 id="_4">步骤二：构建项目<a class="headerlink" href="#_4" title="Permanent link">&para;</a></h2>
+<p>进入项目根目录后，使用 <code>cargo</code>（Rust 的包管理器和构建工具）编译项目。</p>
+<p>推荐构建<strong>发布版本</strong>（release build）：该模式启用编译优化，生成的可执行文件性能优于调试版本。</p>
 <div class="highlight"><pre><span></span><code>cargo<span class="w"> </span>build<span class="w"> </span>--release
 </code></pre></div>
-<p>编译过程可能需要几分钟，<code>cargo</code> 会自动下载并编译所有依赖的库。</p>
-<h3 id="_5">步骤三：运行可执行文件<a class="headerlink" href="#_5" title="Permanent link">&para;</a></h3>
-<p>构建成功后，你可以在 <code>target/release/</code> 目录下找到生成的可执行文件。</p>
+<p>编译过程约需数分钟，<code>cargo</code> 会自动下载并编译所有依赖的库。</p>
+<p>项目同时提供了 <code>Makefile</code>，封装了常用的构建与检查命令：</p>
+<div class="highlight"><pre><span></span><code>make<span class="w"> </span>build<span class="w">         </span><span class="c1"># 构建调试版本</span>
+make<span class="w"> </span>build-release<span class="w"> </span><span class="c1"># 构建发布版本</span>
+make<span class="w"> </span>check<span class="w">         </span><span class="c1"># 代码检查（格式检查 + clippy）</span>
+make<span class="w"> </span><span class="nb">test</span><span class="w">          </span><span class="c1"># 运行测试</span>
+make<span class="w"> </span>bench<span class="w">         </span><span class="c1"># 运行基准测试</span>
+make<span class="w"> </span>fmt<span class="w">           </span><span class="c1"># 格式化代码</span>
+make<span class="w"> </span>cov<span class="w">           </span><span class="c1"># 生成代码覆盖率报告（HTML，需安装 cargo-llvm-cov）</span>
+</code></pre></div>
+<blockquote>
+<p><strong>注意</strong>：Makefile 会自动按当前平台选择目标三元组并传入 <code>--target</code>，因此 <code>make build-release</code> 的产物位于 <code>target/&lt;triple&gt;/release/</code>（例如 <code>target/x86_64-unknown-linux-gnu/release/loadants</code>），而不是 <code>target/release/</code>。</p>
+</blockquote>
+<h2 id="_5">步骤三：运行可执行文件<a class="headerlink" href="#_5" title="Permanent link">&para;</a></h2>
+<p>构建成功后，你可以在 <code>target/release/</code> 目录下找到生成的可执行文件（若使用 <code>make build-release</code>，则位于 <code>target/&lt;triple&gt;/release/</code>，见上文注意事项）。</p>
 <ul>
-<li><strong>在 Linux / macOS 上</strong>: 文件名为 <code>loadants</code></li>
-<li><strong>在 Windows 上</strong>: 文件名为 <code>loadants.exe</code></li>
+<li><strong>在 Linux / macOS 上</strong>：文件名为 <code>loadants</code></li>
+<li><strong>在 Windows 上</strong>：文件名为 <code>loadants.exe</code></li>
 </ul>
 <p>现在，你可以像在 <a href="../">快速上手</a> 指南中一样运行它：</p>
 <ol>
 <li>
-<p><strong>准备配置文件</strong>:
+<p><strong>准备配置文件</strong>：
     将项目根目录下的 <code>config.default.yaml</code> 复制一份，重命名为 <code>config.yaml</code>，并放置在你希望运行程序的任何位置。</p>
 </li>
 <li>
-<p><strong>运行程序</strong>:</p>
+<p><strong>运行程序</strong>：</p>
 <p>将编译好的文件和配置文件放在一起运行。</p>
 <div class="highlight"><pre><span></span><code># 在 Linux 或 macOS 上
 ./target/release/loadants -c ./config.yaml
@@ -1760,17 +1772,17 @@ curl<span class="w"> </span>--proto<span class="w"> </span><span class="s1">&#39
 .\target\release\loadants.exe -c .\config.yaml
 </code></pre></div>
 <blockquote>
-<p><strong>注意</strong>：如果你的 <code>config.yaml</code> 中配置了需要特权的端口（如 53），你可能需要使用 <code>sudo</code> 或以管理员身份运行此命令。</p>
+<p><strong>注意</strong>：如果你的 <code>config.yaml</code> 中配置了特权端口（如 53），需使用 <code>sudo</code>（Linux/macOS）或以管理员身份（Windows）运行此命令。</p>
 </blockquote>
 </li>
 </ol>
-<p>恭喜你，现在你已经成功地从源代码构建并运行了 Load Ants！</p>
+<p>恭喜你，已经从源代码构建并运行了 Load Ants！</p>
 <hr />
-<h3 id="_6">下一步<a class="headerlink" href="#_6" title="Permanent link">&para;</a></h3>
+<h2 id="_6">下一步<a class="headerlink" href="#_6" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="../../deployment/">➡️ 探索不同的部署方式</a></li>
 <li><a href="../../concepts/">➡️ 学习核心概念</a></li>
-<li><a href="../">➡️ 返回快速开始</a></li>
+<li><a href="../">➡️ 返回快速上手</a></li>
 </ul>
 
 

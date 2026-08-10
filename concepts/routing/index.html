@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.2">
     
     
       
@@ -774,16 +774,27 @@
   <a href="#_2" class="md-nav__link">
     <span class="md-ellipsis">
       
-        路由的核心：拦截优先，分层匹配
+        路由的核心：固定优先级，分层匹配
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="路由的核心：拦截优先，分层匹配">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        当前版本的正式契约
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="当前版本的正式契约">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#_3" class="md-nav__link">
+  <a href="#_4" class="md-nav__link">
     <span class="md-ellipsis">
       
         决策流程图
@@ -799,7 +810,7 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#_4" class="md-nav__link">
+  <a href="#_5" class="md-nav__link">
     <span class="md-ellipsis">
       
         规则详解与场景化示例
@@ -814,7 +825,7 @@
   <a href="#1-exact" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. 精确匹配 (exact)
+        1. 精确匹配（exact）
       
     </span>
   </a>
@@ -825,7 +836,7 @@
   <a href="#2-wildcard" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. 通配符匹配 (wildcard)
+        2. 通配符匹配（wildcard）
       
     </span>
   </a>
@@ -836,7 +847,7 @@
   <a href="#3-regex" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. 正则表达式匹配 (regex)
+        3. 正则表达式匹配（regex）
       
     </span>
   </a>
@@ -852,7 +863,7 @@
   <a href="#remote_rules" class="md-nav__link">
     <span class="md-ellipsis">
       
-        关于远程规则 (remote_rules)
+        关于远程规则（remote_rules）
       
     </span>
   </a>
@@ -860,7 +871,7 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#_5" class="md-nav__link">
+  <a href="#_6" class="md-nav__link">
     <span class="md-ellipsis">
       
         下一步
@@ -1679,16 +1690,27 @@
   <a href="#_2" class="md-nav__link">
     <span class="md-ellipsis">
       
-        路由的核心：拦截优先，分层匹配
+        路由的核心：固定优先级，分层匹配
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="路由的核心：拦截优先，分层匹配">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        当前版本的正式契约
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="当前版本的正式契约">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#_3" class="md-nav__link">
+  <a href="#_4" class="md-nav__link">
     <span class="md-ellipsis">
       
         决策流程图
@@ -1704,7 +1726,7 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#_4" class="md-nav__link">
+  <a href="#_5" class="md-nav__link">
     <span class="md-ellipsis">
       
         规则详解与场景化示例
@@ -1719,7 +1741,7 @@
   <a href="#1-exact" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. 精确匹配 (exact)
+        1. 精确匹配（exact）
       
     </span>
   </a>
@@ -1730,7 +1752,7 @@
   <a href="#2-wildcard" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. 通配符匹配 (wildcard)
+        2. 通配符匹配（wildcard）
       
     </span>
   </a>
@@ -1741,7 +1763,7 @@
   <a href="#3-regex" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. 正则表达式匹配 (regex)
+        3. 正则表达式匹配（regex）
       
     </span>
   </a>
@@ -1757,7 +1779,7 @@
   <a href="#remote_rules" class="md-nav__link">
     <span class="md-ellipsis">
       
-        关于远程规则 (remote_rules)
+        关于远程规则（remote_rules）
       
     </span>
   </a>
@@ -1765,7 +1787,7 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#_5" class="md-nav__link">
+  <a href="#_6" class="md-nav__link">
     <span class="md-ellipsis">
       
         下一步
@@ -1796,29 +1818,40 @@
 
 
 <h1 id="_1">智能路由机制<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
-<p>智能路由是 Load Ants 最强大、最灵活的功能。它允许你像交通指挥官一样，根据预设的规则，精准地控制每一个 DNS 查询的去向。</p>
-<h3 id="_2">路由的核心：拦截优先，分层匹配<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h3>
-<p>Load Ants 的路由引擎遵循一个核心原则：<strong>拦截优先 (<code>block</code> first)</strong>。</p>
-<p>当一个 DNS 查询进入时，Load Ants 会首先用<strong>所有</strong>拦截规则进行匹配。只有在没有任何拦截规则命中的情况下，它才会继续用转发规则 (<code>forward</code>) 进行匹配。</p>
-<p>在"拦截"和"转发"这两个大的阶段内部，各自遵循着相同的匹配优先级：</p>
+<p>智能路由是 Load Ants 最强大、最灵活的功能。它让你像交通指挥官一样，按预设的规则精准控制每一个 DNS 查询的去向。</p>
+<h3 id="_2">路由的核心：固定优先级，分层匹配<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h3>
+<p>Load Ants 的路由引擎按固定的优先级顺序求值规则，任何一步命中即返回：</p>
 <ol>
-<li><strong>精确匹配 (<code>exact</code>)</strong>: 最高优先级。</li>
-<li><strong>通配符匹配 (<code>wildcard</code>)</strong>: 次高优先级。</li>
-<li><strong>正则匹配 (<code>regex</code>)</strong>: 较低优先级。</li>
-<li><strong>全局通配符 (<code>*</code>)</strong>: 最低优先级。</li>
+<li><strong>精确匹配（<code>exact</code>）</strong>：全局最先求值。<code>block</code> 与 <code>forward</code> 的精确规则合并为一次查找，因此同一个 pattern 同时配置了两种动作时，<code>block</code> 胜出。</li>
+<li><strong><code>block</code> 动作规则</strong>：按通配符（<code>wildcard</code>）→ 正则（<code>regex</code>）→ 全局通配符（<code>*</code>）的顺序依次求值。</li>
+<li><strong><code>forward</code> 动作规则</strong>：仅当前面的规则都未命中时，才按相同的通配符 → 正则 → 全局通配符（<code>*</code>）顺序求值。</li>
 </ol>
-<h4 id="_3">决策流程图<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h4>
-<p>下面的流程图直观地展示了 Load Ants 的两阶段路由决策过程：</p>
+<p>也就是说，精确匹配优先于一切通配符/正则规则（一条精确的 <code>forward</code> 规则会胜过一条通配符的 <code>block</code> 规则）；进入通配符及更低层级后，才体现“拦截优先”——所有 <code>block</code> 规则先于所有 <code>forward</code> 规则求值。</p>
+<h3 id="_3">当前版本的正式契约<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h3>
+<p>当前版本的路由契约应理解为：</p>
+<ol>
+<li>精确匹配全局最先求值（<code>block</code> 与 <code>forward</code> 合并判断，同一 pattern 同时配置两种动作时 <code>block</code> 胜出）；随后先求值 <code>block</code> 阶段，再求值 <code>forward</code> 阶段。</li>
+<li>在 <code>block</code> 与 <code>forward</code> 各自阶段内，匹配顺序固定为 <code>wildcard &gt; regex &gt; *</code>。</li>
+<li>这是一套<strong>固定优先级契约</strong>，而不是“按配置文件里的声明顺序逐条命中”。</li>
+<li>在同一动作内，<code>exact</code> 规则必须在归一化后保持唯一；重复 pattern 会在启动期直接报错。同一 pattern 允许跨动作共存（同时配置 <code>block</code> 与 <code>forward</code>），命中时 <code>block</code> 优先。</li>
+<li>在同一动作内，<code>wildcard</code> 规则必须在归一化后保持唯一；重复的 <code>*.domain.tld</code> 或重复的全局 <code>*</code> 都会在启动期直接报错。</li>
+<li><code>regex</code> 规则当前会对<strong>同一动作内完全相同的 pattern</strong> 做启动期冲突检查；更复杂的 regex 重叠仍不做静态分析。如果多个不同 regex 同时命中，当前实现仍按内部逆序遍历决定命中结果，因此不要假定“前定义优先”。</li>
+</ol>
+<blockquote>
+<p>当前版本对 <code>remote_rules</code> 的保证是：<strong>启动时加载</strong>并并入路由引擎；之后由后台任务按 <code>reload_interval_secs</code> 间隔（默认 <code>3600</code> 秒）周期性重新加载，加载成功时原子地热替换路由引擎，失败时保留当前规则并在下一周期重试。支持 <code>strict/lenient</code> 失败策略，以及启用 <code>remote_rules.snapshot</code> 后的 last-known-good 快照恢复（快照回退同样适用于周期性加载失败的场景）。除非版本文档另有明确说明，当前版本不支持 <code>clash</code> 格式。</p>
+</blockquote>
+<h4 id="_4">决策流程图<a class="headerlink" href="#_4" title="Permanent link">&para;</a></h4>
+<p>下面的流程图直观地展示了 Load Ants 的分层路由决策过程：</p>
 <p><img alt="路由决策流程图" src="../../images/decision_flow.png" /></p>
 <blockquote>
-<p>✨ <strong>最佳实践</strong>:
-强烈建议在配置的最后，始终保留一条全局通配符的转发规则 (<code>match: "wildcard", patterns: ["*"], action: "forward", target: "..."</code>) 作为默认的"最终去向"，以确保所有查询都有一个明确的处理方式。</p>
+<p>✨ <strong>最佳实践</strong>：
+强烈建议在配置的最后，始终保留一条全局通配符的转发规则（<code>match: "wildcard", patterns: ["*"], action: "forward", target: "..."</code>）作为默认的“最终去向”，以确保所有查询都有一个明确的处理方式。</p>
 </blockquote>
-<h3 id="_4">规则详解与场景化示例<a class="headerlink" href="#_4" title="Permanent link">&para;</a></h3>
-<h4 id="1-exact">1. 精确匹配 (<code>exact</code>)<a class="headerlink" href="#1-exact" title="Permanent link">&para;</a></h4>
+<h3 id="_5">规则详解与场景化示例<a class="headerlink" href="#_5" title="Permanent link">&para;</a></h3>
+<h4 id="1-exact">1. 精确匹配（<code>exact</code>）<a class="headerlink" href="#1-exact" title="Permanent link">&para;</a></h4>
 <ul>
-<li><strong>用途</strong>: 针对特定域名进行操作。</li>
-<li><strong>示例</strong>: 拦截一个已知的广告域名。</li>
+<li><strong>用途</strong>：匹配特定域名。</li>
+<li><strong>示例</strong>：拦截一个已知的广告域名。</li>
 </ul>
 <div class="highlight"><pre><span></span><code><span class="nt">static_rules</span><span class="p">:</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">match</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;exact&quot;</span>
@@ -1826,10 +1859,10 @@
 <span class="w">      </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;block&quot;</span>
 </code></pre></div>
 <p>在这个例子中，只有对 <code>ads.example.com</code> 的查询会被直接拦截，而对 <code>www.example.com</code> 的查询则不受影响。</p>
-<h4 id="2-wildcard">2. 通配符匹配 (<code>wildcard</code>)<a class="headerlink" href="#2-wildcard" title="Permanent link">&para;</a></h4>
+<h4 id="2-wildcard">2. 通配符匹配（<code>wildcard</code>）<a class="headerlink" href="#2-wildcard" title="Permanent link">&para;</a></h4>
 <ul>
-<li><strong>用途</strong>: 针对某一域名下的所有子域名进行操作。</li>
-<li><strong>示例</strong>: 将所有公司内部域名转发到特定的上游组。</li>
+<li><strong>用途</strong>：匹配某一域名下的所有子域名。</li>
+<li><strong>示例</strong>：将所有公司内部域名转发到特定的上游组。</li>
 </ul>
 <div class="highlight"><pre><span></span><code><span class="nt">static_rules</span><span class="p">:</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">match</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;wildcard&quot;</span>
@@ -1837,11 +1870,11 @@
 <span class="w">      </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;forward&quot;</span>
 <span class="w">      </span><span class="nt">target</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;internal_dns_group&quot;</span>
 </code></pre></div>
-<p>在这个例子中，对 <code>dev.my-company.internal</code> 的查询都会被转发到 <code>internal_dns_group</code>。</p>
-<h4 id="3-regex">3. 正则表达式匹配 (<code>regex</code>)<a class="headerlink" href="#3-regex" title="Permanent link">&para;</a></h4>
+<p>在这个例子中，对 <code>dev.my-company.internal</code> 的查询会被转发到 <code>internal_dns_group</code>。</p>
+<h4 id="3-regex">3. 正则表达式匹配（<code>regex</code>）<a class="headerlink" href="#3-regex" title="Permanent link">&para;</a></h4>
 <ul>
-<li><strong>用途</strong>: 进行最复杂、最灵活的域名匹配。</li>
-<li><strong>示例</strong>: 将所有 Google 相关服务的域名都转发到指定的"谷歌公共"上游组。</li>
+<li><strong>用途</strong>：支持最复杂、最灵活的域名匹配。</li>
+<li><strong>示例</strong>：将所有 Google 相关服务的域名都转发到指定的“谷歌公共”上游组。</li>
 </ul>
 <div class="highlight"><pre><span></span><code><span class="nt">static_rules</span><span class="p">:</span>
 <span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">match</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;regex&quot;</span>
@@ -1849,23 +1882,30 @@
 <span class="w">    </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;forward&quot;</span>
 <span class="w">    </span><span class="nt">target</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;google_public&quot;</span>
 </code></pre></div>
-<p>这个正则表达式 <code>^(.*\.)?google\.com$</code> 会匹配 <code>google.com</code> 以及它所有的子域名。</p>
+<p>这个正则表达式 <code>^(.*\.)?google\.com$</code> 会匹配 <code>google.com</code> 及其全部子域名。</p>
 <hr />
-<h3 id="remote_rules">关于远程规则 (<code>remote_rules</code>)<a class="headerlink" href="#remote_rules" title="Permanent link">&para;</a></h3>
-<p>除了在本地 <code>config.yaml</code> 中定义静态规则，Load Ants 还支持从外部 URL 加载远程规则列表。这是一种非常强大的功能，有几点需要特别说明：</p>
+<h3 id="remote_rules">关于远程规则（<code>remote_rules</code>）<a class="headerlink" href="#remote_rules" title="Permanent link">&para;</a></h3>
+<p>除了在本地 <code>config.yaml</code> 中定义静态规则，Load Ants 还支持从外部 URL 加载远程规则列表。使用该功能时有几点需要注意：</p>
 <ul>
 <li>
-<p><strong>无缝整合</strong>: 远程规则<strong>不是</strong>一种新的匹配类型。它们在被下载和解析后，会根据其内容的格式（精确域名、通配符域名等）被无缝地整合进上述的路由匹配引擎中，并严格遵循"拦截优先、分层匹配"的逻辑。一个来自远程列表的精确匹配 <code>block</code> 规则，其优先级会高于本地配置的通配符 <code>forward</code> 规则。</p>
+<p><strong>无缝整合</strong>：远程规则<strong>不是</strong>一种新的匹配类型。它们下载并解析后，会按内容格式（精确域名、通配符域名等）整合进上述路由匹配引擎，并严格遵循“固定优先级、分层匹配”的逻辑。一个来自远程列表的精确匹配 <code>block</code> 规则，其优先级会高于本地配置的通配符 <code>forward</code> 规则。</p>
 </li>
 <li>
-<p><strong>当前支持的格式</strong>:</p>
+<p><strong>当前支持的格式</strong>：</p>
 <ul>
-<li><code>type</code>: 目前仅支持 <code>url</code>，表示规则来源是一个 URL。</li>
-<li><code>format</code>: 目前仅支持 <code>v2ray</code> 格式的规则列表（例如 <code>reject-list.txt</code>, <code>proxy-list.txt</code>）。</li>
+<li><code>type</code>：目前仅支持 <code>url</code>，表示规则来源是一个 URL。</li>
+<li><code>format</code>：目前仅支持 <code>v2ray</code> 格式的规则列表（例如 <code>reject-list.txt</code>、<code>proxy-list.txt</code>）。</li>
 </ul>
 </li>
 <li>
-<p><strong>未来计划</strong>: 未来可能会增加对更多流行规则格式（如 <code>clash</code>）的支持，以进一步增强灵活性和兼容性。</p>
+<p><strong>当前支持的恢复能力</strong>：</p>
+<ul>
+<li>快照通过 <code>remote_rules</code> 下的嵌套配置 <code>snapshot</code> 控制（<code>enabled</code> 默认为 <code>true</code>），用 <code>path</code> 指定本地快照目录。</li>
+<li>当远程源加载失败（无论发生在启动时还是周期性重新加载时），只要该 URL 对应的快照仍可读取，Load Ants 就会使用 last-known-good 快照恢复，并记录 degraded/fallback 状态。</li>
+</ul>
+</li>
+<li>
+<p><strong>未来计划</strong>：当前版本不支持 <code>clash</code> 等更多规则格式。</p>
 </li>
 </ul>
 <p>一个远程规则的配置示例如下：</p>
@@ -1877,10 +1917,10 @@
 </code></pre></div>
 <p>这个配置会下载一个域名列表，并将列表中的所有域名作为 <code>block</code> 规则添加到路由引擎中。</p>
 <hr />
-<h3 id="_5">下一步<a class="headerlink" href="#_5" title="Permanent link">&para;</a></h3>
+<h3 id="_6">下一步<a class="headerlink" href="#_6" title="Permanent link">&para;</a></h3>
 <ul>
 <li><a href="../../configuration/routing-rules/">➡️ 学习如何配置路由规则</a></li>
-<li><a href="../../cookbook/">➡️ 探索一些路由应用实例 (Cookbook)</a></li>
+<li><a href="../../cookbook/">➡️ 探索一些路由应用实例（Cookbook）</a></li>
 <li><a href="../">➡️ 返回核心概念概览</a></li>
 </ul>
 

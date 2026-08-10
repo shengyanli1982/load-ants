@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.2">
     
     
       
@@ -1294,7 +1294,7 @@
   <a href="#docker" class="md-nav__link">
     <span class="md-ellipsis">
       
-        步骤一：创建 Docker 镜像 (可选)
+        步骤一：创建 Docker 镜像（可选）
       
     </span>
   </a>
@@ -1678,7 +1678,7 @@
   <a href="#docker" class="md-nav__link">
     <span class="md-ellipsis">
       
-        步骤一：创建 Docker 镜像 (可选)
+        步骤一：创建 Docker 镜像（可选）
       
     </span>
   </a>
@@ -1772,17 +1772,21 @@
 
 
 <h1 id="kubernetes">在 Kubernetes 上部署<a class="headerlink" href="#kubernetes" title="Permanent link">&para;</a></h1>
-<p>对于需要高可用、可扩展和易于管理的生产环境，将 Load Ants 部署到 Kubernetes 是理想的选择。本指南将引导你完成在 Kubernetes 集群中部署 Load Ants 的完整流程。</p>
-<h3 id="_1">先决条件<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h3>
+<p>对于需要高可用、可扩展和集中管理的生产环境，可以将 Load Ants 部署到 Kubernetes。本指南覆盖完整的部署流程。</p>
+<h2 id="_1">先决条件<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h2>
 <ul>
 <li>一个正在运行的 Kubernetes 集群。</li>
 <li><code>kubectl</code> 命令行工具已配置并连接到你的集群。</li>
-<li>一个 Docker 镜像仓库（如 Docker Hub, GHCR, ECR）的账户，用于存放你的自定义镜像（如果需要）。</li>
+<li>一个 Docker 镜像仓库（如 Docker Hub、GHCR、ECR）的账户，用于存放你的自定义镜像（如果需要）。</li>
 </ul>
 <hr />
-<h3 id="docker">步骤一：创建 Docker 镜像 (可选)<a class="headerlink" href="#docker" title="Permanent link">&para;</a></h3>
-<p>官方在 <code>ghcr.io</code> 上提供了预构建的 Load Ants 镜像 (<code>ghcr.io/shengyanli1982/load-ants-&lt;arch&gt;:latest</code>)。在大多数情况下，你可以直接使用此镜像。</p>
-<p>但是，如果你对代码进行了自定义修改，你需要构建自己的 Docker 镜像并将其推送到镜像仓库。</p>
+<h2 id="docker">步骤一：创建 Docker 镜像（可选）<a class="headerlink" href="#docker" title="Permanent link">&para;</a></h2>
+<p>官方在 <code>ghcr.io</code> 上提供了预构建的 Load Ants 镜像：</p>
+<ul>
+<li>amd64 架构：<code>ghcr.io/shengyanli1982/load-ants-x64</code></li>
+<li>arm64 架构：<code>ghcr.io/shengyanli1982/load-ants-arm64</code></li>
+</ul>
+<p>这些镜像可以直接使用。如果你修改过代码，则需要构建自己的 Docker 镜像并推送到镜像仓库。</p>
 <div class="highlight"><pre><span></span><code><span class="c1"># 假设你的项目根目录有 Dockerfile</span>
 <span class="c1"># 1. 构建镜像</span>
 docker<span class="w"> </span>build<span class="w"> </span>-t<span class="w"> </span>your-repo/load-ants:latest<span class="w"> </span>.
@@ -1791,17 +1795,17 @@ docker<span class="w"> </span>build<span class="w"> </span>-t<span class="w"> </
 docker<span class="w"> </span>push<span class="w"> </span>your-repo/load-ants:latest
 </code></pre></div>
 <blockquote>
-<p><strong>注意</strong>: 请将 <code>your-repo/load-ants:latest</code> 替换为你的实际镜像仓库地址和标签。</p>
+<p><strong>注意</strong>：请将 <code>your-repo/load-ants:latest</code> 替换为你的实际镜像仓库地址和标签。</p>
 </blockquote>
 <hr />
-<h3 id="_2">步骤二：创建命名空间<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h3>
-<p>为了更好地组织和隔离资源，建议为 DNS 服务创建一个专用的命名空间。</p>
+<h2 id="_2">步骤二：创建命名空间<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h2>
+<p>建议为 DNS 服务创建一个专用的命名空间，以便组织和隔离资源。</p>
 <div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>create<span class="w"> </span>namespace<span class="w"> </span>dns
 </code></pre></div>
 <p>后续所有资源都将部署在这个 <code>dns</code> 命名空间下。</p>
 <hr />
-<h3 id="configmap">步骤三：创建 ConfigMap<a class="headerlink" href="#configmap" title="Permanent link">&para;</a></h3>
-<p>Kubernetes 的 <code>ConfigMap</code> 用于将配置文件与应用程序解耦。我们将使用它来存储 <code>config.yaml</code>。</p>
+<h2 id="configmap">步骤三：创建 ConfigMap<a class="headerlink" href="#configmap" title="Permanent link">&para;</a></h2>
+<p>Kubernetes 的 <code>ConfigMap</code> 用于将配置文件与应用程序解耦。这里使用它来存储 <code>config.yaml</code>。</p>
 <ol>
 <li>
 <p>创建一个名为 <code>load-ants-configmap.yaml</code> 的文件：</p>
@@ -1819,11 +1823,14 @@ docker<span class="w"> </span>push<span class="w"> </span>your-repo/load-ants:la
 <span class="w">          </span><span class="no">listen_tcp: &quot;0.0.0.0:53&quot;</span>
 
 <span class="w">        </span><span class="no">admin:</span>
-<span class="w">          </span><span class="no">listen: &quot;0.0.0.0:9000&quot;</span>
+<span class="w">          </span><span class="no">listen: &quot;0.0.0.0:9000&quot; # 容器内必须显式覆盖默认的 127.0.0.1，否则探针与集群内访问不可达</span>
 
 <span class="w">        </span><span class="no">cache:</span>
 <span class="w">          </span><span class="no">enabled: true</span>
 <span class="w">          </span><span class="no">max_size: 10000</span>
+<span class="w">          </span><span class="no">min_ttl: 60</span>
+<span class="w">          </span><span class="no">max_ttl: 3600</span>
+<span class="w">          </span><span class="no">negative_ttl: 60</span>
 
 <span class="w">        </span><span class="no">upstream_groups:</span>
 <span class="w">          </span><span class="no">- name: &quot;google_public&quot;</span>
@@ -1840,13 +1847,13 @@ docker<span class="w"> </span>push<span class="w"> </span>your-repo/load-ants:la
 </code></pre></div>
 </li>
 <li>
-<p>应用此 <code>ConfigMap</code> 到你的集群：
+<p>将此 <code>ConfigMap</code> 应用到你的集群：
     <div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>load-ants-configmap.yaml
 </code></pre></div></p>
 </li>
 </ol>
 <hr />
-<h3 id="deployment">步骤四：创建 Deployment<a class="headerlink" href="#deployment" title="Permanent link">&para;</a></h3>
+<h2 id="deployment">步骤四：创建 Deployment<a class="headerlink" href="#deployment" title="Permanent link">&para;</a></h2>
 <p><code>Deployment</code> 负责管理 Load Ants Pod 的生命周期，确保指定数量的副本正在运行。</p>
 <ol>
 <li>
@@ -1871,7 +1878,7 @@ docker<span class="w"> </span>push<span class="w"> </span>your-repo/load-ants:la
 <span class="w">        </span><span class="nt">spec</span><span class="p">:</span>
 <span class="w">            </span><span class="nt">containers</span><span class="p">:</span>
 <span class="w">                </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">load-ants</span>
-<span class="w">                  </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ghcr.io/shengyanli1982/load-ants-&lt;arch&gt;:latest</span><span class="w"> </span><span class="c1"># 使用官方或你自己的镜像</span>
+<span class="w">                  </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ghcr.io/shengyanli1982/load-ants-x64:latest</span><span class="w"> </span><span class="c1"># arm64 节点请改用 ghcr.io/shengyanli1982/load-ants-arm64:latest</span>
 <span class="w">                  </span><span class="nt">args</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;-c&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;/etc/load-ants/config.yaml&quot;</span><span class="p p-Indicator">]</span>
 <span class="w">                  </span><span class="nt">ports</span><span class="p">:</span>
 <span class="w">                      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">containerPort</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">53</span>
@@ -1892,15 +1899,15 @@ docker<span class="w"> </span>push<span class="w"> </span>your-repo/load-ants:la
 <span class="w">                      </span><span class="nt">requests</span><span class="p">:</span>
 <span class="w">                          </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;128Mi&quot;</span>
 <span class="w">                          </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;100m&quot;</span>
-<span class="w">                  </span><span class="nt">livenessProbe</span><span class="p">:</span><span class="w"> </span><span class="c1"># 健康检查: 如果探测失败，K8s会重启容器</span>
+<span class="w">                  </span><span class="nt">livenessProbe</span><span class="p">:</span><span class="w"> </span><span class="c1"># 存活探针: 如果探测失败，K8s 会重启容器</span>
 <span class="w">                      </span><span class="nt">httpGet</span><span class="p">:</span>
-<span class="w">                          </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/health</span>
+<span class="w">                          </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/health/live</span>
 <span class="w">                          </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http-admin</span>
 <span class="w">                      </span><span class="nt">initialDelaySeconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">15</span>
 <span class="w">                      </span><span class="nt">periodSeconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20</span>
-<span class="w">                  </span><span class="nt">readinessProbe</span><span class="p">:</span><span class="w"> </span><span class="c1"># 就绪探针: 如果探测失败，K8s会停止向此Pod发送流量</span>
+<span class="w">                  </span><span class="nt">readinessProbe</span><span class="p">:</span><span class="w"> </span><span class="c1"># 就绪探针: 如果探测失败，K8s 会停止向此 Pod 发送流量</span>
 <span class="w">                      </span><span class="nt">httpGet</span><span class="p">:</span>
-<span class="w">                          </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/health</span>
+<span class="w">                          </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/health/ready</span>
 <span class="w">                          </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http-admin</span>
 <span class="w">                      </span><span class="nt">initialDelaySeconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5</span>
 <span class="w">                      </span><span class="nt">periodSeconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span>
@@ -1911,14 +1918,14 @@ docker<span class="w"> </span>push<span class="w"> </span>your-repo/load-ants:la
 </code></pre></div>
 </li>
 <li>
-<p>应用此 <code>Deployment</code> 到你的集群：
+<p>将此 <code>Deployment</code> 应用到你的集群：
     <div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>load-ants-deployment.yaml
 </code></pre></div></p>
 </li>
 </ol>
 <hr />
-<h3 id="service">步骤五：创建 Service<a class="headerlink" href="#service" title="Permanent link">&para;</a></h3>
-<p><code>Service</code> 为一组 Pod 提供了一个稳定的网络端点（IP 地址和 DNS 名称），以便其他应用可以访问它们。</p>
+<h2 id="service">步骤五：创建 Service<a class="headerlink" href="#service" title="Permanent link">&para;</a></h2>
+<p><code>Service</code> 为一组 Pod 提供固定的访问端点（IP 地址和 DNS 名称），其他应用通过该端点访问服务。</p>
 <ol>
 <li>
 <p>创建一个名为 <code>load-ants-service.yaml</code> 的文件：</p>
@@ -1945,26 +1952,26 @@ docker<span class="w"> </span>push<span class="w"> </span>your-repo/load-ants:la
 <span class="w">          </span><span class="nt">protocol</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">TCP</span>
 <span class="w">          </span><span class="nt">targetPort</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http-admin</span>
 <span class="w">    </span><span class="c1"># 根据你的需求选择暴露服务的方式</span>
-<span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ClusterIP</span><span class="w"> </span><span class="c1"># (默认) 仅集群内部访问。集群内其他Pod可通过 `load-ants-svc.dns:53` 访问</span>
+<span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ClusterIP</span><span class="w"> </span><span class="c1"># (默认) 仅集群内部访问。集群内其他 Pod 可通过 `load-ants-svc.dns:53` 访问</span>
 <span class="w">    </span><span class="c1"># type: LoadBalancer # 如果需要从外部访问，并且你的云提供商支持 (会自动分配公网IP)</span>
 <span class="w">    </span><span class="c1"># type: NodePort # 如果需要在每个节点的特定端口上暴露服务</span>
 </code></pre></div>
 <blockquote>
-<p><strong>提示</strong>: <code>ClusterIP</code> 是最常见的选择，用于集群内部的 DNS 服务。如果你希望将此 DNS 服务暴露给 VPC 网络或公网，<code>LoadBalancer</code> 是更好的选择。</p>
+<p><strong>提示</strong>：<code>ClusterIP</code> 是最常见的选择，用于集群内部的 DNS 服务。如果你希望将此 DNS 服务暴露给 VPC 网络或公网，<code>LoadBalancer</code> 是更好的选择。</p>
 </blockquote>
 </li>
 <li>
-<p>应用此 <code>Service</code> 到你的集群：
+<p>将此 <code>Service</code> 应用到你的集群：
     <div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>load-ants-service.yaml
 </code></pre></div></p>
 </li>
 </ol>
 <hr />
-<h3 id="_3">步骤六：验证部署<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h3>
-<p>完成以上步骤后，你可以检查所有资源是否正常运行。</p>
+<h2 id="_3">步骤六：验证部署<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h2>
+<p>完成以上步骤后，检查所有资源是否正常运行。</p>
 <ol>
 <li>
-<p><strong>检查 Pod 状态</strong>:</p>
+<p><strong>检查 Pod 状态</strong>：</p>
 <div class="highlight"><pre><span></span><code><span class="c1"># 查看 dns 命名空间下的所有 Pod</span>
 kubectl<span class="w"> </span>-n<span class="w"> </span>dns<span class="w"> </span>get<span class="w"> </span>pods
 
@@ -1975,7 +1982,7 @@ load-ants-5f768f4f6-fghij<span class="w">   </span><span class="m">1</span>/1<sp
 </code></pre></div>
 </li>
 <li>
-<p><strong>检查 Service 状态</strong>:</p>
+<p><strong>检查 Service 状态</strong>：</p>
 <div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>-n<span class="w"> </span>dns<span class="w"> </span>get<span class="w"> </span>svc<span class="w"> </span>load-ants-svc
 
 <span class="c1"># 你会看到分配给 Service 的 IP (ClusterIP 或 外部IP)</span>
@@ -1984,21 +1991,21 @@ load-ants-svc<span class="w">   </span>ClusterIP<span class="w">   </span><span 
 </code></pre></div>
 </li>
 <li>
-<p><strong>查看实时日志</strong>:</p>
+<p><strong>查看实时日志</strong>：</p>
 <div class="highlight"><pre><span></span><code><span class="c1"># 查看所有 Load Ants Pod 的聚合日志</span>
 kubectl<span class="w"> </span>-n<span class="w"> </span>dns<span class="w"> </span>logs<span class="w"> </span>-l<span class="w"> </span><span class="nv">app</span><span class="o">=</span>load-ants<span class="w"> </span>-f
 </code></pre></div>
 </li>
 <li>
-<p><strong>从集群内部测试 DNS 解析</strong>:
-    你可以启动一个临时的 Pod 来测试 DNS 服务是否正常工作。
+<p><strong>从集群内部测试 DNS 解析</strong>：
+    启动一个临时的 Pod，测试 DNS 服务是否正常工作。
     <div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>run<span class="w"> </span>-it<span class="w"> </span>--rm<span class="w"> </span>--image<span class="o">=</span>busybox:1.28<span class="w"> </span>dns-test<span class="w"> </span>--restart<span class="o">=</span>Never<span class="w"> </span>--<span class="w"> </span>nslookup<span class="w"> </span>kubernetes.default.svc.cluster.local<span class="w"> </span>load-ants-svc.dns
 </code></pre></div>
-    如果一切正常，你应该会收到 <code>kubernetes.default</code> 的 IP 地址。</p>
+    解析成功时，命令输出 <code>kubernetes.default</code> 的 IP 地址。</p>
 </li>
 </ol>
 <hr />
-<h3 id="_4">下一步<a class="headerlink" href="#_4" title="Permanent link">&para;</a></h3>
+<h2 id="_4">下一步<a class="headerlink" href="#_4" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="../security/">➡️ 了解安全注意事项</a></li>
 <li><a href="../monitoring/">➡️ 了解如何监控服务</a></li>

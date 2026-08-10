@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.2">
     
     
       
@@ -1684,15 +1684,15 @@
 
 
 <h1 id="dns">DNS 客户端配置<a class="headerlink" href="#dns" title="Permanent link">&para;</a></h1>
-<p><code>dns_client</code> 配置块用于定义 <strong>传统 DNS 上游（UDP/TCP，端口 53）</strong> 的全局客户端行为。</p>
-<p>它仅在你的某个上游组设置了 <code>scheme: dns</code> 时生效；DoH 上游与规则下载仍由 <a href="../http-client/"><code>http_client</code></a> 控制。</p>
+<p><code>dns_client</code> 配置块定义 <strong>传统 DNS 上游（UDP/TCP，端口 53）</strong> 的全局客户端行为。</p>
+<p>该配置块仅在某个上游组设置了 <code>scheme: dns</code> 时生效；DoH（DNS over HTTPS）上游与规则下载仍由 <a href="../http-client/"><code>http_client</code></a> 控制。</p>
 <hr />
 <h3 id="_1">示例<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><span class="nt">dns_client</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">connect_timeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span><span class="w"> </span><span class="c1"># TCP 建连超时（秒）</span>
 <span class="w">    </span><span class="nt">request_timeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span><span class="w"> </span><span class="c1"># 单次 DNS 请求超时（秒）</span>
 <span class="w">    </span><span class="nt">prefer_tcp</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w"> </span><span class="c1"># 是否默认使用上游 TCP</span>
-<span class="w">    </span><span class="nt">tcp_reconnect</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w"> </span><span class="c1"># TCP 请求失败后下次重连</span>
+<span class="w">    </span><span class="nt">tcp_reconnect</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w"> </span><span class="c1"># TCP 请求失败后丢弃连接，立即重建并重试一次</span>
 </code></pre></div>
 <hr />
 <h3 id="_2">参数详解<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h3>
@@ -1702,7 +1702,7 @@
 <th style="text-align: left;">参数</th>
 <th style="text-align: left;">类型</th>
 <th style="text-align: left;">描述</th>
-<th style="text-align: left;">默认值（未配置时）</th>
+<th style="text-align: left;">默认值</th>
 <th style="text-align: left;">是否必填</th>
 </tr>
 </thead>
@@ -1731,8 +1731,22 @@
 <tr>
 <td style="text-align: left;"><code>tcp_reconnect</code></td>
 <td style="text-align: left;">布尔</td>
-<td style="text-align: left;">当一次 TCP 请求失败时，是否丢弃该上游服务器的 TCP 连接并在下一次请求重新建立连接。</td>
+<td style="text-align: left;">TCP 请求失败后是否立即重建连接并重试本次请求。无论取值如何，失败的连接都会被丢弃：<code>true</code> 立即重建连接并重试本次请求一次；<code>false</code> 本次请求直接失败（下次请求会建立新连接）。</td>
 <td style="text-align: left;"><code>true</code></td>
+<td style="text-align: left;">否</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>idle_connection_timeout</code></td>
+<td style="text-align: left;">整数</td>
+<td style="text-align: left;">空闲连接回收超时（秒），有效范围 <code>5-1800</code>。连接池中空闲超过该时长的 TCP/UDP 连接会被定期回收。</td>
+<td style="text-align: left;"><code>30</code></td>
+<td style="text-align: left;">否</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>max_tcp_connections</code></td>
+<td style="text-align: left;">整数</td>
+<td style="text-align: left;">TCP 连接池容量上限（所有上游共享），有效范围 <code>1-65535</code>。达到上限时淘汰最老的连接。</td>
+<td style="text-align: left;"><code>256</code></td>
 <td style="text-align: left;">否</td>
 </tr>
 </tbody>
@@ -1751,7 +1765,7 @@
 <p>说明：</p>
 <ul>
 <li><code>scheme: dns</code> 的上游组 <strong>不支持</strong> <code>proxy</code> 与 <code>retry</code>（会触发配置校验错误）。</li>
-<li>UDP 的超时/IO 错误 <strong>不会</strong> 自动触发 TCP 重试；只有在收到 UDP 响应且 <code>TC=1</code> 时才会触发 UDP→TCP 回退（或你显式设置 <code>prefer_tcp=true</code>）。</li>
+<li>UDP 的超时或 I/O 错误 <strong>不会</strong> 自动触发 TCP 重试；只有在收到 UDP 响应且 <code>TC=1</code> 时才会触发 UDP→TCP 回退（或你显式设置 <code>prefer_tcp=true</code>）。</li>
 </ul>
 </blockquote>
 <hr />

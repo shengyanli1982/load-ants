@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.2">
     
     
       
@@ -1358,10 +1358,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#4-tls-https" class="md-nav__link">
+  <a href="#4-tlshttps" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4. 启用 TLS (HTTPS)
+        4. 启用 TLS（HTTPS）
       
     </span>
   </a>
@@ -1698,10 +1698,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#4-tls-https" class="md-nav__link">
+  <a href="#4-tlshttps" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4. 启用 TLS (HTTPS)
+        4. 启用 TLS（HTTPS）
       
     </span>
   </a>
@@ -1740,13 +1740,13 @@
 
 
 <h1 id="_1">安全最佳实践<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
-<p>将 Load Ants 部署在生产环境时，安全性是首要考虑的因素。遵循以下最佳实践可以帮助你加固应用，保护你的 DNS 服务和敏感数据免受威胁。</p>
-<h3 id="1">1. 保护配置文件<a class="headerlink" href="#1" title="Permanent link">&para;</a></h3>
-<p><code>config.yaml</code> 文件包含了你整个服务的配置，甚至可能包含敏感信息（尽管我们不推荐这样做，见下一节）。限制对该文件的访问权限至关重要。</p>
-<p><strong>建议</strong>:</p>
+<p>将 Load Ants 部署在生产环境时，安全是首要考虑。遵循下面的实践可以加固应用，保护你的 DNS 服务和敏感数据。</p>
+<h2 id="1">1. 保护配置文件<a class="headerlink" href="#1" title="Permanent link">&para;</a></h2>
+<p><code>config.yaml</code> 文件包含整个服务的配置。若其中写入了密钥等敏感信息（我们不推荐这样做，见下一节），文件泄露会连带暴露这些信息，因此必须限制对该文件的访问权限。</p>
+<p><strong>建议</strong>：</p>
 <ul>
-<li><strong>最小权限原则</strong>: 将配置文件的所有者设置为运行 Load Ants 服务的用户（例如，一个专门的 <code>load-ants</code> 用户，或 <code>root</code> 如果你使用 <code>systemd</code> 的默认配置）。</li>
-<li><strong>设置文件权限</strong>: 移除所有其他用户的读取和写入权限。</li>
+<li><strong>最小权限原则</strong>：将配置文件的所有者设置为运行 Load Ants 服务的用户（例如一个专门的 <code>load-ants</code> 用户；若使用上文 <code>systemd</code> 的默认配置，则为 <code>root</code>）。</li>
+<li><strong>设置文件权限</strong>：移除所有其他用户的读取和写入权限。</li>
 </ul>
 <div class="highlight"><pre><span></span><code><span class="c1"># 假设运行服务的用户是 root</span>
 sudo<span class="w"> </span>chown<span class="w"> </span>root:root<span class="w"> </span>/etc/load-ants/config.yaml
@@ -1754,8 +1754,8 @@ sudo<span class="w"> </span>chown<span class="w"> </span>root:root<span class="w
 <span class="c1"># 设置权限为 600，只有所有者（root）可以读写</span>
 sudo<span class="w"> </span>chmod<span class="w"> </span><span class="m">600</span><span class="w"> </span>/etc/load-ants/config.yaml
 </code></pre></div>
-<h3 id="2-configyaml">2. 使用部署系统管理密钥（避免写入 <code>config.yaml</code>）<a class="headerlink" href="#2-configyaml" title="Permanent link">&para;</a></h3>
-<p>你的配置文件中可能需要定义一些密钥信息，例如：</p>
+<h2 id="2-configyaml">2. 使用部署系统管理密钥（避免写入 <code>config.yaml</code>）<a class="headerlink" href="#2-configyaml" title="Permanent link">&para;</a></h2>
+<p>以下配置项会写入密钥信息：</p>
 <ul>
 <li><code>auth</code> 块中的 <code>token</code></li>
 <li><code>proxy</code> 链接中的密码</li>
@@ -1766,8 +1766,8 @@ sudo<span class="w"> </span>chmod<span class="w"> </span><span class="m">600</sp
 <p><strong>重要</strong>：当前版本的 Load Ants 不会在启动时自动展开 <code>config.yaml</code> 中的 <code>${VAR_NAME}</code> / <code>$VAR_NAME</code> 环境变量占位符。</p>
 <p>推荐做法是：由部署系统在启动前渲染配置文件（模板 -&gt; 实际 <code>config.yaml</code>），或使用 Secret/凭据管理能力注入运行环境。</p>
 </blockquote>
-<h4 id="_2">示例<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h4>
-<p><strong>不推荐的配置</strong>:</p>
+<h3 id="_2">示例<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h3>
+<p><strong>不推荐的配置</strong>：</p>
 <div class="highlight"><pre><span></span><code><span class="nt">upstream_groups</span><span class="p">:</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;private_doh&quot;</span>
 <span class="w">      </span><span class="nt">servers</span><span class="p">:</span>
@@ -1776,10 +1776,10 @@ sudo<span class="w"> </span>chmod<span class="w"> </span><span class="m">600</sp
 <span class="w">                </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;bearer&quot;</span>
 <span class="w">                </span><span class="nt">token</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;MySuperSecretToken123&quot;</span><span class="w"> </span><span class="c1"># 密钥硬编码</span>
 </code></pre></div>
-<p><strong>推荐的配置（配置模板渲染）</strong>:</p>
+<p><strong>推荐的配置（配置模板渲染）</strong>：</p>
 <ol>
 <li>
-<p><strong>创建 <code>config.yaml.tpl</code>（模板文件）</strong>:</p>
+<p><strong>创建 <code>config.yaml.tpl</code>（模板文件）</strong>：</p>
 <div class="highlight"><pre><span></span><code><span class="nt">upstream_groups</span><span class="p">:</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;private_doh&quot;</span>
 <span class="w">      </span><span class="nt">servers</span><span class="p">:</span>
@@ -1793,7 +1793,7 @@ sudo<span class="w"> </span>chmod<span class="w"> </span><span class="m">600</sp
 <p><strong>在启动前渲染模板</strong>（示例使用 <code>envsubst</code>）：</p>
 <ul>
 <li>
-<p><strong>直接运行（本机）</strong>:</p>
+<p><strong>直接运行（本机）</strong>：</p>
 <div class="highlight"><pre><span></span><code><span class="nb">export</span><span class="w"> </span><span class="nv">DOH_TOKEN</span><span class="o">=</span><span class="s2">&quot;MySuperSecretToken123&quot;</span>
 envsubst<span class="w"> </span>&lt;<span class="w"> </span>./config.yaml.tpl<span class="w"> </span>&gt;<span class="w"> </span>./config.yaml
 ./loadants<span class="w"> </span>-c<span class="w"> </span>./config.yaml
@@ -1814,33 +1814,104 @@ envsubst<span class="w"> </span>&lt;<span class="w"> </span>./config.yaml.tpl<sp
 </li>
 </ol>
 <p><a id="3-保护-admin-api"></a></p>
-<h3 id="3-admin-api">3. 保护 Admin API<a class="headerlink" href="#3-admin-api" title="Permanent link">&para;</a></h3>
-<p>Load Ants 的 <code>admin</code> 服务提供了运维端点（例如 <code>/health</code>、<code>/metrics</code>，以及用于清空缓存的 <code>POST /api/cache/refresh</code>）。将它暴露在公网上是极其危险的。</p>
-<p><strong>建议</strong>:</p>
+<h2 id="3-admin-api">3. 保护 Admin API<a class="headerlink" href="#3-admin-api" title="Permanent link">&para;</a></h2>
+<p>Load Ants 的 Admin 服务器提供了以下运维端点：</p>
+<table>
+<thead>
+<tr>
+<th>端点</th>
+<th>方法</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/health/live</code></td>
+<td>GET</td>
+<td>存活检查</td>
+</tr>
+<tr>
+<td><code>/health/ready</code></td>
+<td>GET</td>
+<td>就绪检查</td>
+</tr>
+<tr>
+<td><code>/metrics</code></td>
+<td>GET</td>
+<td>Prometheus 指标</td>
+</tr>
+<tr>
+<td><code>/api/cache/clear</code></td>
+<td>POST</td>
+<td>清空缓存</td>
+</tr>
+<tr>
+<td><code>/api/cache/dump</code></td>
+<td>GET</td>
+<td>导出缓存快照</td>
+</tr>
+<tr>
+<td><code>/api/cache/restore</code></td>
+<td>POST</td>
+<td>恢复缓存快照</td>
+</tr>
+<tr>
+<td><code>/api/upstreams</code></td>
+<td>GET</td>
+<td>上游组健康状态</td>
+</tr>
+<tr>
+<td><code>/api/routes</code></td>
+<td>GET</td>
+<td>当前生效路由规则</td>
+</tr>
+<tr>
+<td><code>/api/info</code></td>
+<td>GET</td>
+<td>运行时摘要信息</td>
+</tr>
+</tbody>
+</table>
+<p>配置 <code>admin.auth.token</code> 后，<code>/metrics</code> 与所有 <code>/api/*</code> 端点需要 Bearer token 才能访问；<code>/health/*</code> 端点不受保护。将这些端点暴露在公网上是极其危险的。</p>
+<p><strong>建议</strong>：</p>
 <ul>
-<li><strong>仅在本地监听</strong>: 确保 <code>admin</code> 的 <code>listen</code> 地址绑定到本地回环地址 (<code>127.0.0.1</code> 或 <code>localhost</code>)。这是默认行为，但你需要确保没有错误地将其配置为 <code>0.0.0.0</code>。
+<li><strong>仅在本地监听</strong>：确保 <code>admin</code> 的 <code>listen</code> 地址绑定到本地回环地址（<code>127.0.0.1</code> 或 <code>localhost</code>）。这是默认行为，但你需要确保没有错误地将其配置为 <code>0.0.0.0</code>。容器化部署（Docker/Kubernetes）时，需在容器配置中显式设置为 <code>0.0.0.0</code> 才能从容器外部访问。
     <div class="highlight"><pre><span></span><code><span class="nt">admin</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">listen</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;127.0.0.1:9000&quot;</span>
 </code></pre></div></li>
-<li><strong>使用防火墙</strong>: 如果你必须从另一台机器访问 Admin API，请使用防火墙（如 <code>ufw</code>, <code>iptables</code>）来限制只有特定的、可信的 IP 地址才能访问该端口。
-    <div class="highlight"><pre><span></span><code><span class="c1"># 使用 ufw 只允许 192.168.1.100 访问 8080 端口</span>
-sudo<span class="w"> </span>ufw<span class="w"> </span>allow<span class="w"> </span>from<span class="w"> </span><span class="m">192</span>.168.1.100<span class="w"> </span>to<span class="w"> </span>any<span class="w"> </span>port<span class="w"> </span><span class="m">8080</span>
+<li><strong>使用防火墙</strong>：如果你必须从另一台机器访问 Admin API，请使用防火墙（如 <code>ufw</code>、<code>iptables</code>）限制只有特定的、可信的 IP 地址才能访问该端口。
+    <div class="highlight"><pre><span></span><code><span class="c1"># 使用 ufw 只允许 192.168.1.100 访问 9000 端口（admin 默认端口）</span>
+sudo<span class="w"> </span>ufw<span class="w"> </span>allow<span class="w"> </span>from<span class="w"> </span><span class="m">192</span>.168.1.100<span class="w"> </span>to<span class="w"> </span>any<span class="w"> </span>port<span class="w"> </span><span class="m">9000</span>
 </code></pre></div></li>
-<li><strong>使用反向代理</strong>: 更安全的方式是，将 Admin API 置于一个支持认证的反向代理（如 Nginx）之后。你可以为该 API 端点设置 HTTP Basic Auth 或其他更强的认证机制。</li>
+<li><strong>使用反向代理</strong>：将 Admin API 置于一个支持认证的反向代理（如 Nginx）之后，为该端点附加 HTTP Basic Auth 等认证机制。</li>
+<li><strong>启用内置 token 认证</strong>：配置 <code>admin.auth.token</code> 后，访问 <code>/metrics</code> 与所有 <code>/api/*</code> 端点必须携带 Bearer token（<code>/health/*</code> 不受影响）。
+    <div class="highlight"><pre><span></span><code><span class="nt">admin</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">listen</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;127.0.0.1:9000&quot;</span>
+<span class="w">    </span><span class="nt">auth</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">token</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;your_secret_token&quot;</span>
+</code></pre></div>
+    <div class="highlight"><pre><span></span><code><span class="c1"># 携带 Bearer token 访问</span>
+curl<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer your_secret_token&quot;</span><span class="w"> </span>http://127.0.0.1:9000/api/info
+</code></pre></div></li>
 </ul>
-<h3 id="4-tls-https">4. 启用 TLS (HTTPS)<a class="headerlink" href="#4-tls-https" title="Permanent link">&para;</a></h3>
-<p>Load Ants 本身不直接处理 TLS 证书的配置和终止。推荐的做法是使用一个专门的、经过安全考验的反向代理来处理 TLS，然后将解密后的流量转发给 Load Ants。</p>
-<p>这种架构模式被称为"TLS 终止代理"，它将复杂的证书管理和 TLS 协议处理与核心应用逻辑解耦，是业界标准的做法。</p>
-<p><strong>推荐的工具</strong>:</p>
+<h2 id="4-tlshttps">4. 启用 TLS（HTTPS）<a class="headerlink" href="#4-tlshttps" title="Permanent link">&para;</a></h2>
+<p>Load Ants 的 DNS over HTTPS（DoH）入站原生支持 TLS：在配置中同时指定 <code>server.tls_cert</code> 与 <code>server.tls_key</code>（PEM 格式），<code>listen_http</code> 端口即以 HTTPS 提供服务（rustls 实现）。</p>
+<div class="highlight"><pre><span></span><code><span class="nt">server</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">listen_http</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0.0.0.0:8080&quot;</span>
+<span class="w">    </span><span class="nt">tls_cert</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;/path/to/cert.pem&quot;</span>
+<span class="w">    </span><span class="nt">tls_key</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;/path/to/key.pem&quot;</span>
+</code></pre></div>
+<p>此外，也可以使用反向代理处理 TLS，再将解密后的流量转发给 Load Ants。这种架构模式称为 TLS 终止代理：证书管理和 TLS 协议处理由代理承担，与核心应用逻辑解耦，是业界标准的做法。</p>
+<p><strong>推荐的工具</strong>：</p>
 <ul>
-<li><a href="https://caddyserver.com/">➡️ <strong>Caddy Server</strong></a>: Caddy 是一个现代的 Web 服务器，以其自动化的 HTTPS 功能而闻名。它能自动从 Let's Encrypt 获取和续订 TLS 证书，配置极其简单。</li>
-<li><a href="https://nginx.org/">➡️ <strong>Nginx</strong></a>: Nginx 是一个功能强大且高度可配置的 Web 服务器和反向代理。你需要手动配置证书（例如，使用 <code>certbot</code> 获取 Let's Encrypt 证书），但它提供了极大的灵活性。</li>
+<li><a href="https://caddyserver.com/">➡️ <strong>Caddy Server</strong></a>：Caddy 是一个现代的 Web 服务器，以其自动化的 HTTPS 功能而闻名。它能自动从 Let's Encrypt 获取和续订 TLS 证书。</li>
+<li><a href="https://nginx.org/">➡️ <strong>Nginx</strong></a>：Nginx 是一个高度可配置的 Web 服务器和反向代理。你需要手动配置证书（例如，使用 <code>certbot</code> 获取 Let's Encrypt 证书），但它提供了极大的灵活性。</li>
 </ul>
-<p><strong>示例场景</strong>:
-假设你想对外提供一个 DoH (DNS-over-HTTPS) 服务，监听在 <code>https://mydns.example.com</code>。</p>
+<p><strong>示例场景</strong>：
+假设你想对外提供一个 DoH 服务，监听在 <code>https://mydns.example.com</code>。</p>
 <ol>
 <li>
-<p><strong>配置 Load Ants</strong>:
+<p><strong>配置 Load Ants</strong>：
     在 <code>config.yaml</code> 中，让 Load Ants 在本地的一个 HTTP 端口上监听。</p>
 <div class="highlight"><pre><span></span><code><span class="nt">server</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">listen_http</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;127.0.0.1:8080&quot;</span>
@@ -1848,17 +1919,17 @@ sudo<span class="w"> </span>ufw<span class="w"> </span>allow<span class="w"> </s
 </code></pre></div>
 </li>
 <li>
-<p><strong>配置反向代理 (以 Caddy 为例)</strong>:
+<p><strong>配置反向代理（以 Caddy 为例）</strong>：
     在你的 <code>Caddyfile</code> 中，添加如下配置：</p>
 <div class="highlight"><pre><span></span><code>mydns.example.com {
     reverse_proxy 127.0.0.1:8080
 }
 </code></pre></div>
-<p>Caddy 会自动处理 <code>mydns.example.com</code> 的 TLS 证书，并将所有传入的 HTTPS 请求安全地转发到在本地 8080 端口上运行的 Load Ants 实例。</p>
+<p>Caddy 会自动处理 <code>mydns.example.com</code> 的 TLS 证书，并将传入的 HTTPS 请求转发到在本地 8080 端口上运行的 Load Ants 实例。</p>
 </li>
 </ol>
 <hr />
-<h3 id="_3">下一步<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h3>
+<h2 id="_3">下一步<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="../monitoring/">➡️ 了解如何监控服务</a></li>
 <li><a href="../../architecture/">➡️ 查看架构设计</a></li>

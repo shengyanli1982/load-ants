@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.2">
     
     
       
@@ -586,7 +586,7 @@
   <a href="#_3" class="md-nav__link">
     <span class="md-ellipsis">
       
-        第一步：下载预编译程序
+        步骤一：下载预编译程序
       
     </span>
   </a>
@@ -597,7 +597,7 @@
   <a href="#_4" class="md-nav__link">
     <span class="md-ellipsis">
       
-        第二步：创建配置文件
+        步骤二：创建配置文件
       
     </span>
   </a>
@@ -608,7 +608,7 @@
   <a href="#load-ants" class="md-nav__link">
     <span class="md-ellipsis">
       
-        第三步：运行 Load Ants
+        步骤三：运行 Load Ants
       
     </span>
   </a>
@@ -619,7 +619,7 @@
   <a href="#dns" class="md-nav__link">
     <span class="md-ellipsis">
       
-        第四步：验证 DNS 解析
+        步骤四：验证 DNS 解析
       
     </span>
   </a>
@@ -1656,7 +1656,7 @@
   <a href="#_3" class="md-nav__link">
     <span class="md-ellipsis">
       
-        第一步：下载预编译程序
+        步骤一：下载预编译程序
       
     </span>
   </a>
@@ -1667,7 +1667,7 @@
   <a href="#_4" class="md-nav__link">
     <span class="md-ellipsis">
       
-        第二步：创建配置文件
+        步骤二：创建配置文件
       
     </span>
   </a>
@@ -1678,7 +1678,7 @@
   <a href="#load-ants" class="md-nav__link">
     <span class="md-ellipsis">
       
-        第三步：运行 Load Ants
+        步骤三：运行 Load Ants
       
     </span>
   </a>
@@ -1689,7 +1689,7 @@
   <a href="#dns" class="md-nav__link">
     <span class="md-ellipsis">
       
-        第四步：验证 DNS 解析
+        步骤四：验证 DNS 解析
       
     </span>
   </a>
@@ -1728,47 +1728,47 @@
 
 
 <h1 id="_1">快速上手<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
-<p>本指南将帮助你在 5 分钟内启动并运行 Load Ants。我们将使用最基础的配置，让你快速体验到核心功能。</p>
-<h3 id="_2">环境要求<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h3>
+<p>本指南帮助你在 5 分钟内启动并运行 Load Ants，使用最基础的配置体验核心功能。</p>
+<h2 id="_2">环境要求<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h2>
 <ul>
 <li>一台计算机（Windows、Linux 或 macOS）。</li>
 <li>能够访问互联网。</li>
 <li>一个文本编辑器（如 VS Code、Notepad++、Vim 等）。</li>
 </ul>
 <hr />
-<h3 id="_3">第一步：下载预编译程序<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h3>
+<h2 id="_3">步骤一：下载预编译程序<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h2>
 <p>访问项目的 <a href="https://github.com/shengyanli1982/load-ants/releases">GitHub 发布页面</a>，根据你的操作系统下载最新的二进制文件。</p>
 <p>发布包通常以 <code>.zip</code> 形式提供。请下载与你的平台匹配的压缩包并解压获得可执行文件。</p>
 <p>例如，如果你使用的是 64 位的 Linux 系统，你通常会下载类似 <code>loadants-Linux-x64-&lt;version&gt;.zip</code> 的文件；解压后可得到 <code>loadants-linux-x64</code>。</p>
 <p>下载后，建议将可执行文件重命名为 <code>loadants</code>（Windows 为 <code>loadants.exe</code>），并将其放置在一个专属的文件夹中，方便管理。</p>
-<h3 id="_4">第二步：创建配置文件<a class="headerlink" href="#_4" title="Permanent link">&para;</a></h3>
-<p>这是让 Load Ants 运行起来的关键。最简单的方式是<strong>从默认配置开始</strong>。</p>
+<h2 id="_4">步骤二：创建配置文件<a class="headerlink" href="#_4" title="Permanent link">&para;</a></h2>
+<p>本节介绍如何创建配置文件。最简单的方式是<strong>从默认配置开始</strong>。</p>
 <ol>
 <li>
-<p><strong>获取 <code>config.default.yaml</code></strong>:
+<p><strong>获取 <code>config.default.yaml</code></strong>：
     在项目的 <a href="https://github.com/shengyanli1982/load-ants">GitHub 仓库</a> 中找到 <code>config.default.yaml</code> 文件，并将其下载到与 <code>loadants</code> 程序相同的目录下。</p>
 </li>
 <li>
-<p><strong>重命名并编辑</strong>:
+<p><strong>重命名并编辑</strong>：
     将 <code>config.default.yaml</code> 重命名为 <code>config.yaml</code>。</p>
 <div class="highlight"><pre><span></span><code><span class="c1"># 假设 config.default.yaml 已下载到当前目录</span>
 mv<span class="w"> </span>config.default.yaml<span class="w"> </span>config.yaml
 </code></pre></div>
-<p>然后，用你的文本编辑器打开 <code>config.yaml</code>。对于快速上手，你暂时无需修改任何内容，默认配置已经包含了可以工作的基本设置。</p>
+<p>然后，用文本编辑器打开 <code>config.yaml</code>。初次体验时无需修改任何内容，默认配置已包含可运行的基本设置。</p>
 </li>
 </ol>
 <blockquote>
-<p>✨ <strong>提示</strong>: 默认的 <code>config.yaml</code> 文件已经为你配置好了：</p>
+<p>✨ <strong>提示</strong>：默认的 <code>config.yaml</code> 文件已经为你配置好了：</p>
 <ol>
 <li>让 Load Ants 在本地的 <code>53</code> 端口上监听 DNS 请求。</li>
-<li>定义了多个上游组（例如 <code>google</code>、<code>public</code>、<code>public_dns</code>），同时包含 DoH 与传统 DNS（UDP/TCP）上游示例。</li>
+<li>定义了多个上游组（例如 <code>google</code>、<code>public</code>、<code>public_dns</code>），同时包含 DNS over HTTPS（DoH）与传统 DNS（UDP/TCP）上游示例。</li>
 <li>提供了静态路由规则示例，并显式配置了一条默认的全局转发规则（将所有请求转发到某个上游组，例如 <code>public</code>）。</li>
 </ol>
 </blockquote>
-<h3 id="load-ants">第三步：运行 Load Ants<a class="headerlink" href="#load-ants" title="Permanent link">&para;</a></h3>
-<p>打开你的终端（在 Windows 上是 <code>命令提示符</code> 或 <code>PowerShell</code>）。</p>
-<p><strong>对于 Linux / macOS 用户</strong>:
-你可能需要先给程序添加执行权限：</p>
+<h2 id="load-ants">步骤三：运行 Load Ants<a class="headerlink" href="#load-ants" title="Permanent link">&para;</a></h2>
+<p>打开终端（Windows 上是命令提示符或 PowerShell）。</p>
+<p><strong>对于 Linux / macOS 用户</strong>：
+先给程序添加执行权限：</p>
 <div class="highlight"><pre><span></span><code>chmod<span class="w"> </span>+x<span class="w"> </span>./loadants
 </code></pre></div>
 <p>建议先验证配置（校验通过后直接退出）：</p>
@@ -1777,19 +1777,42 @@ mv<span class="w"> </span>config.default.yaml<span class="w"> </span>config.yaml
 <p>然后，使用 <code>sudo</code>（因为需要绑定特权端口 53）启动程序：</p>
 <div class="highlight"><pre><span></span><code>sudo<span class="w"> </span>./loadants<span class="w"> </span>-c<span class="w"> </span>./config.yaml
 </code></pre></div>
-<p><strong>对于 Windows 用户</strong>:
+<p><strong>对于 Windows 用户</strong>：
 请<strong>以管理员身份</strong>打开命令提示符或 PowerShell，然后运行：</p>
 <div class="highlight"><pre><span></span><code><span class="p">.\</span><span class="n">loadants</span><span class="p">.</span><span class="n">exe</span> <span class="p">-</span><span class="n">-test</span> <span class="n">-c</span> <span class="p">.\</span><span class="n">config</span><span class="p">.</span><span class="n">yaml</span>
 <span class="p">.\</span><span class="n">loadants</span><span class="p">.</span><span class="n">exe</span> <span class="n">-c</span> <span class="p">.\</span><span class="n">config</span><span class="p">.</span><span class="n">yaml</span>
 </code></pre></div>
-<p>如果一切顺利，你将不会在终端看到任何错误信息，程序会在前台运行，并输出日志。</p>
-<h3 id="dns">第四步：验证 DNS 解析<a class="headerlink" href="#dns" title="Permanent link">&para;</a></h3>
-<p>现在，Load Ants 已经在你的电脑上作为 DNS 服务器运行了。让我们来测试一下。</p>
+<p>启动成功后，程序在前台运行并输出日志，终端不出现错误信息。</p>
+<p><strong>可选 CLI 参数</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-d</code>, <code>--debug</code></td>
+<td>启用调试级别日志，输出更详细的运行信息</td>
+</tr>
+<tr>
+<td><code>--shutdown-timeout &lt;秒数&gt;</code></td>
+<td>收到停止信号后等待进程完全退出的最长时间（默认 30 秒）</td>
+</tr>
+<tr>
+<td><code>--dump-schema</code></td>
+<td>将配置的 JSON Schema 输出到 stdout 后退出</td>
+</tr>
+</tbody>
+</table>
+<h2 id="dns">步骤四：验证 DNS 解析<a class="headerlink" href="#dns" title="Permanent link">&para;</a></h2>
+<p>现在，Load Ants 已经在你的电脑上作为 DNS 服务器运行了。来验证一下。</p>
 <p>打开<strong>一个新的</strong>终端窗口，使用 <code>nslookup</code> 或 <code>dig</code> 工具向 <code>127.0.0.1</code>（也就是你的本机）发送一个 DNS 查询请求。</p>
-<p><strong>使用 <code>nslookup</code> (Windows、Linux、macOS):</strong></p>
+<p><strong>使用 <code>nslookup</code>（Windows、Linux、macOS）</strong>：</p>
 <div class="highlight"><pre><span></span><code>nslookup<span class="w"> </span>example.com<span class="w"> </span><span class="m">127</span>.0.0.1
 </code></pre></div>
-<p>你应该会看到类似下面的成功响应：</p>
+<p>命令输出类似下面的成功响应：</p>
 <div class="highlight"><pre><span></span><code>服务器:   localhost
 Address:  127.0.0.1
 
@@ -1798,10 +1821,10 @@ Address:  127.0.0.1
 Addresses:  2606:2800:220:1:248:1893:25c8:1946
           93.184.216.34
 </code></pre></div>
-<p><strong>使用 <code>dig</code> (Linux、macOS):</strong></p>
+<p><strong>使用 <code>dig</code>（Linux、macOS）</strong>：</p>
 <div class="highlight"><pre><span></span><code>dig<span class="w"> </span>@127.0.0.1<span class="w"> </span>example.com
 </code></pre></div>
-<p>你应该会看到类似下面的成功响应：</p>
+<p>命令输出类似下面的成功响应：</p>
 <div class="highlight"><pre><span></span><code>; &lt;&lt;&gt;&gt; DiG 9.16.1-Ubuntu &lt;&lt;&gt;&gt; @127.0.0.1 example.com
 ; (1 server found)
 ;; global options: +cmd
@@ -1824,7 +1847,7 @@ example.com.        172800  IN  A   93.184.216.34
 </code></pre></div>
 <p>如果你能看到类似于上面的响应，<strong>恭喜你！</strong> Load Ants 已经成功运行，并将你的 DNS 查询转发到了上游解析器（默认示例为 DoH 上游）。</p>
 <hr />
-<h3 id="_5">下一步<a class="headerlink" href="#_5" title="Permanent link">&para;</a></h3>
+<h2 id="_5">下一步<a class="headerlink" href="#_5" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="docker/">➡️ 使用 Docker 部署</a></li>
 <li><a href="build-from-source/">➡️ 从源码构建</a></li>

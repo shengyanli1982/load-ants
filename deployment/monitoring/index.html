@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.2">
     
     
       
@@ -1336,56 +1336,33 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#prometheus_1" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        通过 Prometheus 进行监控
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="通过 Prometheus 进行监控">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#metrics" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        步骤一：启用 Metrics 端点
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#prometheus_2" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        步骤二：配置 Prometheus 来抓取指标
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#_1" class="md-nav__link">
     <span class="md-ellipsis">
       
-        关键指标深度解读
+        启用方式
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="关键指标深度解读">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        核心指标
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="核心指标">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#1" class="md-nav__link">
+  <a href="#_3" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. 请求处理和性能
+        请求处理
       
     </span>
   </a>
@@ -1393,10 +1370,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#2" class="md-nav__link">
+  <a href="#_4" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. 缓存效率
+        运行状态
       
     </span>
   </a>
@@ -1404,10 +1381,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#3" class="md-nav__link">
+  <a href="#_5" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. 上游解析器
+        缓存
       
     </span>
   </a>
@@ -1415,18 +1392,35 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#4" class="md-nav__link">
+  <a href="#_6" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4. 路由策略
+        上游解析
       
     </span>
   </a>
   
 </li>
         
-      </ul>
-    </nav>
+          <li class="md-nav__item">
+  <a href="#_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        健康检查端点
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        路由策略
+      
+    </span>
+  </a>
   
 </li>
         
@@ -1436,7 +1430,18 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#_2" class="md-nav__link">
+  <a href="#promql" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PromQL 示例
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_9" class="md-nav__link">
     <span class="md-ellipsis">
       
         下一步
@@ -1687,56 +1692,33 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#prometheus_1" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        通过 Prometheus 进行监控
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="通过 Prometheus 进行监控">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#metrics" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        步骤一：启用 Metrics 端点
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#prometheus_2" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        步骤二：配置 Prometheus 来抓取指标
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#_1" class="md-nav__link">
     <span class="md-ellipsis">
       
-        关键指标深度解读
+        启用方式
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="关键指标深度解读">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        核心指标
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="核心指标">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#1" class="md-nav__link">
+  <a href="#_3" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. 请求处理和性能
+        请求处理
       
     </span>
   </a>
@@ -1744,10 +1726,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#2" class="md-nav__link">
+  <a href="#_4" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. 缓存效率
+        运行状态
       
     </span>
   </a>
@@ -1755,10 +1737,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#3" class="md-nav__link">
+  <a href="#_5" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. 上游解析器
+        缓存
       
     </span>
   </a>
@@ -1766,18 +1748,35 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#4" class="md-nav__link">
+  <a href="#_6" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4. 路由策略
+        上游解析
       
     </span>
   </a>
   
 </li>
         
-      </ul>
-    </nav>
+          <li class="md-nav__item">
+  <a href="#_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        健康检查端点
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        路由策略
+      
+    </span>
+  </a>
   
 </li>
         
@@ -1787,7 +1786,18 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#_2" class="md-nav__link">
+  <a href="#promql" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PromQL 示例
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_9" class="md-nav__link">
     <span class="md-ellipsis">
       
         下一步
@@ -1818,125 +1828,121 @@
 
 
 <h1 id="prometheus">Prometheus 监控<a class="headerlink" href="#prometheus" title="Permanent link">&para;</a></h1>
-<p>在生产环境中，对应用进行有效的监控是确保服务质量和快速排查问题的关键。Load Ants 通过标准的 <code>Prometheus</code> 指标为你提供了强大的可观测性能力。</p>
-<h3 id="prometheus_1">通过 Prometheus 进行监控<a class="headerlink" href="#prometheus_1" title="Permanent link">&para;</a></h3>
-<p>Load Ants 内置了一个 Prometheus 导出器，可以暴露详细的内部状态指标，以便被 Prometheus 服务器抓取和存储。</p>
-<h4 id="metrics">步骤一：启用 Metrics 端点<a class="headerlink" href="#metrics" title="Permanent link">&para;</a></h4>
-<p>指标端点是 <code>admin</code>（健康检查与管理）服务的一部分。当前版本中，<code>admin</code> 服务默认会启动并监听在 <code>127.0.0.1:9000</code>；你可以通过配置 <code>admin</code> 块来修改其监听地址。</p>
-<div class="highlight"><pre><span></span><code><span class="c1"># 健康检查与管理服务器设置（可选）</span>
-<span class="nt">admin</span><span class="p">:</span>
-<span class="w">    </span><span class="nt">listen</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;127.0.0.1:9000&quot;</span><span class="w"> </span><span class="c1"># Admin 服务监听地址和端口</span>
+<p>Load Ants 通过 <code>/metrics</code> 暴露 Prometheus 指标，用于观察请求量、缓存命中、上游健康和路由行为。</p>
+<h2 id="_1">启用方式<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h2>
+<p><code>/metrics</code> 端点由 Admin 服务器提供。默认监听地址是 <code>127.0.0.1:9000</code>，可通过配置修改：</p>
+<div class="highlight"><pre><span></span><code><span class="nt">admin</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">listen</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;127.0.0.1:9000&quot;</span>
 </code></pre></div>
-<ul>
-<li><strong>访问路径</strong>: 指标端点会 <strong>自动</strong> 在 <code>admin</code> 服务的 <code>/metrics</code> 路径上可用。在这个例子中，URL 将是 <code>http://127.0.0.1:9000/metrics</code>。</li>
-<li><strong>无需额外配置</strong>: 你 <strong>不能</strong> 在 <code>config.yaml</code> 中配置路径或禁用它。它的生命周期与 <code>admin</code> 服务绑定。</li>
-</ul>
-<blockquote>
-<p><strong>安全警告</strong>: 指标端点与 Admin API 使用相同的监听地址和端口。请务必遵循<a href="../security/#3-保护-admin-api">安全最佳实践</a>来保护这个端点，例如使用防火墙或反向代理，防止未授权的访问。</p>
-</blockquote>
-<h4 id="prometheus_2">步骤二：配置 Prometheus 来抓取指标<a class="headerlink" href="#prometheus_2" title="Permanent link">&para;</a></h4>
-<p>在你的 <code>prometheus.yml</code> 配置文件中，添加一个新的抓取任务来指向 Load Ants。</p>
+<p>对应抓取地址示例：</p>
 <div class="highlight"><pre><span></span><code><span class="nt">scrape_configs</span><span class="p">:</span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">job_name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;load-ants&quot;</span>
-<span class="w">      </span><span class="nt">static_configs</span><span class="p">:</span>
-<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">targets</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;&lt;load_ants_host&gt;:9000&quot;</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="c1"># 将此处替换为你的 admin 服务地址</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">job_name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;load-ants&quot;</span>
+<span class="w">    </span><span class="nt">static_configs</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">targets</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;&lt;load_ants_host&gt;:9000&quot;</span><span class="p p-Indicator">]</span>
 </code></pre></div>
-<p>重启 Prometheus 后，它将开始定期从 Load Ants 拉取指标数据。</p>
-<h4 id="_1">关键指标深度解读<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h4>
-<p>Load Ants 提供了丰富的指标，以下是几个核心指标的分组说明。所有指标均以 <code>loadants_</code> 为前缀。</p>
-<h5 id="1">1. 请求处理和性能<a class="headerlink" href="#1" title="Permanent link">&para;</a></h5>
+<p>若配置了 <code>admin.auth.token</code>，抓取时需携带 Bearer token：</p>
+<div class="highlight"><pre><span></span><code><span class="nt">scrape_configs</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">job_name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;load-ants&quot;</span>
+<span class="w">    </span><span class="nt">bearer_token</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;your_secret_token&quot;</span>
+<span class="w">    </span><span class="nt">static_configs</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">targets</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;&lt;load_ants_host&gt;:9000&quot;</span><span class="p p-Indicator">]</span>
+</code></pre></div>
+<p>建议只在受控网络内暴露该端点，并结合防火墙或反向代理限制访问。</p>
+<h2 id="_2">核心指标<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h2>
+<h3 id="_3">请求处理<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong><code>loadants_dns_requests_total</code></strong>: 按协议（UDP/TCP）分类的已处理 DNS 请求总数。<ul>
-<li><em>标签</em>: <code>protocol</code></li>
+<li><code>loadants_dns_requests_total</code></li>
+<li>标签：<code>protocol</code></li>
+<li><code>loadants_dns_request_duration_seconds</code></li>
+<li>标签：<code>protocol</code>, <code>query_type</code></li>
+<li><code>loadants_dns_request_processing_duration_seconds</code></li>
+<li>标签：<code>processing_stage</code>, <code>query_type</code></li>
+<li><code>processing_stage</code> 取值为 <code>cached</code>（缓存命中）或 <code>resolved</code>（经上游解析）</li>
+<li><code>loadants_dns_request_errors_total</code></li>
+<li>标签：<code>error_type</code></li>
+<li><code>loadants_http_requests_total</code></li>
+<li>标签：<code>status_code</code></li>
+<li><code>loadants_http_request_duration_seconds</code></li>
+<li>标签：<code>query_type</code>, <code>status_code</code></li>
+<li><code>loadants_http_request_errors_total</code></li>
+<li>标签：<code>error_type</code></li>
+<li><code>loadants_dns_query_type_total</code></li>
+<li>标签：<code>type</code>（记录类型，如 <code>A</code>、<code>AAAA</code>、<code>MX</code>、<code>TXT</code>，未识别类型归为 <code>OTHER</code>）</li>
+<li><code>loadants_dns_response_codes_total</code></li>
+<li>标签：<code>rcode</code>（响应码，如 <code>NOERROR</code>、<code>NXDOMAIN</code>、<code>SERVFAIL</code>，未识别响应码归为 <code>OTHER</code>）</li>
 </ul>
-</li>
-<li><strong><code>loadants_dns_request_duration_seconds</code></strong>: DNS 请求处理时长的直方图。<ul>
-<li><em>标签</em>: <code>protocol</code>, <code>query_type</code></li>
-<li><em>用途</em>: 监控服务延迟，计算 P95/P99 响应时间。</li>
-</ul>
-</li>
-<li><strong><code>loadants_http_requests_total</code></strong>: 按状态码分类的已处理 DoH 请求总数。<ul>
-<li><em>标签</em>: <code>status_code</code></li>
-</ul>
-</li>
-</ul>
-<h5 id="2">2. 缓存效率<a class="headerlink" href="#2" title="Permanent link">&para;</a></h5>
+<h3 id="_4">运行状态<a class="headerlink" href="#_4" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong><code>loadants_cache_entries</code></strong>: DNS 缓存中的当前条目数 (Gauge)。</li>
-<li><strong><code>loadants_cache_capacity</code></strong>: DNS 缓存的最大容量 (Gauge)。</li>
-<li><strong><code>loadants_cache_operations_total</code></strong>: 按操作类型分类的缓存操作总数。<ul>
-<li><em>标签</em>: <code>operation</code> (<code>hit</code>, <code>miss</code>, <code>insert</code>, <code>insert_error</code>, <code>clear</code>)</li>
-<li><em>用途</em>: 计算缓存命中率 <code>rate(loadants_cache_operations_total{operation="hit"}[5m]) / rate(loadants_cache_operations_total{operation=~"hit|miss"}[5m])</code>。</li>
+<li><code>loadants_inflight_requests</code></li>
+<li>无标签；当前正在处理中的 DNS 请求数</li>
+<li><code>loadants_tcp_pool_connections</code></li>
+<li>无标签；当前连接池中的 TCP 连接数</li>
 </ul>
-</li>
-<li><strong><code>loadants_cache_ttl_seconds</code></strong>: 缓存条目 TTL 的直方图（秒）。<ul>
-<li><em>标签</em>: <code>source</code> (<code>original</code>, <code>min_ttl</code>, <code>adjusted</code>, <code>negative_ttl</code>)</li>
-<li><em>用途</em>: 观察 TTL 分布，以及 <code>min_ttl</code> / 负向缓存是否频繁介入。</li>
-</ul>
-</li>
-</ul>
-<h5 id="3">3. 上游解析器<a class="headerlink" href="#3" title="Permanent link">&para;</a></h5>
-<blockquote>
-<p><strong>指标升级说明（Breaking Change）</strong><br />
-新版本已将 <code>loadants_upstream_*</code> 系列指标从“仅 DoH”升级为“DoH + DNS(UDP/TCP)”通用指标，并新增了两个标签维度：</p>
+<h3 id="_5">缓存<a class="headerlink" href="#_5" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>upstream_protocol</code>: <code>doh|dns</code></li>
-<li><code>upstream_transport</code>: <code>http|udp|tcp</code><br />
-  因此如果你之前在 Grafana/PromQL 中只按 <code>group/server</code> 聚合或过滤，需要把新标签纳入查询（或用 <code>sum by (...)</code> 忽略它们）。</li>
+<li><code>loadants_cache_entries</code></li>
+<li><code>loadants_cache_capacity</code></li>
+<li><code>loadants_cache_operations_total</code></li>
+<li>标签：<code>operation</code></li>
+<li><code>loadants_cache_ttl_seconds</code></li>
+<li>标签：<code>source</code></li>
 </ul>
-</blockquote>
+<h3 id="_6">上游解析<a class="headerlink" href="#_6" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong><code>loadants_upstream_requests_total</code></strong>: 发送到上游解析器的请求总数。<ul>
-<li><em>标签</em>: <code>upstream_protocol</code>, <code>upstream_transport</code>, <code>group</code>, <code>server</code></li>
-<li><em>说明</em>:<ul>
-<li><code>doh/http</code>：DoH 上游（<code>server</code> 通常为 Host）。</li>
-<li><code>dns/udp|dns/tcp</code>：传统 DNS 上游（<code>server</code> 通常为 IP 字符串）。</li>
-<li>当 <code>dns_client.prefer_tcp=false</code> 且 UDP 响应 <code>TC=1</code> 触发回退时：<strong>同一条逻辑请求可能会分别产生一条 <code>dns/udp</code> 与一条 <code>dns/tcp</code> 的请求计数</strong>（按“尝试次数”计数，这是预期行为）。</li>
+<li><code>loadants_upstream_requests_total</code></li>
+<li>标签：<code>upstream_protocol</code>, <code>upstream_transport</code>, <code>group</code>, <code>server</code></li>
+<li><code>loadants_upstream_errors_total</code></li>
+<li>标签：<code>upstream_protocol</code>, <code>upstream_transport</code>, <code>error_type</code>, <code>group</code>, <code>server</code></li>
+<li><code>loadants_upstream_duration_seconds</code></li>
+<li>标签：<code>upstream_protocol</code>, <code>upstream_transport</code>, <code>group</code>, <code>server</code></li>
+<li><code>loadants_upstream_health_state</code></li>
+<li>标签：<code>group</code>, <code>server</code></li>
+<li>值语义：<code>0</code>=Unhealthy，<code>1</code>=HalfOpen，<code>2</code>=Healthy</li>
+<li><strong>破坏性变更提示</strong>（2026-08）：旧版本中 <code>0</code> 表示 Healthy，升级后监控面板与告警规则需同步更新阈值</li>
+<li><code>loadants_circuit_breaker_transitions_total</code></li>
+<li>标签：<code>group</code>, <code>state_from</code>, <code>state_to</code></li>
+<li>统计上游健康状态迁移次数（如 Healthy→Unhealthy、Unhealthy→HalfOpen、HalfOpen→Healthy/Unhealthy）</li>
+<li><code>loadants_stale_fallback_total</code></li>
+<li>标签：<code>group</code></li>
+<li>统计上游转发失败时以过期缓存兜底响应的次数</li>
 </ul>
-</li>
-</ul>
-</li>
-<li><strong><code>loadants_upstream_errors_total</code></strong>: 上游解析器错误总数。<ul>
-<li><em>标签</em>: <code>upstream_protocol</code>, <code>upstream_transport</code>, <code>error_type</code>, <code>group</code>, <code>server</code></li>
-<li><em>用途</em>: 快速定位出问题的上游服务器或组，并设置告警。</li>
-</ul>
-</li>
-<li><strong><code>loadants_upstream_duration_seconds</code></strong>: 上游查询时长的直方图。<ul>
-<li><em>标签</em>: <code>upstream_protocol</code>, <code>upstream_transport</code>, <code>group</code>, <code>server</code></li>
-<li><em>用途</em>: 评估不同上游解析器的性能；对 <code>dns</code> 上游可以分别观察 <code>udp</code> 与 <code>tcp</code> 的延迟分布。</li>
-</ul>
-</li>
-</ul>
-<p><strong>PromQL 迁移示例</strong></p>
+<p>说明：</p>
 <ul>
-<li>旧：只看某个组的上游请求速率（旧版无新标签）<ul>
-<li><code>rate(loadants_upstream_requests_total{group="public"}[5m])</code></li>
+<li><code>upstream_protocol</code> 取值为 <code>doh</code> 或 <code>dns</code></li>
+<li><code>upstream_transport</code> 取值为 <code>http</code>、<code>udp</code> 或 <code>tcp</code></li>
+<li>当传统 DNS 上游先走 UDP、再因 <code>TC=1</code> 回退到 TCP 时，同一逻辑请求会产生两条上游请求计数（UDP 与 TCP 各一条），这是预期行为</li>
 </ul>
-</li>
-<li>新：保留新标签，分别看不同上游协议/传输<ul>
-<li><code>rate(loadants_upstream_requests_total{group="public"}[5m])</code></li>
-</ul>
-</li>
-<li>新：忽略 <code>upstream_protocol/upstream_transport</code>，得到与旧版更接近的聚合口径<ul>
-<li><code>sum by (group, server) (rate(loadants_upstream_requests_total[5m]))</code></li>
-</ul>
-</li>
-</ul>
-<h5 id="4">4. 路由策略<a class="headerlink" href="#4" title="Permanent link">&para;</a></h5>
+<h3 id="_7">健康检查端点<a class="headerlink" href="#_7" title="Permanent link">&para;</a></h3>
+<p><code>/health/live</code> 与 <code>/health/ready</code> 由 Admin 服务器提供，可用于探针与告警：</p>
 <ul>
-<li><strong><code>loadants_route_matches_total</code></strong>: 路由规则匹配总数。<ul>
-<li><em>标签</em>: <code>match_type</code> (<code>exact</code>, <code>wildcard</code>, <code>regex</code>), <code>target_group</code>, <code>rule_source</code>, <code>action</code> (<code>block</code>, <code>forward</code>)</li>
-<li><em>用途</em>: 精确洞察你的路由规则是如何被使用的。</li>
-<li><em>备注</em>: 远程规则在加载后会被合并进路由引擎；当前版本的匹配计数中，<code>rule_source</code> 可能统一为 <code>static</code>（即使规则源来自 <code>remote_rules</code>）。</li>
+<li><code>/health/live</code>：存活探针（livenessProbe）端点，进程存活即返回 200</li>
+<li><code>/health/ready</code>：就绪探针（readinessProbe）端点，任一上游组存在服务器（servers&gt;0）且全部不健康（healthy=0）时返回 503；其余情况返回 200</li>
 </ul>
+<h3 id="_8">路由策略<a class="headerlink" href="#_8" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>loadants_route_matches_total</code></li>
+<li>标签：<code>rule_type</code>, <code>target_group</code>, <code>rule_source</code>, <code>action</code></li>
+<li><code>rule_source</code> 会按真实来源写入 <code>static</code> 或 <code>remote</code></li>
+<li>
+<p>若规则来自远程源，内部还会保留来源标识，便于后续实现规则可解释性或热更新扩展</p>
 </li>
-<li><strong><code>loadants_route_rules_count</code></strong>: 当前活动的路由规则数量。<ul>
-<li><em>标签</em>: <code>match_type</code> (<code>exact</code>, <code>wildcard</code>, <code>regex</code>), <code>rule_source</code></li>
-</ul>
+<li>
+<p><code>loadants_route_rules_count</code></p>
 </li>
+<li>标签：<code>rule_type</code>, <code>rule_source</code></li>
+<li>统计当前编译后有效规则数，不再把远程规则统一记成 <code>static</code></li>
 </ul>
-<hr />
-<h3 id="_2">下一步<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h3>
+<h2 id="promql">PromQL 示例<a class="headerlink" href="#promql" title="Permanent link">&para;</a></h2>
+<p>查看某个上游组的请求速率：</p>
+<div class="highlight"><pre><span></span><code><span class="kr">rate</span><span class="o">(</span><span class="nv">loadants_upstream_requests_total</span><span class="p">{</span><span class="nl">group</span><span class="o">=</span><span class="p">&quot;</span><span class="s">public</span><span class="p">&quot;}[</span><span class="s">5m</span><span class="p">]</span><span class="o">)</span>
+</code></pre></div>
+<p>忽略 <code>upstream_protocol</code> 和 <code>upstream_transport</code> 做聚合：</p>
+<div class="highlight"><pre><span></span><code><span class="k">sum</span><span class="w"> </span><span class="k">by</span><span class="w"> </span><span class="o">(</span><span class="k">group</span><span class="p">,</span><span class="w"> </span><span class="nv">server</span><span class="o">)</span><span class="w"> </span><span class="o">(</span><span class="kr">rate</span><span class="o">(</span><span class="nv">loadants_upstream_requests_total</span><span class="p">[</span><span class="s">5m</span><span class="p">]</span><span class="o">))</span>
+</code></pre></div>
+<p>查看路由匹配中远程规则的命中量：</p>
+<div class="highlight"><pre><span></span><code><span class="kr">rate</span><span class="o">(</span><span class="nv">loadants_route_matches_total</span><span class="p">{</span><span class="nl">rule_source</span><span class="o">=</span><span class="p">&quot;</span><span class="s">remote</span><span class="p">&quot;}[</span><span class="s">5m</span><span class="p">]</span><span class="o">)</span>
+</code></pre></div>
+<h2 id="_9">下一步<a class="headerlink" href="#_9" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="../security/">➡️ 了解安全注意事项</a></li>
 <li><a href="../../architecture/">➡️ 查看架构设计</a></li>

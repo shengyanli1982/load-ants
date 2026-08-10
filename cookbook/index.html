@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.2">
     
     
       
@@ -1641,39 +1641,39 @@
 
 <h1 id="_1">总览<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
 <p>欢迎来到 Load Ants 实操手册！</p>
-<p>在前面的章节中，我们已经学习了 Load Ants 的各项独立功能和配置选项。本章节的目标是将这些知识点串联起来，通过一系列完整的、端到端的实例，向你展示如何利用 Load Ants 解决真实世界中的具体问题。</p>
-<p>这里的每一个"配方"都是一个独立的、带有明确目标的教程。我们不仅会提供完整的配置文件，还会详细解释其背后的逻辑、部署步骤以及验证方法。</p>
+<p>前面的章节介绍了 Load Ants 的各项功能和配置选项。本章把这些知识点串联起来，用几个完整的端到端实例展示如何用 Load Ants 解决真实世界中的具体问题。</p>
+<p>这里的每一个“配方”都是一个独立且目标明确的教程：不仅提供完整的配置文件，还会解释背后的逻辑、部署步骤与验证方法。</p>
 <h3 id="_2">可用配方<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h3>
 <ul>
 <li>
-<p><strong><a href="ad-blocking/">终极广告与追踪器拦截</a></strong></p>
+<p><strong><a href="ad-blocking/">终极广告拦截</a></strong></p>
 <ul>
-<li><em>目标</em>：搭建一个强大的、全网络范围的广告和恶意追踪器过滤系统。</li>
-<li><em>涉及模块</em>：<code>remote_rules</code>, <code>static_rules</code>, <code>cache</code>。</li>
+<li><em>目标</em>：搭建覆盖全网络的广告与恶意追踪器过滤系统。</li>
+<li><em>涉及模块</em>：<code>remote_rules</code>、<code>static_rules</code>、<code>cache</code>。</li>
 </ul>
 </li>
 <li>
-<p><strong><a href="geo-unblocking/">流媒体服务地理封锁解除</a></strong></p>
+<p><strong><a href="geo-unblocking/">地理封锁解除</a></strong></p>
 <ul>
 <li><em>目标</em>：为特定流媒体服务（如 Netflix）配置代理，实现跨区访问，同时保持其他流量直连。</li>
-<li><em>涉及模块</em>：<code>upstream_groups</code> (带 <code>proxy</code> 配置), <code>routing_rules</code> (使用 <code>regex</code> 匹配)。</li>
+<li><em>涉及模块</em>：<code>upstream_groups</code>（带 <code>proxy</code> 配置）、<code>static_rules</code>（使用 <code>regex</code> 匹配）。</li>
 </ul>
 </li>
 <li>
-<p><strong><a href="homelab-dns/">为你的家庭实验室提供内部 DNS</a></strong></p>
+<p><strong><a href="homelab-dns/">家庭实验室 DNS</a></strong></p>
 <ul>
-<li><em>目标</em>：为你内部网络的服务（如 <code>nas.local</code>, <code>plex.local</code>）提供简单、易于管理的 DNS 解析。</li>
-<li><em>涉及模块</em>：<code>static_rules</code> (使用 <code>exact</code> 匹配)。</li>
+<li><em>目标</em>：为内部网络中的服务（如 <code>nas.lan</code>、<code>plex.lan</code>）提供简单、易于管理的 DNS 解析。</li>
+<li><em>涉及模块</em>：<code>static_rules</code>（使用 <code>regex</code> 匹配）。</li>
 </ul>
 </li>
 </ul>
-<p>跟随这些配方，你将能更深入地体会到 Load Ants 的灵活性和强大功能。</p>
+<p>跟随这些配方动手实践，你将更深入地体会到 Load Ants 的灵活性和强大功能。</p>
 <hr />
 <h3 id="_3">下一步<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h3>
 <ul>
-<li><a href="ad-blocking/">➡️ 实现广告屏蔽</a></li>
-<li><a href="geo-unblocking/">➡️ 实现 GEO 解锁</a></li>
-<li><a href="homelab-dns/">➡️ 用于家庭实验网络</a></li>
+<li><a href="ad-blocking/">➡️ 终极广告拦截</a></li>
+<li><a href="geo-unblocking/">➡️ 地理封锁解除</a></li>
+<li><a href="homelab-dns/">➡️ 家庭实验室 DNS</a></li>
 </ul>
 
 

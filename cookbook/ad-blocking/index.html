@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.2">
     
     
       
@@ -1772,14 +1772,14 @@
 
 
 <h1 id="_1">终极广告拦截<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
-<p>本教程将指导你如何使用 Load Ants 搭建一个强大的、全网络范围的广告、追踪器和恶意软件域名过滤系统。最终，你将拥有一个私人的、高性能的 DNS 服务，它可以保护你网络下的所有设备。</p>
+<p>本教程指导你使用 Load Ants 搭建一个覆盖全网络的广告、追踪器与恶意软件域名过滤系统。完成后，你将拥有一个私有的高性能 DNS 服务，为网络中的所有设备提供保护。</p>
 <h3 id="_2">目标<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h3>
 <ul>
 <li>订阅一个或多个社区维护的域名黑名单。</li>
-<li>能够手动屏蔽或解封特定域名。</li>
-<li>为正常的 DNS 查询选择一个或多个可信的上游解析器（推荐 DoH 以获得更好的隐私保护）。</li>
+<li>手动拦截或放行特定域名。</li>
+<li>为正常的 DNS 查询选择一个或多个可信的上游解析器，推荐使用 DoH（DNS over HTTPS）以获得更好的隐私保护。</li>
 <li>启用缓存以加速常见查询。</li>
-<li>通过 Docker Compose 轻松部署和管理。</li>
+<li>通过 Docker Compose 部署和管理。</li>
 </ul>
 <h3 id="_3">先决条件<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h3>
 <ol>
@@ -1787,23 +1787,19 @@
 <li>对 Load Ants 的<a href="../../configuration/">基本配置</a>有大致了解。</li>
 </ol>
 <h3 id="_4">步骤一：项目结构<a class="headerlink" href="#_4" title="Permanent link">&para;</a></h3>
-<p>首先，创建一个项目目录：</p>
+<p>首先，创建项目目录：</p>
+<div class="highlight"><pre><span></span><code>mkdir<span class="w"> </span>-p<span class="w"> </span>load-ants-blocker/config
+</code></pre></div>
+<p>目录结构如下：</p>
 <div class="highlight"><pre><span></span><code>load-ants-blocker/
 ├── docker-compose.yml
 └── config/
     └── config.yaml
 </code></pre></div>
 <h3 id="configyaml">步骤二：<code>config.yaml</code> 配置<a class="headerlink" href="#configyaml" title="Permanent link">&para;</a></h3>
-<p>这是本配方的核心。我们将定义一个"干净"的上游组和一个"拦截"上游组，然后通过远程和静态规则来决定流量的走向。</p>
+<p>这是本配方的核心。定义一个名为 <code>clean_dns</code> 的“干净”上游组，再通过远程规则与静态规则决定流量的走向。</p>
 <p>将以下内容粘贴到 <code>config/config.yaml</code> 文件中：</p>
 <div class="highlight"><pre><span></span><code><span class="c1"># ----------------------------------</span>
-<span class="c1"># 日志配置</span>
-<span class="c1"># ----------------------------------</span>
-<span class="nt">log</span><span class="p">:</span>
-<span class="w">    </span><span class="nt">level</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;info&quot;</span><span class="w"> </span><span class="c1"># 日常运行时使用 info，调试时可改为 debug</span>
-<span class="w">    </span><span class="nt">format</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;text&quot;</span>
-
-<span class="c1"># ----------------------------------</span>
 <span class="c1"># 服务监听</span>
 <span class="c1"># ----------------------------------</span>
 <span class="nt">server</span><span class="p">:</span>
@@ -1812,30 +1808,36 @@
 <span class="w">    </span><span class="nt">listen_http</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0.0.0.0:5380&quot;</span><span class="w"> </span><span class="c1"># 可选，用于 DoH</span>
 
 <span class="c1"># ----------------------------------</span>
+<span class="c1"># Admin 服务器</span>
+<span class="c1"># ----------------------------------</span>
+<span class="nt">admin</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">listen</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0.0.0.0:9000&quot;</span><span class="w"> </span><span class="c1"># 默认为 127.0.0.1:9000；容器场景需绑定 0.0.0.0 才能通过端口映射从外部访问</span>
+
+<span class="c1"># ----------------------------------</span>
 <span class="c1"># 缓存配置</span>
 <span class="c1"># ----------------------------------</span>
 <span class="nt">cache</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 <span class="w">    </span><span class="nt">max_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100000</span><span class="w"> </span><span class="c1"># 缓存最多 10 万条记录</span>
-<span class="w">    </span><span class="nt">retention_period</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3600</span><span class="w"> </span><span class="c1"># 缓存项保留 1 小时</span>
+<span class="w">    </span><span class="nt">min_ttl</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">60</span><span class="w"> </span><span class="c1"># 缓存条目最小 TTL（秒）</span>
+<span class="w">    </span><span class="nt">max_ttl</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3600</span><span class="w"> </span><span class="c1"># 缓存条目最大 TTL（秒）</span>
+<span class="w">    </span><span class="nt">negative_ttl</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">60</span><span class="w"> </span><span class="c1"># 负面缓存 TTL（秒）</span>
 
 <span class="c1"># ----------------------------------</span>
-<span class="c1"># 上游服务器组</span>
+<span class="c1"># 上游组</span>
 <span class="c1"># ----------------------------------</span>
 <span class="nt">upstream_groups</span><span class="p">:</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;clean_dns&quot;</span>
-<span class="w">      </span><span class="nt">strategy</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;random&quot;</span>
+<span class="w">      </span><span class="nt">strategy</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;random&quot;</span><span class="w"> </span><span class="c1"># weight 字段仅在 strategy 为 weighted 时生效，故此处不配置</span>
 <span class="w">      </span><span class="nt">servers</span><span class="p">:</span>
 <span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;https://dns.quad9.net/dns-query&quot;</span>
-<span class="w">            </span><span class="nt">weight</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span>
 <span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;https://cloudflare-dns.com/dns-query&quot;</span>
-<span class="w">            </span><span class="nt">weight</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span>
 
 <span class="c1"># ----------------------------------</span>
 <span class="c1"># 路由规则</span>
 <span class="c1"># ----------------------------------</span>
 <span class="nt">static_rules</span><span class="p">:</span>
-<span class="w">    </span><span class="c1"># 手动白名单 (优先级最高)</span>
+<span class="w">    </span><span class="c1"># 手动白名单（优先级最高）</span>
 <span class="w">    </span><span class="c1"># 如果某个域名被远程列表误杀，可以在这里放行</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">match</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;exact&quot;</span>
 <span class="w">      </span><span class="nt">patterns</span><span class="p">:</span>
@@ -1849,7 +1851,7 @@
 <span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;very-bad-domain.com&quot;</span>
 <span class="w">      </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;block&quot;</span>
 
-<span class="w">    </span><span class="c1"># 默认规则 (优先级最低)</span>
+<span class="w">    </span><span class="c1"># 默认规则（优先级最低）</span>
 <span class="w">    </span><span class="c1"># 所有未被以上规则匹配的流量，都将转发到干净的上游</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">match</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;wildcard&quot;</span>
 <span class="w">      </span><span class="nt">patterns</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;*&quot;</span><span class="p p-Indicator">]</span>
@@ -1860,41 +1862,54 @@
 <span class="w">    </span><span class="c1"># 订阅一个主流的广告/追踪器拦截列表</span>
 <span class="w">    </span><span class="c1"># 你可以添加多个不同的列表</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;url&quot;</span>
-<span class="w">      </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;https://raw.githubusercontent.com/privacy-respecting-software/Blocky-Adlists/main/dns-hole-list.txt&quot;</span>
+<span class="w">      </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/reject-list.txt&quot;</span>
 <span class="w">      </span><span class="nt">format</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;v2ray&quot;</span><span class="w"> </span><span class="c1"># 该列表格式兼容 v2ray 格式</span>
 <span class="w">      </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;block&quot;</span>
+<span class="w">      </span><span class="nt">failure_policy</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;strict&quot;</span><span class="w"> </span><span class="c1"># 拉取失败且无可恢复快照时终止启动；可改为 lenient 允许降级启动</span>
 <span class="w">      </span><span class="nt">retry</span><span class="p">:</span>
 <span class="w">          </span><span class="nt">attempts</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span>
-<span class="w">          </span><span class="nt">delay</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span><span class="w"> </span><span class="c1"># 指数回退，初始延迟1秒</span>
+<span class="w">          </span><span class="nt">delay</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span><span class="w"> </span><span class="c1"># 指数回退，初始延迟 1 秒</span>
 </code></pre></div>
-<p><strong>配置逻辑解读</strong>:</p>
+<blockquote>
+<p>日志级别由 <code>RUST_LOG</code> 环境变量或 <code>--debug</code> 命令行参数控制（默认为 <code>loadants=info</code> 级别，<code>--debug</code> 启用调试日志）。</p>
+</blockquote>
+<p><strong>配置逻辑解读</strong>：</p>
 <ol>
-<li><strong><code>upstream_groups</code></strong>: 我们只定义了一个名为 <code>clean_dns</code> 的上游组，其中包含了两个广受好评的公共 DNS 解析服务。</li>
-<li><strong><code>remote_rules</code></strong>: 我们订阅了一个远程维护的黑名单。Load Ants 会在启动和固定的时间间隔自动下载这个列表。所有在此列表中的域名都将被 <code>block</code> (拦截)。</li>
-<li><strong><code>static_rules</code></strong>:<ul>
-<li>我们设置的 <code>exact</code> 匹配规则优先级高于远程规则和 <code>wildcard</code> 规则。这给了我们最终的控制权。</li>
-<li>你可以通过向 <code>good-domain.com</code> 列表中添加域名来创建"白名单"，强制某个域名被解析。</li>
-<li><code>very-bad-domain.com</code> 则是你的私人"黑名单"。</li>
-<li>最后，<code>wildcard</code> 规则 <code>"*"</code> 确保任何没有被拦截的域名都会被正常转发出去解析。</li>
+<li><strong><code>upstream_groups</code></strong>：只定义了一个名为 <code>clean_dns</code> 的上游组，包含 Quad9 与 Cloudflare 两个公共 DoH 解析服务。</li>
+<li><strong><code>remote_rules</code></strong>：订阅了一份远程维护的黑名单。当前版本的 Load Ants 会在<strong>启动时</strong>下载该列表，将列表中的域名作为 <code>block</code> 规则并入路由引擎，此后<strong>定时刷新</strong>，刷新间隔由 <code>reload_interval_secs</code> 控制（默认 3600 秒）。<ul>
+<li><strong>v2ray 列表解析语义</strong>：列表中的裸域名（如 <code>example.com</code>）会被转换为通配符规则 <code>*.example.com</code>，即匹配该域名的所有子域名，但<strong>不匹配</strong> apex 域名 <code>example.com</code> 本身；如需同时拦截 apex 域名，列表中需提供 <code>full:example.com</code> 条目。</li>
+<li><strong><code>failure_policy</code></strong>：默认为 <code>strict</code>，即启动时列表拉取失败且没有可恢复的快照时，启动将终止；可改为 <code>lenient</code> 允许降级启动。</li>
+<li><strong>快照机制</strong>：快照默认开启，成功拉取的规则会保存到 <code>.load-ants/remote-rule-snapshots</code> 目录（相对工作目录），供远程源失败时恢复使用。请确保该目录对运行 Load Ants 的用户可写——若以非 root 用户运行，需检查目录权限。</li>
+</ul>
+</li>
+<li><strong><code>static_rules</code></strong>：<ul>
+<li>得益于固定优先级契约（<code>exact</code> &gt; <code>wildcard</code> &gt; <code>regex</code> &gt; <code>*</code>），我们设置的 <code>exact</code> <code>block</code> 规则会先于 <code>wildcard</code> 或 <code>regex</code> 的 <code>forward</code> 规则生效，手动拦截始终有效。</li>
+<li>将域名加入 <code>good-domain.com</code> 所在的 <code>patterns</code> 列表，即可创建“白名单”，强制放行该域名。</li>
+<li><code>very-bad-domain.com</code> 则是你的私人“黑名单”。</li>
+<li>最后，<code>wildcard</code> 规则 <code>"*"</code> 确保任何没有被拦截的域名都会被正常转发解析。</li>
 </ul>
 </li>
 </ol>
 <h3 id="docker-composeyml">步骤三：<code>docker-compose.yml</code> 配置<a class="headerlink" href="#docker-composeyml" title="Permanent link">&para;</a></h3>
-<p>这个配置文件将使部署变得异常简单。</p>
+<p>下面的 Compose 文件声明了镜像、端口映射与配置挂载，一条命令即可完成部署。</p>
 <p>将以下内容粘贴到 <code>docker-compose.yml</code> 文件中：</p>
 <div class="highlight"><pre><span></span><code><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;3.8&quot;</span>
 
 <span class="nt">services</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">load-ants-blocker</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ghcr.io/shengyanli1982/load-ants-&lt;arch&gt;:latest</span>
+<span class="w">        </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ghcr.io/shengyanli1982/load-ants-x64:latest</span><span class="w"> </span><span class="c1"># ARM64 主机请改用 load-ants-arm64</span>
 <span class="w">        </span><span class="nt">container_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">load-ants-blocker</span>
 <span class="w">        </span><span class="nt">restart</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">unless-stopped</span>
+<span class="w">        </span><span class="c1"># 镜像默认读取 /app/config.yaml，需显式指定挂载进来的配置文件路径</span>
+<span class="w">        </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;-c&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;/app/config/config.yaml&quot;</span><span class="p p-Indicator">]</span>
 <span class="w">        </span><span class="nt">ports</span><span class="p">:</span>
 <span class="w">            </span><span class="c1"># 将容器的 53 端口映射到主机的 53 端口</span>
 <span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;53:53/udp&quot;</span>
 <span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;53:53/tcp&quot;</span>
 <span class="w">            </span><span class="c1"># 可选：如果你想使用 DoH，可以映射 HTTP 端口</span>
 <span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;5380:5380/tcp&quot;</span>
+<span class="w">            </span><span class="c1"># 可选：如需从主机访问 Admin 服务器（健康检查、指标），映射 Admin 端口</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;9000:9000/tcp&quot;</span>
 <span class="w">        </span><span class="nt">volumes</span><span class="p">:</span>
 <span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">./config:/app/config</span>
 <span class="w">        </span><span class="nt">cap_add</span><span class="p">:</span>
@@ -1904,33 +1919,33 @@
 <h3 id="_5">步骤四：启动和验证<a class="headerlink" href="#_5" title="Permanent link">&para;</a></h3>
 <ol>
 <li>
-<p><strong>启动服务</strong>:
+<p><strong>启动服务</strong>：
     在 <code>load-ants-blocker</code> 目录下，运行：</p>
 <div class="highlight"><pre><span></span><code>docker-compose<span class="w"> </span>up<span class="w"> </span>-d
 </code></pre></div>
 </li>
 <li>
-<p><strong>验证</strong>:
+<p><strong>验证</strong>：
     使用 <code>dig</code> 或 <code>nslookup</code> 工具，将 DNS 服务器指向你的 Docker 主机 IP。</p>
 <ul>
 <li>
-<p><strong>测试一个正常域名</strong>:</p>
+<p><strong>测试一个正常域名</strong>：</p>
 <div class="highlight"><pre><span></span><code>dig<span class="w"> </span>@&lt;your_docker_host_ip&gt;<span class="w"> </span>www.google.com
 </code></pre></div>
-<p>你应该能收到一个正常的 A 记录。</p>
+<p>预期返回一个正常的 A 记录。</p>
 </li>
 <li>
-<p><strong>测试一个被拦截的域名</strong>:
-  从你订阅的<a href="https://raw.githubusercontent.com/privacy-respecting-software/Blocky-Adlists/main/dns-hole-list.txt">列表</a>中找一个域名，例如 <code>101com.com</code>。</p>
-<div class="highlight"><pre><span></span><code>dig<span class="w"> </span>@&lt;your_docker_host_ip&gt;<span class="w"> </span>101com.com
+<p><strong>测试一个被拦截的域名</strong>：
+  从你订阅的<a href="https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/reject-list.txt">列表</a>中找一个域名，例如 <code>www.101com.com</code>（注意：列表中的裸域名 <code>101com.com</code> 被转换为 <code>*.101com.com</code>，apex 域名本身不会被拦截，因此这里测试其子域名）。</p>
+<div class="highlight"><pre><span></span><code>dig<span class="w"> </span>@&lt;your_docker_host_ip&gt;<span class="w"> </span>www.101com.com
 </code></pre></div>
-<p>你应该会收到一个 <code>NXDOMAIN</code> 或 <code>0.0.0.0</code> 的响应，表示域名被成功拦截。</p>
+<p>预期响应状态为 <code>REFUSED</code> 且没有应答记录，表示域名已被成功拦截。</p>
 </li>
 <li>
-<p><strong>查看日志</strong>:
+<p><strong>查看日志</strong>：
     <div class="highlight"><pre><span></span><code>docker-compose<span class="w"> </span>logs<span class="w"> </span>-f
 </code></pre></div>
-    你应该能在日志中看到查询、拦截和转发的记录。</p>
+    日志中可以看到查询、拦截与转发的记录。</p>
 </li>
 </ul>
 </li>
@@ -1938,10 +1953,10 @@
 <h3 id="_6">步骤五：配置你的网络<a class="headerlink" href="#_6" title="Permanent link">&para;</a></h3>
 <p>现在你的 DNS 拦截服务已经成功运行，最后一步是让你的设备使用它。</p>
 <ul>
-<li><strong>在路由器上配置</strong>: 这是最推荐的方法。登录你的路由器管理页面，找到 DNS 设置，将主 DNS 服务器的 IP 地址改为你运行 Docker 的那台主机的 IP 地址。这样，连接到你 WiFi 的所有设备都会自动受到保护。</li>
-<li><strong>在单个设备上配置</strong>: 你也可以在你的电脑或手机的网络设置中手动指定 DNS 服务器。</li>
+<li><strong>在路由器上配置</strong>：这是推荐的方式。登录你的路由器管理页面，找到 DNS 设置，将主 DNS 服务器的 IP 地址改为运行 Docker 的那台主机的 IP 地址。这样，连接到 Wi-Fi 的所有设备都会自动受到保护。</li>
+<li><strong>在单个设备上配置</strong>：也可以在电脑或手机的网络设置中手动指定 DNS 服务器。</li>
 </ul>
-<p>恭喜！你现在拥有了一个属于自己的、功能强大的网络"净化器"。</p>
+<p>恭喜！你现在拥有了一个属于自己的网络“净化器”。</p>
 <hr />
 <h3 id="_7">下一步<a class="headerlink" href="#_7" title="Permanent link">&para;</a></h3>
 <ul>

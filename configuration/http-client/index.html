@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.2">
     
     
       
@@ -76,7 +76,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#_1" class="md-skip">
+        <a href="#http" class="md-skip">
           跳转至
         </a>
       
@@ -1025,7 +1025,7 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#_2" class="md-nav__link">
+  <a href="#_1" class="md-nav__link">
     <span class="md-ellipsis">
       
         示例
@@ -1036,7 +1036,7 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#_3" class="md-nav__link">
+  <a href="#_2" class="md-nav__link">
     <span class="md-ellipsis">
       
         参数详解
@@ -1047,7 +1047,7 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#_4" class="md-nav__link">
+  <a href="#_3" class="md-nav__link">
     <span class="md-ellipsis">
       
         下一步
@@ -1609,7 +1609,7 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#_2" class="md-nav__link">
+  <a href="#_1" class="md-nav__link">
     <span class="md-ellipsis">
       
         示例
@@ -1620,7 +1620,7 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#_3" class="md-nav__link">
+  <a href="#_2" class="md-nav__link">
     <span class="md-ellipsis">
       
         参数详解
@@ -1631,7 +1631,7 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#_4" class="md-nav__link">
+  <a href="#_3" class="md-nav__link">
     <span class="md-ellipsis">
       
         下一步
@@ -1661,17 +1661,17 @@
   
 
 
-<h1 id="_1">客户端配置<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
-<p><code>http_client</code> 配置块用于定义全局的 HTTP 客户端行为。这里的设置将影响所有出站 HTTP 请求，包括：</p>
+<h1 id="http">HTTP 客户端配置<a class="headerlink" href="#http" title="Permanent link">&para;</a></h1>
+<p><code>http_client</code> 配置块定义全局的 HTTP 客户端行为。此处的设置影响所有出站 HTTP 请求，包括：</p>
 <ul>
-<li>上游组（<code>upstream_groups</code>）发出的 DoH (DNS-over-HTTPS) 请求</li>
+<li>上游组（<code>upstream_groups</code>）发出的 DoH（DNS over HTTPS）请求</li>
 <li>远程规则（<code>remote_rules</code>）下载规则文件时的 HTTP 请求</li>
 </ul>
 <blockquote>
 <p>如果你使用了传统 DNS 上游（<code>upstream_groups[].scheme: dns</code>），其 UDP/TCP 行为由 <a href="../dns-client/"><code>dns_client</code></a> 单独控制，不受 <code>http_client</code> 影响。</p>
 </blockquote>
-<p>精细地调整这些参数，可以帮助你优化网络连接的性能和可靠性。</p>
-<h3 id="_2">示例<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h3>
+<p>按需调整这些参数，可以优化连接的性能和可靠性。</p>
+<h3 id="_1">示例<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><span class="nt">http_client</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">connect_timeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span>
 <span class="w">    </span><span class="nt">request_timeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5</span>
@@ -1679,14 +1679,14 @@
 <span class="w">    </span><span class="nt">keepalive</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30</span>
 <span class="w">    </span><span class="nt">agent</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Mozilla/5.0</span><span class="nv"> </span><span class="s">(Windows</span><span class="nv"> </span><span class="s">NT</span><span class="nv"> </span><span class="s">10.0;</span><span class="nv"> </span><span class="s">Win64;</span><span class="nv"> </span><span class="s">x64)</span><span class="nv"> </span><span class="s">AppleWebKit/537.36</span><span class="nv"> </span><span class="s">(KHTML,</span><span class="nv"> </span><span class="s">like</span><span class="nv"> </span><span class="s">Gecko)</span><span class="nv"> </span><span class="s">Chrome/120.0.0.0</span><span class="nv"> </span><span class="s">Safari/537.36&quot;</span>
 </code></pre></div>
-<h3 id="_3">参数详解<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h3>
+<h3 id="_2">参数详解<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
 <tr>
 <th style="text-align: left;">参数</th>
 <th style="text-align: left;">类型</th>
 <th style="text-align: left;">描述</th>
-<th style="text-align: left;">默认值（未配置时）</th>
+<th style="text-align: left;">默认值</th>
 <th style="text-align: left;">是否必填</th>
 </tr>
 </thead>
@@ -1729,14 +1729,14 @@
 </tbody>
 </table>
 <blockquote>
-<p>✨ <strong>专家提示</strong>:</p>
+<p>✨ <strong>专家提示</strong>：</p>
 <ul>
-<li>在一个网络状况不佳的环境中，你可能需要适当增加 <code>connect_timeout</code> 和 <code>request_timeout</code> 的值，以避免因网络波动导致的请求失败。</li>
-<li><code>idle_timeout</code> 和 <code>keepalive</code> 是优化连接池性能的关键参数。对于大多数场景，默认值是合理的。如果你需要与大量不同的上游服务器通信，且每个服务器的请求频率不高，可以适当调低 <code>idle_timeout</code> 来更快地回收空闲连接。</li>
+<li>在网络状况不佳的环境中，可以调大 <code>connect_timeout</code> 和 <code>request_timeout</code>，避免网络波动导致请求超时失败。</li>
+<li><code>idle_timeout</code> 和 <code>keepalive</code> 是优化连接池性能的关键参数，大多数场景使用默认值即可。如果你需要与大量不同的上游服务器通信，且每个服务器的请求频率低，可以调低 <code>idle_timeout</code> 加快回收空闲连接。</li>
 </ul>
 </blockquote>
 <hr />
-<h3 id="_4">下一步<a class="headerlink" href="#_4" title="Permanent link">&para;</a></h3>
+<h3 id="_3">下一步<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h3>
 <ul>
 <li><a href="../upstream-groups/">➡️ 了解上游组配置</a></li>
 <li><a href="../../concepts/doh/">➡️ 回顾 DoH 概念</a></li>

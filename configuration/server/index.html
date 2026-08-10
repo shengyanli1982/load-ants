@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.2">
     
     
       
@@ -1008,15 +1008,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#admin" class="md-nav__link">
+  <a href="#admin-admin" class="md-nav__link">
     <span class="md-ellipsis">
       
-        admin 管理服务器
+        admin Admin 服务器
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="admin 管理服务器">
+    <nav class="md-nav" aria-label="admin Admin 服务器">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1704,15 +1704,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#admin" class="md-nav__link">
+  <a href="#admin-admin" class="md-nav__link">
     <span class="md-ellipsis">
       
-        admin 管理服务器
+        admin Admin 服务器
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="admin 管理服务器">
+    <nav class="md-nav" aria-label="admin Admin 服务器">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1774,9 +1774,9 @@
 
 
 <h1 id="_1">服务端配置<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
-<p>这部分配置决定了 Load Ants 如何对外提供服务，包括监听哪些端口来接收 DNS 请求，以及在哪个端口上提供管理和监控服务。</p>
+<p>以下配置决定 Load Ants 如何对外提供服务：<code>server</code> 块定义接收 DNS 请求的监听地址与参数，<code>admin</code> 块定义管理与监控服务的监听地址。</p>
 <h3 id="server"><code>server</code> 配置<a class="headerlink" href="#server" title="Permanent link">&para;</a></h3>
-<p><code>server</code> 配置块用于定义核心的 DNS 服务监听器。</p>
+<p><code>server</code> 配置块定义核心的 DNS 服务监听器。</p>
 <h4 id="_2">示例<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h4>
 <div class="highlight"><pre><span></span><code><span class="nt">server</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">listen_udp</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0.0.0.0:53&quot;</span>
@@ -1786,14 +1786,14 @@
 <span class="w">    </span><span class="nt">http_timeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30</span>
 </code></pre></div>
 <h4 id="_3">参数详解<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h4>
-<p>如果需要绑定 53 等特权端口，需要管理员权限。</p>
+<p>绑定 53 等特权端口需要管理员权限。</p>
 <table>
 <thead>
 <tr>
 <th style="text-align: left;">参数</th>
 <th style="text-align: left;">类型</th>
 <th style="text-align: left;">描述</th>
-<th style="text-align: left;">默认值（未配置时）</th>
+<th style="text-align: left;">默认值</th>
 <th style="text-align: left;">是否必填</th>
 </tr>
 </thead>
@@ -1815,7 +1815,7 @@
 <tr>
 <td style="text-align: left;"><code>listen_http</code></td>
 <td style="text-align: left;">字符串</td>
-<td style="text-align: left;">(可选) 内置 DoH 服务端监听地址和端口。配置后将启动 DoH 服务端；<strong>若不配置，则不会启动 DoH 服务</strong>。</td>
+<td style="text-align: left;">（可选）内置 DoH（DNS over HTTPS）服务端监听地址和端口。配置后将启动 DoH 服务端；<strong>若不配置，则不会启动 DoH 服务</strong>。</td>
 <td style="text-align: left;">（不启用）</td>
 <td style="text-align: left;">否</td>
 </tr>
@@ -1833,12 +1833,40 @@
 <td style="text-align: left;"><code>30</code></td>
 <td style="text-align: left;">否</td>
 </tr>
+<tr>
+<td style="text-align: left;"><code>tls_cert</code></td>
+<td style="text-align: left;">字符串</td>
+<td style="text-align: left;">（可选）TLS 证书文件路径。与 <code>tls_key</code> 成对配置后，DoH 入站启用 HTTPS。</td>
+<td style="text-align: left;">（不启用）</td>
+<td style="text-align: left;">否</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>tls_key</code></td>
+<td style="text-align: left;">字符串</td>
+<td style="text-align: left;">（可选）TLS 私钥文件路径。与 <code>tls_cert</code> 成对配置后生效。</td>
+<td style="text-align: left;">（不启用）</td>
+<td style="text-align: left;">否</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>rate_limit</code></td>
+<td style="text-align: left;">对象</td>
+<td style="text-align: left;">（可选）请求限流：<code>max_requests_per_second</code>（全局上限，块内必填）与 <code>per_ip_max_requests_per_second</code>（单 IP 上限，默认 <code>100</code>），有效范围均为 <code>1-100000</code>；不配置则不限流。</td>
+<td style="text-align: left;">（不限流）</td>
+<td style="text-align: left;">否</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>udp</code></td>
+<td style="text-align: left;">对象</td>
+<td style="text-align: left;">（可选）UDP socket 配置：<code>recv_buffer</code> / <code>send_buffer</code>（缓冲区大小，字节，默认均为 <code>4194304</code> 即 4MB）与 <code>socket_count</code>（socket 数量，有效范围 <code>1-256</code>，默认 <code>1</code>；大于 <code>1</code> 时通过 <code>SO_REUSEPORT</code> 多 socket 绑定同一端口）。</td>
+<td style="text-align: left;">（默认值）</td>
+<td style="text-align: left;">否</td>
+</tr>
 </tbody>
 </table>
 <hr />
-<p><a id="admin-管理服务器"></a></p>
-<h3 id="admin"><code>admin</code> 管理服务器<a class="headerlink" href="#admin" title="Permanent link">&para;</a></h3>
-<p><code>admin</code> 配置块用于定义一个独立的 HTTP 服务器，它专门用于运维和监控目的。</p>
+<p><a id="admin-服务器"></a></p>
+<h3 id="admin-admin"><code>admin</code> Admin 服务器<a class="headerlink" href="#admin-admin" title="Permanent link">&para;</a></h3>
+<p><code>admin</code> 配置块定义一个独立的 HTTP 服务器，专门用于运维和监控。</p>
 <blockquote>
 <p><strong>重要</strong>：当前版本中，<code>admin</code> 服务会在启动时创建并运行。</p>
 <ul>
@@ -1865,15 +1893,34 @@
 <tr>
 <td style="text-align: left;"><code>listen</code></td>
 <td style="text-align: left;">字符串</td>
-<td style="text-align: left;">管理服务器的监听地址和端口。该服务器会暴露 <code>/health</code>（健康检查）、<code>/metrics</code>（Prometheus 指标）以及 <code>POST /api/cache/refresh</code>（清空缓存）等端点。建议将其配置在与主服务不同的端口上。</td>
+<td style="text-align: left;">Admin 服务器的监听地址和端口。Admin 服务器暴露 <code>/health/live</code>（存活探针）、<code>/health/ready</code>（就绪探针）、<code>/metrics</code>（Prometheus 指标）以及 <code>/api/*</code> 运维端点（完整列表见下方）。建议将其配置在与主服务不同的端口上。</td>
 <td style="text-align: left;"><code>127.0.0.1:9000</code></td>
 <td style="text-align: left;"><strong>是</strong></td>
 </tr>
+<tr>
+<td style="text-align: left;"><code>auth</code></td>
+<td style="text-align: left;">对象</td>
+<td style="text-align: left;">（可选）认证配置，内含必填的 <code>token</code> 字段。配置后，<code>/metrics</code> 与 <code>/api/*</code> 的请求必须携带 <code>Authorization: Bearer &lt;token&gt;</code>；<code>/health/live</code> 与 <code>/health/ready</code> 不受保护。</td>
+<td style="text-align: left;">-</td>
+<td style="text-align: left;">否</td>
+</tr>
 </tbody>
 </table>
+<p>Admin 服务器暴露的端点：</p>
+<ul>
+<li><code>GET /health/live</code>：存活探针，仅反映进程存活状态；只要进程在运行即返回正常，不检查上游健康，也不受 <code>auth</code> 保护。</li>
+<li><code>GET /health/ready</code>：就绪探针，附带各上游组的健康信息；当任一上游组存在服务器但健康数为 <code>0</code> 时返回 <code>503</code>；未触发 <code>503</code> 但存在并非全部服务器健康的上游组时，返回 <code>200</code> 且状态为 <code>degraded</code>。不受 <code>auth</code> 保护。</li>
+<li><code>GET /metrics</code>：Prometheus 指标。</li>
+<li><code>POST /api/cache/clear</code>：清空缓存。</li>
+<li><code>GET /api/cache/dump</code>：导出缓存快照。</li>
+<li><code>POST /api/cache/restore</code>：恢复缓存快照。</li>
+<li><code>GET /api/upstreams</code>：查询上游组健康状态。</li>
+<li><code>GET /api/routes</code>：查询当前生效的路由规则。</li>
+<li><code>GET /api/info</code>：查询运行时信息（版本、启动时间等）。</li>
+</ul>
 <blockquote>
-<p>✨ <strong>专家提示</strong>:
-将 <code>admin</code> 服务与 <code>server</code> 服务分离是一种很好的安全实践。你可以将 <code>server</code> 的端口（如 53）暴露给局域网或公网，而将 <code>admin</code> 的端口（如 9000）只暴露给内部的监控系统或通过防火墙规则进行严格的访问控制。</p>
+<p>✨ <strong>专家提示</strong>：
+将 <code>admin</code> 服务与 <code>server</code> 服务分离是推荐的安全实践。你可以将 <code>server</code> 的端口（如 53）暴露给局域网或公网，而将 <code>admin</code> 的端口（如 9000）只暴露给内部的监控系统，或用防火墙规则严格控制访问。</p>
 </blockquote>
 <hr />
 <h3 id="_6">下一步<a class="headerlink" href="#_6" title="Permanent link">&para;</a></h3>

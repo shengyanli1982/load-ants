@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.2">
     
     
       
@@ -1084,12 +1084,12 @@
   <a href="#_2" class="md-nav__link">
     <span class="md-ellipsis">
       
-        顶级参数 (上游组级别)
+        顶级参数（上游组级别）
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="顶级参数 (上游组级别)">
+    <nav class="md-nav" aria-label="顶级参数（上游组级别）">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1162,7 +1162,7 @@
   <a href="#auth" class="md-nav__link">
     <span class="md-ellipsis">
       
-        auth (认证) 参数详解
+        auth（认证）参数详解
       
     </span>
   </a>
@@ -1751,12 +1751,12 @@
   <a href="#_2" class="md-nav__link">
     <span class="md-ellipsis">
       
-        顶级参数 (上游组级别)
+        顶级参数（上游组级别）
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="顶级参数 (上游组级别)">
+    <nav class="md-nav" aria-label="顶级参数（上游组级别）">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1829,7 +1829,7 @@
   <a href="#auth" class="md-nav__link">
     <span class="md-ellipsis">
       
-        auth (认证) 参数详解
+        auth（认证）参数详解
       
     </span>
   </a>
@@ -1940,10 +1940,10 @@
 
 
 <h1 id="_1">上游组配置<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
-<p><code>upstream_groups</code> 是 Load Ants 配置中至关重要的一环。它定义了你的 DNS 查询最终将被发送到哪些上游解析器（<strong>DoH</strong> 或 <strong>传统 DNS（UDP/TCP）</strong>），以及如何在高可用、高性能和高隐私之间取得平衡。</p>
-<p>本配置项是一个<strong>列表</strong>，这意味着你可以定义多个独立配置的"上游组"。</p>
-<p>想要深入了解上游管理和负载均衡策略背后的理念吗？请阅读 <a href="../../concepts/upstream/"><strong>核心概念：上游服务器管理</strong></a>。</p>
-<h3 id="_2">顶级参数 (上游组级别)<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h3>
+<p><code>upstream_groups</code> 定义了你的 DNS 查询最终将被发送到哪些上游解析器（<strong>DoH（DNS over HTTPS）</strong> 或 <strong>传统 DNS（UDP/TCP）</strong>），以及如何在高可用、高性能和高隐私之间取得平衡。</p>
+<p>本配置项是一个<strong>列表</strong>，你可以定义多个独立配置的上游组（upstream group）。</p>
+<p>上游管理和负载均衡策略背后的设计理念详见 <a href="../../concepts/upstream/"><strong>核心概念：上游服务器管理</strong></a>。</p>
+<h3 id="_2">顶级参数（上游组级别）<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h3>
 <h4 id="_3">示例<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h4>
 <div class="highlight"><pre><span></span><code><span class="nt">upstream_groups</span><span class="p">:</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;google_public&quot;</span>
@@ -1971,7 +1971,7 @@
 <tr>
 <td style="text-align: left;"><code>name</code></td>
 <td style="text-align: left;">字符串</td>
-<td style="text-align: left;">为这个上游组指定一个唯一的名称。这个名称将在路由规则 (<code>static_rules</code> 或 <code>remote_rules</code>) 的 <code>target</code> 字段中被引用。</td>
+<td style="text-align: left;">为这个上游组指定一个唯一的名称。该名称将在路由规则（<code>static_rules</code> 或 <code>remote_rules</code>）的 <code>target</code> 字段中被引用。</td>
 <td style="text-align: left;">-</td>
 <td style="text-align: left;"><strong>是</strong></td>
 </tr>
@@ -1985,7 +1985,7 @@
 <tr>
 <td style="text-align: left;"><code>strategy</code></td>
 <td style="text-align: left;">字符串</td>
-<td style="text-align: left;">定义该组内服务器的负载均衡策略。可选值为：<code>roundrobin</code> (轮询), <code>weighted</code> (加权轮询), <code>random</code> (随机)。</td>
+<td style="text-align: left;">定义该组内服务器的负载均衡策略。可选值为：<code>roundrobin</code>（轮询）、<code>weighted</code>（加权）、<code>random</code>（随机）。</td>
 <td style="text-align: left;">-</td>
 <td style="text-align: left;"><strong>是</strong></td>
 </tr>
@@ -1999,15 +1999,43 @@
 <tr>
 <td style="text-align: left;"><code>retry</code></td>
 <td style="text-align: left;">对象</td>
-<td style="text-align: left;">(可选，仅 <code>scheme: doh</code>) 本组上游请求的重试策略。详见下方 <code>retry</code> 参数详解。</td>
+<td style="text-align: left;">（可选，仅 <code>scheme: doh</code>）本组上游请求的重试策略。详见下方 <code>retry</code> 参数详解。</td>
 <td style="text-align: left;">-</td>
 <td style="text-align: left;">否</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>proxy</code></td>
 <td style="text-align: left;">字符串</td>
-<td style="text-align: left;">(可选，仅 <code>scheme: doh</code>) 为<strong>整个组</strong>的服务器指定一个出站代理。所有发往该组内服务器的 DoH 请求都将通过此代理。支持 <code>http</code>, <code>https</code> 和 <code>socks5</code> 协议。例如: <code>http://user:pass@host:port</code> 或 <code>socks5://host:port</code>。</td>
+<td style="text-align: left;">（可选，仅 <code>scheme: doh</code>）为<strong>整个组</strong>的服务器指定一个出站代理。所有发往该组内服务器的 DoH 请求都将通过此代理。支持 <code>http</code>、<code>https</code> 协议，例如 <code>http://user:pass@host:port</code>。</td>
 <td style="text-align: left;">-</td>
+<td style="text-align: left;">否</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>tls_verify</code></td>
+<td style="text-align: left;">布尔</td>
+<td style="text-align: left;">（可选）是否校验 DoH 上游的 TLS 证书。<code>false</code> 跳过证书校验；不配置时启用校验。</td>
+<td style="text-align: left;">-</td>
+<td style="text-align: left;">否</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>deny_answers</code></td>
+<td style="text-align: left;">列表</td>
+<td style="text-align: left;">（可选）已知污染 IP 段列表（CIDR 格式，例如 <code>["1.1.1.1/32", "10.0.0.0/8"]</code>），用于过滤上游响应中 <code>A</code>/<code>AAAA</code> 记录里的污染 IP；若过滤后 <code>A</code>/<code>AAAA</code> 记录全部被移除，则返回 <code>SERVFAIL</code>。</td>
+<td style="text-align: left;"><code>[]</code></td>
+<td style="text-align: left;">否</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>case_randomization</code></td>
+<td style="text-align: left;">布尔</td>
+<td style="text-align: left;">（可选）是否启用 0x20 大小写随机化防响应伪造，仅对 <code>scheme: dns</code> 的上游组生效。如果上游响应不保留查询中的大小写，启用后会导致验证失败。</td>
+<td style="text-align: left;"><code>false</code></td>
+<td style="text-align: left;">否</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>case_randomization_strict</code></td>
+<td style="text-align: left;">布尔</td>
+<td style="text-align: left;">（可选）0x20 大小写随机化验证的严格模式，仅在 <code>case_randomization: true</code> 时生效。<code>true</code>：UDP 响应验证失败时丢弃该响应并回退 TCP 重发；<code>false</code>：仅记录警告日志，仍接受 UDP 响应。</td>
+<td style="text-align: left;"><code>false</code></td>
 <td style="text-align: left;">否</td>
 </tr>
 </tbody>
@@ -2048,28 +2076,28 @@
 <tr>
 <td style="text-align: left;"><code>weight</code></td>
 <td style="text-align: left;">整数</td>
-<td style="text-align: left;">(可选) 服务器的权重，仅在组的 <code>strategy</code> 为 <code>weighted</code> 时生效。权重越高的服务器，被选中的概率就越大。</td>
+<td style="text-align: left;">（可选）服务器的权重，仅在组的 <code>strategy</code> 为 <code>weighted</code> 时生效。权重越高的服务器，被选中的概率越大。有效范围 <code>1-65535</code>。</td>
 <td style="text-align: left;"><code>1</code></td>
 <td style="text-align: left;">否</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>method</code></td>
 <td style="text-align: left;">字符串</td>
-<td style="text-align: left;">(可选) 与该服务器通信时使用的 HTTP 方法。可选值为 <code>get</code> 或 <code>post</code>。</td>
+<td style="text-align: left;">（可选）与该服务器通信时使用的 HTTP 方法。可选值为 <code>get</code> 或 <code>post</code>。</td>
 <td style="text-align: left;"><code>"post"</code></td>
 <td style="text-align: left;">否</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>content_type</code></td>
 <td style="text-align: left;">字符串</td>
-<td style="text-align: left;">(可选) DoH 请求的内容类型。可选值为 <code>message</code> (对应 <code>application/dns-message</code>) 或 <code>json</code> (对应 <code>application/dns-json</code>)。注意：如果设为 <code>json</code>，<code>method</code> 必须为 <code>get</code>。</td>
+<td style="text-align: left;">（可选）DoH 请求的内容类型。可选值为 <code>message</code>（对应 <code>application/dns-message</code>）或 <code>json</code>（对应 <code>application/dns-json</code>）。注意：如果设为 <code>json</code>，<code>method</code> 必须为 <code>get</code>。</td>
 <td style="text-align: left;"><code>"message"</code></td>
 <td style="text-align: left;">否</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>auth</code></td>
 <td style="text-align: left;">对象</td>
-<td style="text-align: left;">(可选) 访问此特定服务器所需的认证配置。详见下方的 <code>auth</code> 参数详解。</td>
+<td style="text-align: left;">（可选）访问此特定服务器所需的认证配置。详见下方的 <code>auth</code> 参数详解。</td>
 <td style="text-align: left;">-</td>
 <td style="text-align: left;">否</td>
 </tr>
@@ -2097,14 +2125,14 @@
 <tr>
 <td style="text-align: left;"><code>weight</code></td>
 <td style="text-align: left;">整数</td>
-<td style="text-align: left;">(可选) 服务器的权重，仅在组的 <code>strategy</code> 为 <code>weighted</code> 时生效。</td>
+<td style="text-align: left;">（可选）服务器的权重，仅在组的 <code>strategy</code> 为 <code>weighted</code> 时生效。有效范围 <code>1-65535</code>。</td>
 <td style="text-align: left;"><code>1</code></td>
 <td style="text-align: left;">否</td>
 </tr>
 </tbody>
 </table>
 <p><a id="auth-认证-参数详解"></a></p>
-<h3 id="auth"><code>auth</code> (认证) 参数详解<a class="headerlink" href="#auth" title="Permanent link">&para;</a></h3>
+<h3 id="auth"><code>auth</code>（认证）参数详解<a class="headerlink" href="#auth" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
 <tr>
@@ -2119,30 +2147,30 @@
 <tr>
 <td style="text-align: left;"><code>type</code></td>
 <td style="text-align: left;">字符串</td>
-<td style="text-align: left;">认证类型。可选值为 <code>basic</code> (HTTP 基本认证) 或 <code>bearer</code> (Bearer 令牌认证)。</td>
+<td style="text-align: left;">认证类型。可选值为 <code>basic</code>（HTTP 基本认证）或 <code>bearer</code>（Bearer 令牌认证）。</td>
 <td style="text-align: left;">-</td>
-<td style="text-align: left;"><strong>是</strong> (若 <code>auth</code> 块存在)</td>
+<td style="text-align: left;"><strong>是</strong>（若 <code>auth</code> 块存在）</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>username</code></td>
 <td style="text-align: left;">字符串</td>
 <td style="text-align: left;">用户名，仅在 <code>type</code> 为 <code>basic</code> 时使用。</td>
 <td style="text-align: left;">-</td>
-<td style="text-align: left;"><strong>是</strong> (若 <code>type</code> 为 <code>basic</code>)</td>
+<td style="text-align: left;"><strong>是</strong>（若 <code>type</code> 为 <code>basic</code>）</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>password</code></td>
 <td style="text-align: left;">字符串</td>
 <td style="text-align: left;">密码，仅在 <code>type</code> 为 <code>basic</code> 时使用。</td>
 <td style="text-align: left;">-</td>
-<td style="text-align: left;"><strong>是</strong> (若 <code>type</code> 为 <code>basic</code>)</td>
+<td style="text-align: left;"><strong>是</strong>（若 <code>type</code> 为 <code>basic</code>）</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>token</code></td>
 <td style="text-align: left;">字符串</td>
 <td style="text-align: left;">Bearer 令牌，仅在 <code>type</code> 为 <code>bearer</code> 时使用。</td>
 <td style="text-align: left;">-</td>
-<td style="text-align: left;"><strong>是</strong> (若 <code>type</code> 为 <code>bearer</code>)</td>
+<td style="text-align: left;"><strong>是</strong>（若 <code>type</code> 为 <code>bearer</code>）</td>
 </tr>
 </tbody>
 </table>
@@ -2176,7 +2204,7 @@
 <tr>
 <td style="text-align: left;"><code>attempts</code></td>
 <td style="text-align: left;">整数</td>
-<td style="text-align: left;">最大重试次数（包含第一次请求），有效范围 <code>1-100</code>。例如 <code>3</code> 表示总共最多尝试 3 次。</td>
+<td style="text-align: left;">最大重试次数（不含首次请求），有效范围 <code>1-100</code>。例如 <code>3</code> 表示首次请求失败后最多再重试 3 次。</td>
 <td style="text-align: left;">-</td>
 <td style="text-align: left;"><strong>是</strong>（若 <code>retry</code> 块存在）</td>
 </tr>
@@ -2189,6 +2217,9 @@
 </tr>
 </tbody>
 </table>
+<blockquote>
+<p><strong>注意</strong>：除 <code>retry</code> 外，转发层还存在换服务器重试：当请求组内某台服务器失败时，会自动切换到同组的其他服务器重试，最多尝试次数等于该组的服务器数量。</p>
+</blockquote>
 <hr />
 <h3 id="_5">场景化配置示例<a class="headerlink" href="#_5" title="Permanent link">&para;</a></h3>
 <h4 id="_6">场景一：基础隐私设置<a class="headerlink" href="#_6" title="Permanent link">&para;</a></h4>
@@ -2204,7 +2235,7 @@
 <span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;https://doh.opendns.com/dns-query&quot;</span>
 </code></pre></div>
 <h4 id="_7">场景二：高性能主备模式<a class="headerlink" href="#_7" title="Permanent link">&para;</a></h4>
-<p><strong>目标</strong>：主要使用一个高性能的服务器，当它不可用时，自动切换到备用服务器。</p>
+<p><strong>目标</strong>：主要使用一个高性能的服务器，当该服务器不可用时，自动切换到备用服务器。</p>
 <div class="highlight"><pre><span></span><code><span class="nt">upstream_groups</span><span class="p">:</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;high_perf&quot;</span>
 <span class="w">      </span><span class="nt">scheme</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;doh&quot;</span>
@@ -2216,13 +2247,13 @@
 <span class="w">            </span><span class="nt">weight</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span><span class="w"> </span><span class="c1"># 10% 的请求会发往这里，作为探活和备用</span>
 </code></pre></div>
 <h4 id="doh">场景三：连接需要认证和代理的私有 DoH 服务<a class="headerlink" href="#doh" title="Permanent link">&para;</a></h4>
-<p><strong>目标</strong>：连接到类似 NextDNS 这样的私有 DoH 服务，它可能需要认证，并且你希望通过代理访问它。</p>
+<p><strong>目标</strong>：连接需要认证、并且通过代理访问的私有 DoH 服务（以 NextDNS 为例）。</p>
 <div class="highlight"><pre><span></span><code><span class="nt">upstream_groups</span><span class="p">:</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;private_nextdns&quot;</span>
 <span class="w">      </span><span class="nt">scheme</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;doh&quot;</span>
-<span class="w">      </span><span class="nt">strategy</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;roundrobin&quot;</span><span class="w"> </span><span class="c1"># 如果只有一个服务器，策略无所谓</span>
+<span class="w">      </span><span class="nt">strategy</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;roundrobin&quot;</span><span class="w"> </span><span class="c1"># 只有一个服务器时，策略的取值不影响结果</span>
 <span class="w">      </span><span class="c1"># 为整个组配置代理</span>
-<span class="w">      </span><span class="nt">proxy</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;socks5://127.0.0.1:1080&quot;</span>
+<span class="w">      </span><span class="nt">proxy</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;http://127.0.0.1:7890&quot;</span>
 <span class="w">      </span><span class="nt">servers</span><span class="p">:</span>
 <span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;https://dns.nextdns.io/YOUR_CONFIG_ID&quot;</span>
 <span class="w">            </span><span class="c1"># 也可以在这里为单个服务器配置认证</span>

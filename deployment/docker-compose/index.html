@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.2">
     
     
       
@@ -1750,19 +1750,19 @@
 
 
 <h1 id="docker-compose">在 Docker Compose 上部署<a class="headerlink" href="#docker-compose" title="Permanent link">&para;</a></h1>
-<p><code>docker-compose</code> 是一个用于定义和运行多容器 Docker 应用程序的强大工具。虽然你可以直接使用 <code>docker run</code> 来启动 Load Ants，但当你需要将它与其它服务（例如，一个需要通过 Load Ants 解析域名来访问外部 API 的 Web 应用）一起部署时，<code>docker-compose</code> 能极大地简化网络配置和管理。</p>
-<p>本指南将演示一个常见的场景：部署一个 <code>Load Ants</code> 容器和一个 <code>curl</code> 工具容器，并配置后者使用前者作为其 DNS 服务器。</p>
-<h3 id="_1">先决条件<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h3>
+<p><code>docker-compose</code> 用于定义和运行多容器 Docker 应用。单独启动 Load Ants 用 <code>docker run</code> 即可；当需要将它与其他服务（例如一个需要通过 Load Ants 解析域名来访问外部 API 的 Web 应用）一起部署时，<code>docker-compose</code> 能简化网络配置和管理。</p>
+<p>本指南演示一个常见的场景：部署一个 Load Ants 容器和一个 <code>curl</code> 工具容器，并配置后者使用前者作为其 DNS 服务器。</p>
+<h2 id="_1">先决条件<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h2>
 <ol>
-<li><strong>Docker 和 Docker Compose</strong>: 确保你的系统上已经安装了这两个工具。</li>
-<li><strong>配置文件</strong>: 准备好你的 <code>config.yaml</code> 文件。</li>
+<li><strong>Docker 和 Docker Compose</strong>：确保你的系统上已经安装了这两个工具。</li>
+<li><strong>配置文件</strong>：准备好你的 <code>config.yaml</code> 文件。</li>
 </ol>
-<h3 id="_2">场景描述<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h3>
+<h2 id="_2">场景描述<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>服务 A (<code>load-ants</code>)</strong>: 我们的 DNS 代理，它将监听 UDP 端口 5353。</li>
-<li><strong>服务 B (<code>my-app</code>)</strong>: 一个模拟应用（我们用 <code>curl</code> 容器代替），它需要解析域名。我们将配置它把所有 DNS 查询发送给 <code>load-ants</code> 服务。</li>
+<li><strong>服务 A（<code>load-ants</code>）</strong>：DNS 代理服务，监听 UDP 端口 5353。</li>
+<li><strong>服务 B（<code>my-app</code>）</strong>：模拟应用（用 <code>curl</code> 容器代替），需要解析域名；所有 DNS 查询都发送到 <code>load-ants</code> 服务。</li>
 </ul>
-<h3 id="_3">步骤一：创建项目目录结构<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h3>
+<h2 id="_3">步骤一：创建项目目录结构<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h2>
 <p>在一个你选择的目录下，创建以下文件和目录：</p>
 <div class="highlight"><pre><span></span><code>load-ants-compose/
 ├── docker-compose.yml
@@ -1773,24 +1773,26 @@
 <li><code>docker-compose.yml</code>: <code>docker-compose</code> 的核心定义文件。</li>
 <li><code>config/config.yaml</code>: 你的 Load Ants 配置文件。</li>
 </ul>
-<h3 id="configyaml">步骤二：配置 <code>config.yaml</code><a class="headerlink" href="#configyaml" title="Permanent link">&para;</a></h3>
-<p>为了在 Docker 环境中工作，请确保你的 <code>config.yaml</code> 中 <code>server</code> 的监听地址是 <code>0.0.0.0</code>，这样它才能接受来自其他容器的连接。</p>
+<h2 id="configyaml">步骤二：配置 <code>config.yaml</code><a class="headerlink" href="#configyaml" title="Permanent link">&para;</a></h2>
+<p>请确保你的 <code>config.yaml</code> 中 <code>server</code> 的监听地址是 <code>0.0.0.0</code>，否则无法接受来自其他容器的连接。</p>
 <div class="highlight"><pre><span></span><code><span class="nt">server</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">listen_udp</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0.0.0.0:5353&quot;</span><span class="w"> </span><span class="c1"># 使用一个非特权端口，如 5353</span>
 <span class="w">    </span><span class="c1"># ... 其他配置</span>
+<span class="nt">admin</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">listen</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0.0.0.0:9000&quot;</span><span class="w"> </span><span class="c1"># 容器内必须显式覆盖默认的 127.0.0.1，否则同网络容器与端口映射均不可达</span>
 <span class="c1"># ...</span>
 </code></pre></div>
 <blockquote>
-<p><strong>注意</strong>: 我们在这里使用 5353 端口而不是标准的 53 端口，因为在某些系统上，53 端口可能已被本地的 DNS resolver（如 <code>systemd-resolved</code>）占用。在容器化环境中，使用非特权端口是更简单和推荐的做法。</p>
+<p><strong>注意</strong>：这里使用 5353 端口而不是标准的 53 端口，因为在某些系统上，53 端口已被本地的 DNS resolver（如 <code>systemd-resolved</code>）占用。在容器化环境中，推荐使用非特权端口。</p>
 </blockquote>
-<h3 id="docker-composeyml">步骤三：编写 <code>docker-compose.yml</code><a class="headerlink" href="#docker-composeyml" title="Permanent link">&para;</a></h3>
-<p>这是此设置的核心。将以下内容粘贴到 <code>docker-compose.yml</code> 文件中：</p>
+<h2 id="docker-composeyml">步骤三：编写 <code>docker-compose.yml</code><a class="headerlink" href="#docker-composeyml" title="Permanent link">&para;</a></h2>
+<p>将以下内容粘贴到 <code>docker-compose.yml</code> 文件中：</p>
 <div class="highlight"><pre><span></span><code><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;3.8&quot;</span>
 
 <span class="nt">services</span><span class="p">:</span>
 <span class="w">    </span><span class="c1"># 服务A: Load Ants</span>
 <span class="w">    </span><span class="nt">load-ants</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ghcr.io/shengyanli1982/load-ants-&lt;arch&gt;:latest</span>
+<span class="w">        </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ghcr.io/shengyanli1982/load-ants-x64:latest</span><span class="w"> </span><span class="c1"># arm64 节点请改用 ghcr.io/shengyanli1982/load-ants-arm64:latest</span>
 <span class="w">        </span><span class="nt">container_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">load-ants-server</span>
 <span class="w">        </span><span class="nt">volumes</span><span class="p">:</span>
 <span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">./config/config.yaml:/app/config.yaml</span>
@@ -1798,7 +1800,8 @@
 <span class="w">        </span><span class="c1"># ports:</span>
 <span class="w">        </span><span class="c1">#   - &quot;5353:5353/udp&quot;</span>
 <span class="w">        </span><span class="nt">networks</span><span class="p">:</span>
-<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ants-network</span>
+<span class="w">            </span><span class="nt">ants-network</span><span class="p">:</span>
+<span class="w">                </span><span class="nt">ipv4_address</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">172.28.0.10</span><span class="w"> </span><span class="c1"># 固定 IP，供 my-app 的 dns 配置指向</span>
 
 <span class="w">    </span><span class="c1"># 服务B: 模拟的应用</span>
 <span class="w">    </span><span class="nt">my-app</span><span class="p">:</span>
@@ -1807,10 +1810,10 @@
 <span class="w">        </span><span class="c1"># 使用 depends_on 确保 load-ants 容器先于 my-app 启动</span>
 <span class="w">        </span><span class="nt">depends_on</span><span class="p">:</span>
 <span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">load-ants</span>
-<span class="w">        </span><span class="c1"># 关键配置：将此容器的 DNS 服务器指向 load-ants 服务</span>
+<span class="w">        </span><span class="c1"># 关键配置：将此容器的 DNS 服务器指向 load-ants 的固定 IP</span>
+<span class="w">        </span><span class="c1"># 注意：dns 字段只接受 IP 地址（服务名无效），且容器内 127.0.0.1 上没有 DNS 监听</span>
 <span class="w">        </span><span class="nt">dns</span><span class="p">:</span>
-<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">127.0.0.1</span><span class="w"> </span><span class="c1"># 作为备用</span>
-<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">load-ants</span><span class="w"> </span><span class="c1"># Docker 会自动将服务名 &#39;load-ants&#39; 解析为其容器的 IP 地址</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">172.28.0.10</span>
 <span class="w">        </span><span class="c1"># 保持容器运行以便我们进入</span>
 <span class="w">        </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;sleep&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;infinity&quot;</span><span class="p p-Indicator">]</span>
 <span class="w">        </span><span class="nt">networks</span><span class="p">:</span>
@@ -1819,40 +1822,43 @@
 <span class="nt">networks</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">ants-network</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">driver</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bridge</span>
+<span class="w">        </span><span class="nt">ipam</span><span class="p">:</span>
+<span class="w">            </span><span class="nt">config</span><span class="p">:</span>
+<span class="w">                </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">subnet</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">172.28.0.0/16</span>
 </code></pre></div>
-<p><strong>配置解释</strong>:</p>
+<p><strong>配置解释</strong>：</p>
 <ul>
-<li><strong><code>services</code></strong>: 定义了两个服务，<code>load-ants</code> 和 <code>my-app</code>。</li>
-<li><strong><code>volumes</code></strong>: 我们将本地的 <code>config.yaml</code> 文件挂载到 <code>load-ants</code> 容器的 <code>/app/config.yaml</code> 路径，这样容器就能读取到我们的配置。</li>
-<li><strong><code>dns</code></strong>: 这是最关键的部分。我们为 <code>my-app</code> 服务设置了 DNS 服务器。Docker 的内置 DNS 服务会将服务名 <code>load-ants</code> 解析为 <code>load-ants</code> 容器在 <code>ants-network</code> 网络中的内部 IP 地址。这意味着 <code>my-app</code> 容器内的任何 DNS 查询都会被发送到 <code>load-ants</code> 容器。</li>
-<li><strong><code>networks</code></strong>: 我们创建了一个自定义的桥接网络 <code>ants-network</code>，并让两个服务都连接到这个网络。这能确保它们之间可以相互通信，并且拥有可预测的 DNS 名称。如果需要将服务暴露给主机或其他外部网络，请务必参考<a href="../security/">安全最佳实践</a>中的建议。</li>
-<li><strong><code>depends_on</code></strong>: 确保了容器的启动顺序，<code>my-app</code> 会在 <code>load-ants</code> 成功启动后才启动。</li>
+<li><strong><code>services</code></strong>：定义了两个服务，<code>load-ants</code> 和 <code>my-app</code>。</li>
+<li><strong><code>volumes</code></strong>：将本地的 <code>config.yaml</code> 文件挂载到 <code>load-ants</code> 容器的 <code>/app/config.yaml</code> 路径，这样容器就能读取到配置。</li>
+<li><strong><code>dns</code></strong>：决定 <code>my-app</code> DNS 行为的关键配置。<code>dns</code> 字段只接受 IP 地址，不能写服务名；容器自身的 <code>127.0.0.1</code> 上也没有 DNS 监听。因此通过 <code>ipv4_address</code> 给 <code>load-ants</code> 分配了固定 IP <code>172.28.0.10</code>，并将 <code>my-app</code> 的 DNS 服务器指向它。<code>my-app</code> 容器内的所有 DNS 查询都会发送到 <code>load-ants</code> 容器。</li>
+<li><strong><code>networks</code></strong>：创建了一个自定义的桥接网络 <code>ants-network</code>（子网 <code>172.28.0.0/16</code>），并让两个服务都连接到这个网络。两个服务因此可以相互通信，且 <code>load-ants</code> 拥有固定的 IP。如果需要将服务暴露给主机或其他外部网络，请务必参考<a href="../security/">安全最佳实践</a>中的建议。</li>
+<li><strong><code>depends_on</code></strong>：确保容器的启动顺序，<code>my-app</code> 会在 <code>load-ants</code> 启动后才启动。</li>
 </ul>
-<h3 id="_4">步骤四：启动和验证<a class="headerlink" href="#_4" title="Permanent link">&para;</a></h3>
+<h2 id="_4">步骤四：启动和验证<a class="headerlink" href="#_4" title="Permanent link">&para;</a></h2>
 <ol>
 <li>
-<p><strong>启动服务</strong>:
+<p><strong>启动服务</strong>：
     在 <code>load-ants-compose</code> 目录下，运行以下命令。<code>-d</code> 参数表示在后台（detached mode）运行。</p>
 <div class="highlight"><pre><span></span><code>docker-compose<span class="w"> </span>up<span class="w"> </span>-d
 </code></pre></div>
 </li>
 <li>
-<p><strong>验证</strong>:
-    我们可以进入 <code>my-app</code> 容器，并使用 <code>curl</code> 来测试 DNS 解析是否通过 <code>load-ants</code>。
+<p><strong>验证</strong>：
+    进入 <code>my-app</code> 容器，使用 <code>curl</code> 测试 DNS 解析是否通过 <code>load-ants</code>。
     <div class="highlight"><pre><span></span><code>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-it<span class="w"> </span>my-app-client<span class="w"> </span>sh
 </code></pre></div>
     进入容器后，执行一个 <code>curl</code> 命令：
     <div class="highlight"><pre><span></span><code><span class="c1"># -v 参数会显示详细的连接信息，包括 DNS 解析过程</span>
 curl<span class="w"> </span>-v<span class="w"> </span>https://www.google.com
 </code></pre></div>
-    同时，你可以查看 <code>load-ants</code> 容器的日志，你应该能看到来自 <code>my-app</code> 容器的 DNS 查询记录。
+    同时，查看 <code>load-ants</code> 容器的日志，可以看到来自 <code>my-app</code> 容器的 DNS 查询记录：
     <div class="highlight"><pre><span></span><code>docker<span class="w"> </span>logs<span class="w"> </span>-f<span class="w"> </span>load-ants-server
 </code></pre></div></p>
 </li>
 </ol>
-<p>这个例子展示了 <code>docker-compose</code> 的强大之处：只需几行声明式的 YAML，我们就构建了一个包含自定义 DNS 解析逻辑的多服务应用环境。</p>
+<p>这个例子展示了 <code>docker-compose</code> 的声明式能力：只需几行 YAML，即可构建一个包含自定义 DNS 解析逻辑的多服务应用环境。</p>
 <hr />
-<h3 id="_5">下一步<a class="headerlink" href="#_5" title="Permanent link">&para;</a></h3>
+<h2 id="_5">下一步<a class="headerlink" href="#_5" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="../security/">➡️ 了解安全注意事项</a></li>
 <li><a href="../monitoring/">➡️ 了解如何监控服务</a></li>

@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.2">
     
     
       
@@ -1662,8 +1662,8 @@
 
 
 <h1 id="_1">缓存配置<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
-<p><code>cache</code> 配置块用于控制 Load Ants 内置的 DNS 缓存功能。一个优化的缓存配置可以极大地提升 DNS 解析速度，降低延迟，并减少对上游服务器的请求压力。</p>
-<p>想要深入了解缓存的工作原理吗？请阅读 <a href="../../concepts/caching/"><strong>核心概念：高性能缓存机制</strong></a>。</p>
+<p><code>cache</code> 配置块控制 Load Ants 内置的 DNS 缓存。缓存命中时直接返回结果，降低解析延迟，减少对上游服务器的请求。</p>
+<p>缓存的工作原理详见 <a href="../../concepts/caching/"><strong>核心概念：高性能缓存机制</strong></a>。</p>
 <h3 id="_2">示例<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><span class="nt">cache</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
@@ -1672,6 +1672,9 @@
 <span class="w">    </span><span class="nt">max_ttl</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3600</span>
 <span class="w">    </span><span class="nt">negative_ttl</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">300</span>
 </code></pre></div>
+<blockquote>
+<p>📝 <strong>注意</strong>：上述示例中的 <code>min_ttl: 60</code> 与 <code>max_ttl: 3600</code> 为常用示例值而非默认值，各参数的默认值见下方“参数详解”表。</p>
+</blockquote>
 <h3 id="_3">参数详解<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -1687,46 +1690,53 @@
 <tr>
 <td style="text-align: left;"><code>enabled</code></td>
 <td style="text-align: left;">布尔值</td>
-<td style="text-align: left;">是否启用 DNS 缓存功能。你可以通过将其设为 <code>false</code> 禁用缓存；也可以直接移除整个 <code>cache</code> 配置块来禁用缓存。</td>
+<td style="text-align: left;">是否启用 DNS 缓存功能。将其设为 <code>false</code> 或直接移除整个 <code>cache</code> 配置块，均可禁用缓存。</td>
 <td style="text-align: left;"><code>true</code></td>
-<td style="text-align: left;"><strong>是</strong> (若 <code>cache</code> 块存在)</td>
+<td style="text-align: left;"><strong>是</strong>（若 <code>cache</code> 块存在）</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>max_size</code></td>
 <td style="text-align: left;">整数</td>
-<td style="text-align: left;">缓存中可以存储的最大 DNS 记录条数。当缓存达到此上限时，最老的记录会被移除，为新记录腾出空间。</td>
+<td style="text-align: left;">缓存中可以存储的最大条目数。当缓存达到此上限时，最老的条目会被移除，为新条目腾出空间。</td>
 <td style="text-align: left;"><code>10000</code></td>
-<td style="text-align: left;"><strong>是</strong> (若 <code>cache</code> 块存在)</td>
+<td style="text-align: left;"><strong>是</strong>（若 <code>cache</code> 块存在）</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>min_ttl</code></td>
 <td style="text-align: left;">整数</td>
-<td style="text-align: left;">缓存 TTL 下限（秒）：当响应中的记录 TTL 过小，会被提升到不低于 <code>min_ttl</code>。</td>
+<td style="text-align: left;">缓存 TTL 下限（秒）：当响应中的记录 TTL 低于该值时，会被提升到 <code>min_ttl</code>。</td>
 <td style="text-align: left;"><code>1</code></td>
-<td style="text-align: left;"><strong>是</strong> (若 <code>cache</code> 块存在)</td>
+<td style="text-align: left;"><strong>是</strong>（若 <code>cache</code> 块存在）</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>max_ttl</code></td>
 <td style="text-align: left;">整数</td>
-<td style="text-align: left;">缓存 TTL 上限（秒）。<strong>注意</strong>：当前版本主要用于配置校验（例如确保 <code>min_ttl &lt;= max_ttl</code>）；缓存实现未在写入阶段对 TTL 做上限截断。</td>
+<td style="text-align: left;">缓存 TTL 上限（秒）：写入缓存时，响应 TTL 会先被 <code>min_ttl</code> 抬升，再被 <code>max_ttl</code> 截断，实际缓存的 TTL 不会超过该值。</td>
 <td style="text-align: left;"><code>86400</code></td>
-<td style="text-align: left;"><strong>是</strong> (若 <code>cache</code> 块存在)</td>
+<td style="text-align: left;"><strong>是</strong>（若 <code>cache</code> 块存在）</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>negative_ttl</code></td>
 <td style="text-align: left;">整数</td>
 <td style="text-align: left;">负向缓存 TTL（秒）：用于缓存失败查询（例如 <code>NXDOMAIN</code> 或无答案响应），可减少对无效域名的重复请求。</td>
 <td style="text-align: left;"><code>300</code></td>
-<td style="text-align: left;"><strong>是</strong> (若 <code>cache</code> 块存在)</td>
+<td style="text-align: left;"><strong>是</strong>（若 <code>cache</code> 块存在）</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>stale_while_revalidate</code></td>
+<td style="text-align: left;">整数</td>
+<td style="text-align: left;">过期缓存宽限时间（秒），有效范围 <code>0-86400</code>。大于 <code>0</code> 时，条目过期但未超出宽限期的请求会先返回过期缓存，并触发后台异步刷新；<code>0</code> 表示禁用。</td>
+<td style="text-align: left;"><code>0</code></td>
+<td style="text-align: left;">否</td>
 </tr>
 </tbody>
 </table>
 <blockquote>
-<p>✨ <strong>专家提示</strong>:</p>
+<p>✨ <strong>专家提示</strong>：</p>
 <ul>
-<li>对于大多数家庭或个人用户，默认的缓存配置已经相当优化，无需修改。</li>
-<li>如果你在一个变化非常频繁的网络环境（例如，某些服务的 IP 地址经常变更），更推荐通过路由或上游策略来控制解析结果的更新节奏（当前版本缓存实现主要使用 <code>min_ttl</code>/<code>negative_ttl</code>）。</li>
-<li>如果你的网络中有设备（例如 IoT 设备）会频繁查询一些不存在的域名，适当调高 <code>negative_ttl</code> 可以减轻上游服务器的压力。</li>
+<li>家庭或个人用户可以直接使用默认的缓存配置，无需修改。</li>
+<li>如果你访问的服务 IP 地址经常变更，推荐通过路由或上游策略控制解析结果的更新节奏，也可以调低 <code>max_ttl</code> 缩短缓存时长。</li>
+<li>如果你的网络中有设备（例如 IoT 设备）频繁查询不存在的域名，可以调高 <code>negative_ttl</code> 来减轻上游服务器的压力。</li>
 </ul>
 </blockquote>
 <hr />

@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.2">
     
     
       
@@ -1618,21 +1618,23 @@
 
 
 <h1 id="_1">总览<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
-<p>欢迎来到 "部署指南" 章节。当你已经熟悉 Load Ants 的基本配置和核心概念后，本章节将指导你如何在更真实、更复杂的生产环境中，以稳健、安全、可观测的方式部署和管理 Load Ants。</p>
+<p>本章面向已熟悉基本配置与核心概念的用户，介绍如何在生产环境中部署和管理 Load Ants，覆盖系统服务托管、Docker Compose 编排、安全加固与监控告警。</p>
 <p>在这里，你将学到：</p>
 <ul>
-<li><strong>作为系统服务运行</strong>: 如何将 Load Ants 设置为在后台持续运行的系统服务，确保其稳定性和开机自启。</li>
-<li><strong>使用 Docker Compose</strong>: 如何通过 <code>docker-compose</code> 编排 Load Ants 与其他应用（如 Web 服务、监控组件）的部署，实现高效的多容器管理。</li>
-<li><strong>安全最佳实践</strong>: 学习如何加固你的 Load Ants 实例，包括保护配置文件、管理敏感信息以及安全地暴露管理接口。</li>
-<li><strong>监控与告警</strong>: 如何接入 <code>Prometheus</code> 监控系统，实时观测性能指标，并为潜在问题设置告警。</li>
+<li><strong>作为系统服务运行</strong>：如何将 Load Ants 设置为后台持续运行的系统服务，实现进程退出后自动重启与开机自启。</li>
+<li><strong>使用 Docker Compose</strong>：如何通过 <code>docker-compose</code> 编排 Load Ants 与其他应用（如 Web 服务、监控组件）的部署，统一管理多容器的网络配置。</li>
+<li><strong>安全最佳实践</strong>：如何加固你的 Load Ants 实例，包括保护配置文件、管理敏感信息以及控制管理接口的暴露范围。</li>
+<li><strong>监控与告警</strong>：如何接入 Prometheus 监控系统，观测性能指标，并为异常情况设置告警。</li>
 </ul>
-<p>无论你是希望将 Load Ants 用于企业内部 DNS 解析、搭建高可用的 DNS 服务，还是仅仅想让你的个人项目更加专业，本章都将为你提供坚实的技术指导。</p>
+<p>无论你是要将 Load Ants 用于企业内部 DNS 解析、搭建高可用的 DNS 服务，还是用于个人项目，本章都提供了对应的部署方案。</p>
 <hr />
-<h3 id="_2">下一步<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h3>
+<h2 id="_2">下一步<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="docker-compose/">➡️ 使用 Docker Compose 部署</a></li>
 <li><a href="system-service/">➡️ 部署为系统服务</a></li>
 <li><a href="kubernetes/">➡️ 在 Kubernetes 中部署</a></li>
+<li><a href="security/">➡️ 了解安全注意事项</a></li>
+<li><a href="monitoring/">➡️ 了解如何监控服务</a></li>
 </ul>
 
 

@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.2">
     
     
       
@@ -865,10 +865,9 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="核心处理流程">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
+</li>
+      
+        <li class="md-nav__item">
   <a href="#_3" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -876,11 +875,6 @@
       
     </span>
   </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -1607,10 +1601,9 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="核心处理流程">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
+</li>
+      
+        <li class="md-nav__item">
   <a href="#_3" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1618,11 +1611,6 @@
       
     </span>
   </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -1647,63 +1635,67 @@
 
 
 <h1 id="_1">架构设计<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
-<p>Load Ants 的设计哲学是<strong>高性能、模块化和高可扩展性</strong>。它作为一个高效的 DNS 代理，核心任务是接收 DNS 请求，并通过一系列内部处理流程，将其安全、可靠地转发到上游解析器（DoH 或传统 DNS）。</p>
+<p>Load Ants 的设计哲学是<strong>高性能、模块化和高可扩展性</strong>。作为高效的 DNS 代理，它的核心任务是接收 DNS 请求，经过一系列内部处理流程后，安全、可靠地转发到上游解析器：DNS-over-HTTPS（DoH）服务器或传统 DNS 服务器。</p>
 <p>下图描绘了 Load Ants 的核心组件及其交互流程：</p>
 <p><img alt="architecture" src="../images/architecture.png" /></p>
 <h2 id="_2">核心处理流程<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h2>
 <ol>
 <li>
-<p><strong>服务监听 (DNS Service Listener)</strong>:</p>
+<p><strong>服务监听（DNS Service Listener）</strong>：</p>
 <ul>
 <li>Load Ants 启动时会同时监听一个 UDP 端口和一个 TCP 端口（通常是 53 端口）。这是所有 DNS 请求的入口点。</li>
 <li>监听器负责接收原始的 DNS 查询数据包，并将其传递给请求处理核心。</li>
+<li>Load Ants 还可以启用 HTTP(S) 监听来接收 DoH 查询：<code>/dns-query</code> 路径支持 GET 与 POST（<code>application/dns-message</code>），<code>/resolve</code> 路径提供 JSON 格式的 GET 查询；配置 <code>tls_cert</code>/<code>tls_key</code> 后监听自动启用 TLS。</li>
+<li>Admin 服务器在独立端口提供健康检查、Prometheus 指标与缓存清理等运维端点。</li>
+<li>启用速率限制（<code>rate_limit</code>）后，超限请求会被直接拒绝：UDP/TCP 查询收到 <code>REFUSED</code> 响应，DoH 请求收到 HTTP 429。</li>
 </ul>
 </li>
 <li>
-<p><strong>缓存查询 (Cache Lookup)</strong>:</p>
+<p><strong>缓存查询（Cache Lookup）</strong>：</p>
 <ul>
-<li>在进行任何外部查询之前，系统会首先在内部的高性能缓存中查找请求的域名。</li>
-<li><strong>如果缓存命中</strong> (<code>cache hit</code>)，并且缓存条目尚未过期，系统将直接使用缓存的响应，跳过后续所有步骤，从而极大地提升解析速度并降低上游服务器的负载。</li>
-<li>缓存模块同时支持正向缓存（成功解析的记录）和负向缓存（不存在的域名或解析错误的记录），以避免对无效域名的重复查询。</li>
+<li>在发起任何外部查询之前，系统首先在内部缓存中查找请求的域名。</li>
+<li><strong>如果缓存命中</strong>（<code>cache hit</code>）且缓存条目尚未过期，系统将直接使用缓存的响应，跳过后续所有步骤，从而极大地提升解析速度并降低上游服务器的负载。</li>
+<li>缓存模块同时支持正向缓存（成功解析的记录）和负向缓存（域名不存在的 <code>NXDOMAIN</code> 响应与无匹配记录的 <code>NODATA</code> 响应；<code>SERVFAIL</code> 等错误响应一律不缓存），以避免对无效域名的重复查询。</li>
+<li>对于缓存未命中的相同并发查询，请求处理核心会执行请求合并（request coalescing）：只向上游实际发起一次查询，其余并发请求共享该结果，避免重复的上游请求。</li>
 </ul>
 </li>
 <li>
-<p><strong>路由引擎 (Routing Engine)</strong>:</p>
+<p><strong>路由引擎（Routing Engine）</strong>：</p>
 <ul>
-<li><strong>如果缓存未命中</strong> (<code>cache miss</code>)，请求将被交给路由引擎。</li>
-<li>路由引擎是 Load Ants 的决策中心。它会根据 <code>config.yaml</code> 中定义的 <code>static_rules</code> 或者 <code>remote_rules</code> 规则，对查询的域名进行匹配。</li>
-<li>匹配支持多种方式：精确域名、通配符 (<code>*.example.com</code>) 和正则表达式。</li>
-<li>根据匹配到的第一条规则，路由引擎决定下一步的操作，通常是 <code>forward</code> (转发) 或 <code>block</code> (拦截)。</li>
+<li><strong>如果缓存未命中</strong>（<code>cache miss</code>），请求将交给路由引擎。</li>
+<li>路由引擎是 Load Ants 的决策中心。它根据 <code>config.yaml</code> 中定义的 <code>static_rules</code> 或 <code>remote_rules</code> 匹配查询的域名。</li>
+<li>匹配支持多种方式：精确域名、通配符（<code>*.example.com</code>）和正则表达式。</li>
+<li>路由引擎按固定契约求值：先做精确匹配（<code>block</code> 与 <code>forward</code> 合并判断，同一域名同时配置两者时 <code>block</code> 胜出），再依次求值 <code>block</code> 阶段与 <code>forward</code> 阶段；每个阶段内，优先级为 <code>wildcard</code> &gt; <code>regex</code> &gt; <code>*</code>。命中后，决定下一步的操作，通常是 <code>forward</code>（转发）或 <code>block</code>（拦截）。</li>
 </ul>
 </li>
 <li>
-<p><strong>上游管理 (Upstream Groups)</strong>:</p>
+<p><strong>上游管理（Upstream Groups）</strong>：</p>
 <ul>
-<li>如果路由决策是 <code>forward</code>，请求将被发送到规则指定的<strong>上游组</strong>。</li>
+<li>如果路由决策是 <code>forward</code>，请求将发送到规则指定的<strong>上游组</strong>。</li>
 <li>上游组是上游服务器的逻辑集合。每个组通过 <code>scheme</code> 指定上游类型：<code>doh</code>（DoH）或 <code>dns</code>（传统 DNS，UDP/TCP）。</li>
-<li>你可以为不同的上游组配置不同的负载均衡策略（如轮询、加权轮询、随机）。对于 DoH 组，还可以配置认证与代理等能力。</li>
-<li>这种分组机制使得用户可以灵活地将不同类型的流量导向不同的上游路径（例如，外网域名走 DoH，内网域名走局域网 DNS）。</li>
+<li>你可以为不同的上游组配置不同的负载均衡策略（<code>roundrobin</code> 轮询、<code>weighted</code> 加权、<code>random</code> 随机等）。对于 DoH 组，还可以配置认证与代理等能力。</li>
+<li>这种分组机制让你可以灵活地把不同类型的流量导向不同的上游路径（例如外网域名走 DoH，内网域名走局域网 DNS）。</li>
 </ul>
 </li>
 <li>
-<p><strong>上游客户端 (Upstream Client)</strong>:</p>
+<p><strong>上游客户端（Upstream Client）</strong>：</p>
 <ul>
-<li><strong>对于 DoH 上游（<code>scheme: doh</code>）</strong>：HTTP/DoH 客户端负责把 DNS 报文封装为符合 DoH 规范的 HTTPS 请求（如 <code>Content-Type: application/dns-message</code>），并复用连接池以减少握手延迟；如配置了重试策略，将按策略执行重试。</li>
-<li><strong>对于传统 DNS 上游（<code>scheme: dns</code>）</strong>：DNS 客户端负责与上游的 <code>IP:端口</code> 进行 UDP/TCP 通信；默认优先 UDP，在收到 UDP 响应且 <code>TC=1</code>（截断）时会自动回退到 TCP 重试（或你可通过 <code>dns_client.prefer_tcp=true</code> 直接使用 TCP）。TCP 连接可复用，并可在失败后按需重连（<code>dns_client.tcp_reconnect</code>）。</li>
+<li><strong>对于 DoH 上游（<code>scheme: doh</code>）</strong>：HTTP/DoH 客户端负责把 DNS 报文封装为符合 DoH 规范的 HTTPS 请求（如 <code>Content-Type: application/dns-message</code>），并复用连接池以减少握手延迟；如配置了重试策略，则按策略重试。</li>
+<li><strong>对于传统 DNS 上游（<code>scheme: dns</code>）</strong>：DNS 客户端负责与上游 <code>IP:端口</code> 的 UDP/TCP 通信；默认优先 UDP，收到 UDP 响应且 <code>TC=1</code>（截断）时自动回退到 TCP 重试（你也可以通过 <code>dns_client.prefer_tcp=true</code> 直接使用 TCP）。TCP 连接可复用，并可在失败后按需重连（<code>dns_client.tcp_reconnect</code>）。</li>
 </ul>
 </li>
 <li>
-<p><strong>响应处理与缓存更新 (Response Handling &amp; Cache Update)</strong>:</p>
+<p><strong>响应处理与缓存更新（Response Handling &amp; Cache Update）</strong>：</p>
 <ul>
-<li>当上游返回响应后，Load Ants 会得到完整的 DNS 响应报文（无论该上游是 DoH 还是传统 DNS）。</li>
-<li>该响应首先会被送往缓存模块进行<strong>更新</strong> (<code>cache update</code>)，以便下一次相同的查询可以直接命中缓存。</li>
+<li>上游返回响应后，Load Ants 会得到完整的 DNS 响应报文（无论该上游是 DoH 还是传统 DNS）。</li>
+<li>该响应首先会送往缓存模块<strong>更新</strong>（<code>cache update</code>），以便下一次相同的查询直接命中缓存。</li>
 <li>最后，响应被打包成标准的 DNS UDP/TCP 数据包或者 DoH 响应，通过最初的监听器连接返回给客户端。</li>
 </ul>
 </li>
 </ol>
-<p>模块化的架构确保了每个组件职责单一，并且流程清晰、高效。通过配置文件，用户可以对缓存、路由、上游等几乎所有环节进行精细调整，以适应各种复杂的网络环境和需求。</p>
+<p>模块化的架构确保每个组件职责单一、流程清晰。通过配置文件，你可以精细调整缓存、路由、上游等环节，适应不同的网络环境和需求。</p>
 <hr />
-<h3 id="_3">下一步<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h3>
+<h2 id="_3">下一步<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="../concepts/">➡️ 了解核心概念</a></li>
 <li><a href="../deployment/">➡️ 查看部署方案</a></li>

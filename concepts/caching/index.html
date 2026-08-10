@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.2">
     
     
       
@@ -830,7 +830,7 @@
   <a href="#_2" class="md-nav__link">
     <span class="md-ellipsis">
       
-        一个类比：大脑的"短期记忆"
+        一个类比：大脑的“短期记忆”
       
     </span>
   </a>
@@ -852,7 +852,7 @@
   <a href="#ttl" class="md-nav__link">
     <span class="md-ellipsis">
       
-        理解 TTL (生存时间)
+        理解 TTL（生存时间）
       
     </span>
   </a>
@@ -1623,7 +1623,7 @@
   <a href="#_2" class="md-nav__link">
     <span class="md-ellipsis">
       
-        一个类比：大脑的"短期记忆"
+        一个类比：大脑的“短期记忆”
       
     </span>
   </a>
@@ -1645,7 +1645,7 @@
   <a href="#ttl" class="md-nav__link">
     <span class="md-ellipsis">
       
-        理解 TTL (生存时间)
+        理解 TTL（生存时间）
       
     </span>
   </a>
@@ -1684,58 +1684,73 @@
 
 
 <h1 id="_1">高性能缓存机制<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
-<p>缓存是 Load Ants 实现高性能、低延迟 DNS 解析的"秘密武器"。启用缓存后，Load Ants 会将一度查询过的 DNS 记录在本地保存一小段时间，从而大幅提升重复访问的响应速度。</p>
-<h3 id="_2">一个类比：大脑的"短期记忆"<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h3>
+<p>缓存是 Load Ants 实现高性能、低延迟 DNS 解析的“秘密武器”。启用缓存后，Load Ants 会将曾查询过的 DNS 记录在本地保存一段时间，从而大幅提升重复访问的响应速度。</p>
+<h3 id="_2">一个类比：大脑的“短期记忆”<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h3>
 <p>你可以将 Load Ants 的缓存机制想象成我们大脑的短期记忆功能：</p>
 <ul>
-<li><strong>没有缓存</strong>: 就像一个记性很差的人。每次朋友问你"小明的电话是多少？"，你都得去翻又厚又重的电话本（查询上游解析器）。这显然很慢。</li>
-<li><strong>有缓存</strong>: 就像一个记性好的人。当朋友第一次问你"小明的电话是多少？"时，你认真地查了电话本并告诉了他。在接下来的一段时间里，如果再有人问起，你就能凭着"短期记忆"立刻回答，而无需再次翻阅电话本。</li>
+<li><strong>没有缓存</strong>：就像一个记性很差的人。每次朋友问你“小明的电话是多少？”，你都得去翻又厚又重的电话本（查询上游解析器）。这显然很慢。</li>
+<li><strong>有缓存</strong>：就像一个记性好的人。当朋友第一次问你“小明的电话是多少？”时，你认真地查了电话本并告诉了他。在接下来的一段时间里，如果再有人问起，你就能凭着“短期记忆”立刻回答，而无需再次翻阅电话本。</li>
 </ul>
-<p>Load Ants 的缓存就是这个"短期记忆"。它存储了近期 DNS 查询的结果，当相同的查询再次到来时，Load Ants 可以直接从缓存中返回答案，避免了与上游服务器之间耗时的网络通信。</p>
+<p>Load Ants 的缓存就是这个“短期记忆”。它存储了近期 DNS 查询的结果，当相同的查询再次到来时，Load Ants 可以直接从缓存中返回答案，省去与上游服务器之间耗时的网络通信。</p>
+<p>这里对“相同的查询”有两点补充说明：</p>
+<ul>
+<li>缓存键会包含查询携带的 ECS（EDNS Client Subnet）子网信息（如有）：携带不同 ECS 子网的查询会命中各自独立的缓存条目，不会互相串用解析视图。</li>
+<li>对于缓存的 A/AAAA 应答，Load Ants 会在每次命中时打乱记录顺序，避免所有客户端总是使用同一条首选记录。</li>
+</ul>
 <h3 id="_3">缓存的两种类型<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h3>
-<p>Load Ants 的"记忆"能力分为两种，都非常重要：</p>
+<p>Load Ants 的“记忆”能力分为两种：</p>
 <ol>
 <li>
-<p><strong>正向缓存 (Positive Caching)</strong></p>
+<p><strong>正向缓存（Positive Caching）</strong></p>
 <ul>
-<li><strong>是什么</strong>: 记住那些"成功"的查询结果。例如，记住 <code>www.google.com</code> 的 IP 地址是 <code>142.250.199.196</code>。</li>
-<li><strong>作用</strong>: 这是最常见的缓存类型，它能极大地加速对常用网站的访问。</li>
+<li><strong>是什么</strong>：记住那些“成功”的查询结果。例如，记住 <code>www.google.com</code> 的 IP 地址是 <code>142.250.199.196</code>。</li>
+<li><strong>作用</strong>：这是最常见的缓存类型，它能极大地加速对常用网站的访问。</li>
 </ul>
 </li>
 <li>
-<p><strong>负向缓存 (Negative Caching)</strong></p>
+<p><strong>负向缓存（Negative Caching）</strong></p>
 <ul>
-<li><strong>是什么</strong>: 记住那些"失败"的查询结果。例如，记住域名 <code>non-existent-domain-123.com</code> 是不存在的（NXDOMAIN），或者某个服务器暂时无法访问（ServFail）。</li>
-<li><strong>作用</strong>: 这是一个常被忽视但极其重要的性能优化点。如果没有负向缓存，当你的网络中某个程序或设备持续尝试访问一个不存在的域名时，Load Ants 会不断地向上游服务器发起无效查询，造成不必要的资源浪费和延迟。负向缓存可以有效地终结这种无效的重复查询。</li>
+<li><strong>是什么</strong>：记住“域名不存在或没有对应记录”的结论。例如，记住域名 <code>non-existent-domain-123.com</code> 不存在（<code>NXDOMAIN</code>），或者某个域名没有所查询类型的记录（<code>NODATA</code>）。<code>SERVFAIL</code>、<code>REFUSED</code>、<code>FORMERR</code>、<code>NOTIMP</code> 这类错误响应一律不会被缓存，以避免把上游的临时故障固化在缓存里。</li>
+<li><strong>作用</strong>：这是一个常被忽视但极其重要的性能优化点。如果没有负向缓存，当你的网络中某个程序或设备持续尝试访问一个不存在的域名时，Load Ants 会不断地向上游服务器发起无效查询，造成不必要的资源浪费和延迟。负向缓存可以有效地终结这种无效的重复查询。</li>
 </ul>
 </li>
 </ol>
-<h3 id="ttl">理解 TTL (生存时间)<a class="headerlink" href="#ttl" title="Permanent link">&para;</a></h3>
-<p>每条 DNS 记录都有一个由权威服务器建议的"保质期"，称为 TTL (Time-To-Live)。Load Ants 的缓存配置允许你对这个"保质期"进行干预，以强制执行你自己的缓存策略。</p>
+<h3 id="ttl">理解 TTL（生存时间）<a class="headerlink" href="#ttl" title="Permanent link">&para;</a></h3>
+<p>每条 DNS 记录都有一个权威服务器建议的“保质期”，即 TTL（Time-To-Live）。Load Ants 的缓存配置让你直接干预这个“保质期”，强制执行你自己的缓存策略。</p>
 <ul>
 <li>
-<p><strong><code>min_ttl</code> (最小生存时间)</strong></p>
+<p><strong><code>min_ttl</code>（最小生存时间）</strong></p>
 <ul>
-<li><strong>用途</strong>: 强制延长那些"保质期"过短的记录。</li>
-<li><strong>场景</strong>: 某些大型网站为了实现流量的精细调度，可能会设置一个非常短的 TTL（例如 60 秒）。这意味着你需要每分钟都去查询一次。通过设置一个较高的 <code>min_ttl</code> (例如 <code>300</code> 秒)，你可以强制 Load Ants 将这条记录在缓存中保留至少 5 分钟，从而减少不必要的查询。</li>
+<li><strong>用途</strong>：强制延长那些“保质期”过短的记录。</li>
+<li><strong>场景</strong>：某些大型网站为了精细调度流量，会设置非常短的 TTL（例如 60 秒）。这意味着你需要每分钟都去查询一次。将 <code>min_ttl</code> 调高（例如设为 <code>300</code> 秒），可以强制 Load Ants 将这条记录在缓存中保留至少 5 分钟，从而减少不必要的查询。</li>
 </ul>
 </li>
 <li>
-<p><strong><code>max_ttl</code> (最大生存时间)</strong></p>
+<p><strong><code>max_ttl</code>（最大生存时间）</strong></p>
 <ul>
-<li><strong>用途</strong>: 强制缩短那些"保质期"过长的记录。</li>
-<li><strong>场景</strong>: 有些域名可能设置了长达一天甚至更久的 TTL。如果你希望更快地获取到这个域名可能发生的 IP 地址变更，可以设置一个较低的 <code>max_ttl</code> (例如 <code>3600</code> 秒)，强制缓存条目在一小时后过期，并重新向上游查询。</li>
+<li><strong>用途</strong>：强制缩短那些“保质期”过长的记录。</li>
+<li><strong>场景</strong>：有些域名的 TTL 长达一天甚至更久。如果你希望及时跟上该域名的 IP 地址变更，可以将 <code>max_ttl</code> 调低（例如设为 <code>3600</code> 秒），强制缓存条目在一小时后过期，并重新向上游查询。</li>
 </ul>
 </li>
 <li>
-<p><strong><code>negative_ttl</code> (负向缓存生存时间)</strong></p>
+<p><strong><code>negative_ttl</code>（负向缓存生存时间）</strong></p>
 <ul>
-<li><strong>用途</strong>: 专门为"失败"的查询结果（如域名不存在）设定一个缓存时间。</li>
-<li><strong>场景</strong>: 这是负向缓存的核心配置。设置一个合理的 <code>negative_ttl</code>（例如 <code>300</code> 秒）意味着在 5 分钟内，所有对同一个不存在域名的查询都会被 Load Ants 直接从缓存拦截，并立即返回"不存在"的响应，而不会去打扰上游服务器。</li>
+<li><strong>用途</strong>：专门为“失败”的查询结果（如域名不存在）设定一个缓存时间。</li>
+<li><strong>场景</strong>：这是负向缓存的核心配置。设置一个合理的 <code>negative_ttl</code>（例如 <code>300</code> 秒）意味着在 5 分钟内，所有对同一个不存在域名的查询都会被 Load Ants 直接从缓存拦截，并立即返回“不存在”的响应，而不会去打扰上游服务器。</li>
+</ul>
+</li>
+<li>
+<p><strong><code>stale_while_revalidate</code>（过期宽限期，stale-while-revalidate 机制）</strong></p>
+<ul>
+<li><strong>用途</strong>：为已过期的缓存条目提供一段宽限期。默认 <code>0</code>（关闭）；设为正数后，刚过期的条目可以继续“应急”使用。</li>
+<li><strong>场景</strong>：当某个条目已经过期但仍在宽限期内时，Load Ants 会立即返回这条旧记录（该应答中的 TTL 会被修正为剩余时间），同时触发一次后台刷新去上游获取最新结果并更新缓存。这样即使上游响应变慢，查询也不必等待上游。</li>
 </ul>
 </li>
 </ul>
-<p>通过精细地调整这些 TTL 设置，你可以让 Load Ants 的缓存行为最大程度地符合你的网络环境和性能需求。</p>
+<blockquote>
+<p>注意：正向应答中只要有记录的 TTL 为 <code>0</code>，整个应答就不会被缓存（这是 RFC 2308 中“TTL=0 表示不得缓存”的约定），<code>min_ttl</code> 在这种情况下也不会生效。</p>
+</blockquote>
+<p>调整这些 TTL 设置，就能让 Load Ants 的缓存行为贴合你的网络环境和性能需求。</p>
 <hr />
 <h3 id="_4">下一步<a class="headerlink" href="#_4" title="Permanent link">&para;</a></h3>
 <ul>

@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.2">
     
     
       
@@ -802,7 +802,7 @@
   <a href="#_2" class="md-nav__link">
     <span class="md-ellipsis">
       
-        一个类比：分配任务的"工作小组"
+        一个类比：分配任务的“工作小组”
       
     </span>
   </a>
@@ -813,7 +813,7 @@
   <a href="#strategy" class="md-nav__link">
     <span class="md-ellipsis">
       
-        负载均衡策略 (strategy)
+        负载均衡策略（strategy）
       
     </span>
   </a>
@@ -835,7 +835,7 @@
   <a href="#_4" class="md-nav__link">
     <span class="md-ellipsis">
       
-        资源优化：共享的连接池
+        资源优化：按组独立的连接池
       
     </span>
   </a>
@@ -1645,7 +1645,7 @@
   <a href="#_2" class="md-nav__link">
     <span class="md-ellipsis">
       
-        一个类比：分配任务的"工作小组"
+        一个类比：分配任务的“工作小组”
       
     </span>
   </a>
@@ -1656,7 +1656,7 @@
   <a href="#strategy" class="md-nav__link">
     <span class="md-ellipsis">
       
-        负载均衡策略 (strategy)
+        负载均衡策略（strategy）
       
     </span>
   </a>
@@ -1678,7 +1678,7 @@
   <a href="#_4" class="md-nav__link">
     <span class="md-ellipsis">
       
-        资源优化：共享的连接池
+        资源优化：按组独立的连接池
       
     </span>
   </a>
@@ -1728,17 +1728,17 @@
 
 
 <h1 id="_1">上游服务器管理<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
-<p>上游 (Upstream) 是你的 DNS 查询在经过 Load Ants 加密和路由决策后的最终目的地。合理地配置上游，是保证 DNS 解析服务高可用和高性能的关键。</p>
-<h3 id="_2">一个类比：分配任务的"工作小组"<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h3>
+<p>上游（Upstream）是你的 DNS 查询经过 Load Ants 路由决策（对 DoH 上游还包括加密）后的最终目的地。上游服务器按上游组组织和管理；合理配置上游组，是保证 DNS 解析服务高可用和高性能的关键。</p>
+<h3 id="_2">一个类比：分配任务的“工作小组”<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h3>
 <p>你可以将 Load Ants 的上游管理机制想象成一个办公室里的项目管理场景：</p>
 <ul>
-<li><strong>上游服务器 (<code>servers</code>)</strong>: 就像是办公室里的一个个"组员"。组员可以是 DoH（URL）或传统 DNS（<code>IP:端口</code>）。</li>
-<li><strong>上游组 (<code>upstream_groups</code>)</strong>: 就像是为了完成特定目标而建立的"工作小组"。你可以创建多个小组，例如"谷歌组"、"阿里组"、"抗污染专用组"等。</li>
-<li><strong>负载均衡策略 (<code>strategy</code>)</strong>: 就像是"小组组长"分配任务的方式。组长需要决定下一个进来的任务（DNS 查询）应该交给哪个组员来处理。</li>
+<li><strong>上游服务器（<code>servers</code>）</strong>：就像是办公室里的一个个“组员”。组员可以是 DNS-over-HTTPS（DoH）服务器（以 URL 指定），也可以是传统 DNS 服务器（以 <code>IP:端口</code> 指定）。</li>
+<li><strong>上游组（<code>upstream_groups</code>）</strong>：就像是为了完成特定目标而建立的“工作小组”。你可以创建多个小组，例如“谷歌组”、“阿里组”、“抗污染专用组”等。</li>
+<li><strong>负载均衡策略（<code>strategy</code>）</strong>：就像是“小组组长”分配任务的方式。组长需要决定下一个进来的任务（DNS 查询）交给哪个组员处理。</li>
 </ul>
-<p>Load Ants 就是这位高效的"管理者"，它根据你设定的策略，智能地将查询分发给组内的各个服务器。</p>
-<h3 id="strategy">负载均衡策略 (<code>strategy</code>)<a class="headerlink" href="#strategy" title="Permanent link">&para;</a></h3>
-<p>为每个上游组选择合适的策略，可以帮助你实现不同的目标，如性能、隐私或故障转移。</p>
+<p>Load Ants 就是这位高效的“管理者”，根据你设定的策略，将查询分发给组内的各个服务器。</p>
+<h3 id="strategy">负载均衡策略（<code>strategy</code>）<a class="headerlink" href="#strategy" title="Permanent link">&para;</a></h3>
+<p>为每个上游组选择合适的策略，可以满足性能、隐私或故障转移等不同目标。</p>
 <table>
 <thead>
 <tr>
@@ -1755,7 +1755,7 @@
 </tr>
 <tr>
 <td style="text-align: left;"><strong><code>weighted</code></strong></td>
-<td style="text-align: left;"><strong>加权轮询</strong>：根据你为每个服务器设定的"权重"(<code>weight</code>)来分配请求。权重越高的服务器，接到的请求就越多。</td>
+<td style="text-align: left;"><strong>加权</strong>：根据你为每个服务器设定的“权重”（<code>weight</code>）来分配请求。权重越高的服务器，接到的请求就越多。</td>
 <td style="text-align: left;">当组内服务器性能或可靠性不同时。例如，你可以让一台高性能的主服务器承担 80% 的流量，另一台备用服务器承担 20%。</td>
 </tr>
 <tr>
@@ -1765,35 +1765,44 @@
 </tr>
 </tbody>
 </table>
+<p>无论选择哪种策略，Load Ants 都会通过熔断器对组内每台服务器做健康检测：一台服务器连续失败达到阈值（默认 3 次）后会被熔断并标记为不可用，冷却期（默认 30 秒）内不会被选中；冷却期过后进入半开状态，Load Ants 允许用真实请求探测，探测成功即恢复健康。当某台服务器的请求失败时，它会在组内自动故障转移，改用其他可用服务器重试，直到成功或组内服务器全部尝试完毕。</p>
 <h3 id="_3">连接到私有服务：认证支持<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h3>
-<p>除了连接到公共 DoH 服务器，Load Ants 还支持与需要认证的私有 DoH 提供商安全通信。这对于企业内部或个人搭建的私有 DNS 服务非常有用。</p>
+<p>除了连接公共 DoH 服务器，Load Ants 还支持与需要认证的私有 DoH 提供商安全通信，适合企业内部或个人搭建的私有 DNS 服务。</p>
 <ul>
-<li><strong>支持的认证方式</strong>:<ul>
-<li><strong>HTTP 基本认证 (<code>Basic Auth</code>)</strong>: 使用用户名和密码进行验证。</li>
-<li><strong>Bearer 令牌认证 (<code>Bearer Token</code>)</strong>: 使用一个访问令牌进行验证。</li>
+<li><strong>支持的认证方式</strong>：<ul>
+<li><strong>HTTP 基本认证（<code>Basic Auth</code>）</strong>：用用户名和密码验证。</li>
+<li><strong>Bearer 令牌认证（<code>Bearer Token</code>）</strong>：用一个访问令牌验证。</li>
 </ul>
 </li>
 </ul>
 <blockquote>
 <p>说明：认证仅适用于 <code>scheme: doh</code> 的上游服务器条目（传统 DNS 上游不涉及 HTTP 认证）。</p>
 </blockquote>
-<p>你可以在<a href="../../configuration/upstream-groups/">上游组配置</a>中为特定的 DoH 服务器条目轻松添加认证信息。</p>
-<h3 id="_4">资源优化：共享的连接池<a class="headerlink" href="#_4" title="Permanent link">&para;</a></h3>
-<p>为了最大化性能并减少资源消耗，Load Ants 会按上游类型复用连接资源：</p>
+<p>你可以在<a href="../../configuration/upstream-groups/">上游组配置</a>中为特定的 DoH 服务器条目添加认证信息。</p>
+<p>除认证外，上游组级别还支持几项可选能力：</p>
 <ul>
-<li>对于 <code>scheme: doh</code>：内部维护一个<strong>共享的 HTTP 客户端连接池</strong>，高效复用与上游服务器的 TCP/TLS 连接。</li>
-<li>对于 <code>scheme: dns</code>：内部会复用与上游服务器的 TCP 连接，并支持在 TCP 请求失败后按需重连（见 <code>dns_client.tcp_reconnect</code>）。</li>
+<li><code>proxy</code>：为整个组指定出站代理（仅 DoH 组）。</li>
+<li><code>retry</code>：控制请求失败后的重试策略（仅 DoH 组）。</li>
+<li><code>tls_verify</code>：控制是否校验上游的 TLS 证书（仅 DoH 组生效）。</li>
+<li><code>deny_answers</code>：过滤应答中落在指定 CIDR 内的 A/AAAA 记录；若记录被全部过滤，该次查询返回 <code>SERVFAIL</code>。</li>
 </ul>
-<p>这意味着，即使你配置了数十个不同的上游服务器，Load Ants 也会智能地复用底层连接资源（DoH 为 TCP/TLS 连接，传统 DNS 为 TCP 连接）。这带来了几个好处：</p>
+<p>另需注意：DoH 上游的 <code>content_type</code> 为 <code>json</code> 时只支持 GET 方法；将 <code>json</code> 与 POST 搭配使用，会在启动期的配置校验中直接报错。</p>
+<h3 id="_4">资源优化：按组独立的连接池<a class="headerlink" href="#_4" title="Permanent link">&para;</a></h3>
+<p>为降低延迟并减少资源消耗，Load Ants 按上游类型复用连接资源：</p>
 <ul>
-<li><strong>减少延迟</strong>：避免了为每个新请求都重新进行 TCP 和 TLS 握手的开销。</li>
+<li>对于 <code>scheme: doh</code>：<strong>每个上游组</strong>独立持有一个 HTTP 客户端及其连接池，高效复用与该组内上游服务器的 TCP/TLS 连接；不同上游组之间的连接池互不共享。</li>
+<li>对于 <code>scheme: dns</code>：内部会复用与上游服务器的 TCP 连接，并支持在 TCP 请求失败后按需重连（见 <code>dns_client.tcp_reconnect</code>）。<code>scheme: dns</code> 组还支持 0x20 大小写随机化（仅对该 scheme 生效）：通过随机化查询域名的大小写并校验响应来防范 DNS 伪造；在 <code>strict</code> 模式下校验失败会丢弃该 UDP 响应并自动回退 TCP 重试。</li>
+</ul>
+<p>这意味着，即使你配置了数十个不同的上游服务器，Load Ants 也会复用底层连接资源（DoH 为 TCP/TLS 连接，传统 DNS 为 TCP 连接）。这带来了几个好处：</p>
+<ul>
+<li><strong>减少延迟</strong>：避免了每个新请求都重新做 TCP 和 TLS 握手的开销。</li>
 <li><strong>降低 CPU 和内存使用</strong>：更少的连接数意味着更少的系统资源占用。</li>
 <li><strong>提升吞吐量</strong>：连接复用是实现高并发 DoH 请求的关键。</li>
 </ul>
-<p>这个优化过程是自动且透明的，无需任何额外配置。</p>
+<p>这个优化过程自动且透明，无需额外配置。</p>
 <hr />
 <h3 id="_5">配置示例<a class="headerlink" href="#_5" title="Permanent link">&para;</a></h3>
-<p>让我们看一个包含多个上游组和不同策略的配置：</p>
+<p>下面是一个包含多个上游组和不同策略的配置示例：</p>
 <div class="highlight"><pre><span></span><code><span class="nt">upstream_groups</span><span class="p">:</span>
 <span class="w">    </span><span class="c1"># 上游组 1: 公共 DoH，用于日常使用</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;public_doh&quot;</span>
@@ -1807,7 +1816,7 @@
 <span class="w">    </span><span class="c1"># 上游组 2: 高性能服务器组，主备模式</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;high_performance&quot;</span>
 <span class="w">      </span><span class="nt">scheme</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;doh&quot;</span>
-<span class="w">      </span><span class="c1"># 策略: 加权，让 server_1 处理大部分请求</span>
+<span class="w">      </span><span class="c1"># 策略: 加权，主服务器承担 80% 的请求</span>
 <span class="w">      </span><span class="nt">strategy</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;weighted&quot;</span>
 <span class="w">      </span><span class="nt">servers</span><span class="p">:</span>
 <span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;https://main-server.com/dns-query&quot;</span>
@@ -1843,12 +1852,12 @@
 <span class="w">      </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;forward&quot;</span>
 <span class="w">      </span><span class="nt">target</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;public_doh&quot;</span><span class="w"> </span><span class="c1"># 其他所有查询使用公共 DoH 组</span>
 </code></pre></div>
-<p>通过将服务器分组并应用不同策略，你可以构建一个高度定制化、既可靠又高效的 DNS 解析系统。</p>
+<p>把服务器分组并应用不同策略，你可以构建一套可靠、高效的定制化 DNS 解析系统。</p>
 <hr />
 <h3 id="_6">下一步<a class="headerlink" href="#_6" title="Permanent link">&para;</a></h3>
 <ul>
 <li><a href="../../configuration/upstream-groups/">➡️ 学习如何配置上游组</a></li>
-<li><a href="../doh/">➡️ 了解什么是 DNS over HTTPS (DoH)</a></li>
+<li><a href="../doh/">➡️ 了解什么是 DNS-over-HTTPS（DoH）</a></li>
 <li><a href="../">➡️ 返回核心概念概览</a></li>
 </ul>
 
