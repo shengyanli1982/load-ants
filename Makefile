@@ -57,10 +57,6 @@ build:
 build-release:
 	$(CARGO) build --release --bin $(BINARY_NAME) --target $(TARGET)
 
-# 构建发布版本
-.PHONY: build-release
-build-release:
-
 # 运行代码检查
 .PHONY: check
 check:
@@ -77,18 +73,42 @@ test:
 clean:
 	$(CARGO) clean
 
+# 运行基准测试
+.PHONY: bench
+bench:
+	$(CARGO) bench --target $(TARGET)
+
+# 格式化代码
+.PHONY: fmt
+fmt:
+	$(CARGO) fmt
+
+# 检查代码格式
+.PHONY: fmt-check
+fmt-check:
+	$(CARGO) fmt -- --check
+
+# 生成代码覆盖率报告
+.PHONY: cov
+cov:
+	$(CARGO) llvm-cov --html --target $(TARGET)
+
 # 帮助信息
 .PHONY: help
 help:
-	@echo "OxideWebDNS Makefile"
+	@echo "Load Ants Makefile"
 	@echo ""
 	@echo "Target Platform: $(TARGET)"
 	@echo ""
 	@echo "Usage:"
-	@echo "  make              - 构建发布版本 (等同于 make build-release)"
-	@echo "  make build        - 构建调试版本"
-	@echo "  make build-release- 构建带优化的发布版本"
-	@echo "  make check        - 运行代码检查 (format, clippy)"
-	@echo "  make test         - 运行测试"
-	@echo "  make clean        - 清理构建产物"
-	@echo "  make help         - 显示帮助信息" 
+	@echo "  make                - 构建调试版本 (等同于 make build)"
+	@echo "  make build          - 构建调试版本"
+	@echo "  make build-release  - 构建带优化的发布版本"
+	@echo "  make check          - 运行代码检查 (format, clippy)"
+	@echo "  make test           - 运行测试"
+	@echo "  make bench          - 运行基准测试"
+	@echo "  make fmt            - 格式化代码"
+	@echo "  make fmt-check      - 检查代码格式"
+	@echo "  make cov            - 生成代码覆盖率报告 (HTML)"
+	@echo "  make clean          - 清理构建产物"
+	@echo "  make help           - 显示帮助信息"

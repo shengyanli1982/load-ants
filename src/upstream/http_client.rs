@@ -9,23 +9,23 @@ use retry_policies::Jitter;
 use std::time::Duration;
 use tracing::debug;
 
+/// 统一封装上游 HTTP 客户端构建与请求发送逻辑。
 pub struct HttpClient;
 
 impl HttpClient {
-    // 创建HTTP客户端
+    // 创建上游 HTTP 客户端。
     pub fn create(
         config: &HttpClientConfig,
         proxy: Option<&str>,
         retry_config: Option<&RetryConfig>,
+        tls_verify: Option<bool>,
     ) -> Result<ClientWithMiddleware, AppError> {
         debug!(
             "Creating HTTP client for upstream, config: {:?}, proxy: {:?}, retry_config: {:?}",
             config, proxy, retry_config
         );
 
-        // 创建客户端构建器
         let mut client_builder = reqwest::ClientBuilder::new()
-            .danger_accept_invalid_certs(true) // 允许无效证书，用于内部自签名证书
             .connect_timeout(Duration::from_secs(config.connect_timeout))
             .timeout(Duration::from_secs(config.request_timeout));
 
@@ -54,6 +54,10 @@ impl HttpClient {
             })?);
         }
 
+        if tls_verify == Some(false) {
+            client_builder = client_builder.danger_accept_invalid_certs(true);
+        }
+
         // 创建基础HTTP客户端
         let client = client_builder.build().map_err(|e| {
             AppError::HttpError(HttpClientError(format!(
@@ -66,16 +70,12 @@ impl HttpClient {
         let middleware_client = if let Some(retry) = retry_config {
             // 使用指数退避策略，基于组的重试配置
             let retry_policy = ExponentialBackoff::builder()
-                // 设置重试时间间隔的上下限
                 .retry_bounds(
-                    Duration::from_secs(retry_limits::MIN_DELAY as u64),
+                    Duration::from_secs(retry.delay as u64),
                     Duration::from_secs(retry_limits::MAX_DELAY as u64),
                 )
-                // 设置指数退避的基数
-                .base(retry.delay)
-                // 使用有界抖动来避免多个客户端同时重试
+                .base(2)
                 .jitter(Jitter::Bounded)
-                // 配置最大重试次数
                 .build_with_max_retries(retry.attempts);
 
             ClientBuilder::new(client)
@@ -89,7 +89,7 @@ impl HttpClient {
         Ok(middleware_client)
     }
 
-    // 处理认证头添加
+    // 为请求补充认证头。
     pub fn add_auth_to_request(
         request: RequestBuilder,
         auth: &Option<AuthConfig>,
@@ -113,7 +113,7 @@ impl HttpClient {
                         AppError::Upstream("Missing token for Bearer authentication".to_string())
                     })?;
                     req.header(
-                        http_headers::AUTHORIZATION,
+                        "Authorization",
                         format!("{}{}", http_headers::auth::BEARER_PREFIX, token),
                     )
                 }
@@ -123,7 +123,7 @@ impl HttpClient {
         Ok(req)
     }
 
-    // 发送middleware请求并读取响应体
+    // 发送带中间件的请求并读取响应体。
     pub async fn send_request(request: RequestBuilder) -> Result<bytes::Bytes, AppError> {
         // 发送请求
         let response = request.send().await?;

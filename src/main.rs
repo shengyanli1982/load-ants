@@ -1,50 +1,63 @@
 use loadants::{
-    doh::server::DoHServer, metrics::METRICS, r#const::server_defaults, rule_source_labels,
-    rule_type_labels, server::DnsServerConfig, subsystem_names, AdminServer, AppError, Args,
-    Config, DnsCache, DnsServer, MatchType, RequestHandler, Router, UpstreamManager,
+    build_router,
+    doh::server::DoHServer,
+    r#const::server_defaults,
+    rate_limit::RateLimiter,
+    remote_rule::{evaluate_remote_rule_startup, load_and_merge_rules},
+    server::DnsServerConfig,
+    subsystem_names, AdminServer, AppError, Args, Config, ConfigSummary, DnsCache, DnsServer,
+    RemoteSourceStatus, RequestHandler, Router, UpstreamManager,
 };
 use mimalloc::MiMalloc;
 use std::process;
 use std::sync::Arc;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tokio::sync::RwLock;
+use tokio::time::interval;
 use tokio_graceful_shutdown::{IntoSubsystem, SubsystemBuilder, Toplevel};
 use tracing::{error, info, warn};
 
-// 使用 mimalloc 分配器提高内存效率
 #[global_allocator]
 static GLOBAL: MiMalloc = mimalloc::MiMalloc;
 
 fn init_logging(args: &Args) {
-    let builder = tracing_subscriber::fmt()
-        .with_ansi(false)
-        .with_line_number(false);
-
-    // 如果启用调试模式，输出调试信息，否则只输出 info 及以上级别
-    if args.debug {
-        builder.with_max_level(tracing::Level::DEBUG)
+    let default_level = if args.debug {
+        "loadants=debug"
     } else {
-        builder.with_max_level(tracing::Level::INFO)
-    }
-    .init();
+        "loadants=info"
+    };
+
+    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(default_level));
+
+    tracing_subscriber::fmt()
+        .with_ansi(false)
+        .with_line_number(false)
+        .with_env_filter(env_filter)
+        .init()
 }
 
-// 程序入口
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 解析命令行参数
     let args = Args::parse_args();
 
-    // 初始化日志
     init_logging(&args);
 
-    // 验证参数
     if let Err(e) = args.validation() {
         error!("Invalid command line arguments: {}", e);
         process::exit(1);
     }
 
+    if args.dump_schema {
+        let schema = schemars::schema_for!(Config);
+        let json_schema =
+            serde_json::to_string_pretty(&schema).expect("Failed to serialize JSON schema");
+        println!("{}", json_schema);
+        return Ok(());
+    }
+
     info!("Starting Load Ants DNS UDP/TCP to DoH Proxy");
 
-    // 加载配置
     let config = match Config::from_file(&args.config) {
         Ok(config) => {
             info!("Successfully loaded configuration: {:?}", args.config);
@@ -61,13 +74,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         process::exit(1);
     }
 
-    // 如果是测试模式，成功验证配置后退出
     if args.test_config {
-        info!("Configuration file validation successful");
+        info!("Configuration validation successful");
         return Ok(());
     }
 
-    // 创建应用组件
     let components = match create_components(config).await {
         Ok(components) => components,
         Err(e) => {
@@ -76,21 +87,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    // 创建优雅关闭顶层管理器
     let toplevel = Toplevel::new(|s| async move {
-        // 启动DNS服务器子系统
         let dns_server = components.dns_server;
         s.start(SubsystemBuilder::new(
             subsystem_names::DNS_SERVER,
             dns_server.into_subsystem(),
         ));
-        // 启动管理服务器子系统
         let admin_server = components.admin_server;
         s.start(SubsystemBuilder::new(
             subsystem_names::ADMIN_SERVER,
             admin_server.into_subsystem(),
         ));
-        // 启动DoH服务器子系统
         if let Some(doh_server) = components.doh_server {
             s.start(SubsystemBuilder::new(
                 subsystem_names::DOH_SERVER,
@@ -99,11 +106,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    // 等待关闭
     info!("All services started, waiting for requests...");
     match toplevel
         .catch_signals()
-        .handle_shutdown_requests(tokio::time::Duration::from_secs(args.shutdown_timeout))
+        .handle_shutdown_requests(Duration::from_secs(args.shutdown_timeout))
         .await
     {
         Ok(_) => {
@@ -117,64 +123,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 }
 
-// 应用组件
 struct AppComponents {
-    // DoH 服务器
     doh_server: Option<DoHServer>,
-    // DNS 服务器
     dns_server: DnsServer,
-    // 管理服务器
     admin_server: AdminServer,
 }
 
-// 创建应用组件
 async fn create_components(config: Config) -> Result<AppComponents, AppError> {
-    // 创建 DNS 缓存
     let cache = if let Some(cache_config) = &config.cache {
         let cache_size = if cache_config.enabled {
             cache_config.max_size
         } else {
             0
         };
-        let cache = Arc::new(DnsCache::new(
+        let stale_while_revalidate = if cache_config.stale_while_revalidate > 0 {
+            Some(cache_config.stale_while_revalidate)
+        } else {
+            None
+        };
+        Arc::new(DnsCache::new(
             cache_size,
             cache_config.min_ttl,
+            cache_config.max_ttl,
             Some(cache_config.negative_ttl),
-        ));
-        if cache_config.enabled {
-            info!(
-                "DNS cache enabled, size: {}, min TTL: {}s, negative TTL: {}s",
-                cache_config.max_size, cache_config.min_ttl, cache_config.negative_ttl
-            );
-        } else {
-            info!("DNS cache disabled");
-        }
-        cache
+            stale_while_revalidate,
+        ))
     } else {
-        // 如果没有提供缓存配置，创建一个默认的禁用缓存
-        info!("Cache configuration not provided, cache disabled");
-        Arc::new(DnsCache::new(0, 0, Some(0)))
+        Arc::new(DnsCache::new(0, 0, 0, Some(0), None))
     };
 
-    // 创建管理服务器
-    let admin_listen_addr = match &config.admin {
-        Some(admin_config) => admin_config.listen.parse()?,
-        None => {
-            warn!(
-                "Admin server configuration not provided, using default address {}",
-                server_defaults::DEFAULT_ADMIN_LISTEN
-            );
-            server_defaults::DEFAULT_ADMIN_LISTEN.parse()?
-        }
-    };
-    let admin_server = AdminServer::new(admin_listen_addr).with_cache(Arc::clone(&cache));
-
-    // 准备HTTP客户端配置
     let http_client_config = config.http_client.clone().unwrap_or_default();
-    // 准备 DNS 客户端配置
     let dns_client_config = config.dns_client.clone().unwrap_or_default();
 
-    // 创建上游管理器 - 避免不必要的克隆
     let upstream = match UpstreamManager::new(
         config.upstream_groups.clone().unwrap_or_default(),
         http_client_config.clone(),
@@ -182,141 +162,101 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
     )
     .await
     {
-        Ok(manager) => {
-            info!("Upstream manager initialized successfully");
-            Arc::new(manager)
-        }
+        Ok(manager) => Arc::new(manager),
         Err(e) => {
             error!("Failed to initialize upstream manager: {}", e);
             return Err(e);
         }
     };
 
-    // 获取静态规则（如果有）
-    let static_rules = config.static_rules.clone().unwrap_or_default();
-
-    // 加载远程规则并与静态规则合并
-    let rules = if !config.remote_rules.is_empty() {
-        info!(
-            "Loading {} remote rule sources...",
-            config.remote_rules.len()
-        );
-        match loadants::remote_rule::load_and_merge_rules(
-            &config.remote_rules,
-            &static_rules,
-            &http_client_config,
-        )
-        .await
-        {
-            Ok(merged_rules) => merged_rules,
-            Err(e) => {
-                error!(
-                    "Failed to load remote rules: {}, falling back to static rules only",
-                    e
-                );
-                static_rules.clone()
-            }
-        }
-    } else {
-        // 没有远程规则，直接使用静态规则
-        static_rules.clone()
-    };
-
-    // 创建路由引擎 - 使用合并后的规则
-    let router = match Router::new(rules.clone()) {
-        Ok(router) => {
-            // 设置路由规则数量指标 - 考虑每个规则中的多个模式
-            let mut exact_count_static = 0;
-            let mut wildcard_count_static = 0;
-            let mut regex_count_static = 0;
-            let mut exact_count_remote = 0;
-            let mut wildcard_count_remote = 0;
-            let mut regex_count_remote = 0;
-
-            // 静态规则数量
-            for rule in &static_rules {
-                match &rule.match_type {
-                    MatchType::Exact => exact_count_static += rule.patterns.len(),
-                    MatchType::Wildcard => wildcard_count_static += rule.patterns.len(),
-                    MatchType::Regex => regex_count_static += rule.patterns.len(),
-                }
-            }
-
-            // 远程规则数量
-            let static_rules_len = static_rules.len();
-            if static_rules_len < rules.len() {
-                // 计算远程规则中各类型的数量
-                for rule in rules.iter().skip(static_rules_len) {
-                    match &rule.match_type {
-                        MatchType::Exact => exact_count_remote += rule.patterns.len(),
-                        MatchType::Wildcard => wildcard_count_remote += rule.patterns.len(),
-                        MatchType::Regex => regex_count_remote += rule.patterns.len(),
-                    }
-                }
-            }
-
-            // 设置静态规则指标
-            METRICS
-                .route_rules_count()
-                .with_label_values(&[rule_type_labels::EXACT, rule_source_labels::STATIC])
-                .set(exact_count_static as i64);
-
-            METRICS
-                .route_rules_count()
-                .with_label_values(&[rule_type_labels::WILDCARD, rule_source_labels::STATIC])
-                .set(wildcard_count_static as i64);
-
-            METRICS
-                .route_rules_count()
-                .with_label_values(&[rule_type_labels::REGEX, rule_source_labels::STATIC])
-                .set(regex_count_static as i64);
-
-            // 设置远程规则指标
-            let remote_rules_count = rules.len() - static_rules_len;
-            if remote_rules_count > 0 {
-                METRICS
-                    .route_rules_count()
-                    .with_label_values(&[rule_type_labels::EXACT, rule_source_labels::REMOTE])
-                    .set(exact_count_remote as i64);
-
-                METRICS
-                    .route_rules_count()
-                    .with_label_values(&[rule_type_labels::WILDCARD, rule_source_labels::REMOTE])
-                    .set(wildcard_count_remote as i64);
-
-                METRICS
-                    .route_rules_count()
-                    .with_label_values(&[rule_type_labels::REGEX, rule_source_labels::REMOTE])
-                    .set(regex_count_remote as i64);
-            }
-
-            info!(
-                "Routing engine initialized successfully with {} rules ({} static, {} remote): {} exact, {} wildcard, {} regex",
-                rules.len(),
-                static_rules_len,
-                remote_rules_count,
-                exact_count_static + exact_count_remote,
-                wildcard_count_static + wildcard_count_remote,
-                regex_count_static + regex_count_remote
-            );
-
-            Arc::new(router)
-        }
+    let router = match build_router(&config).await {
+        Ok(router) => router,
         Err(e) => {
             error!("Failed to initialize routing engine: {}", e);
-            return Err(AppError::Config(e));
+            return Err(e);
         }
     };
 
-    // 创建请求处理器
+    let admin_listen_addr = match &config.admin {
+        Some(admin_config) => admin_config.listen.parse()?,
+        None => {
+            info!(
+                "Admin server using default address {}",
+                server_defaults::DEFAULT_ADMIN_LISTEN
+            );
+            server_defaults::DEFAULT_ADMIN_LISTEN.parse()?
+        }
+    };
+    let admin_auth = config.admin.as_ref().and_then(|a| a.auth.clone());
+    let config_summary = ConfigSummary {
+        listen_udp: config.server.listen_udp.clone(),
+        listen_tcp: config.server.listen_tcp.clone(),
+        listen_http: config.server.listen_http.clone(),
+        cache_enabled: config.cache.as_ref().is_some_and(|c| c.enabled),
+        cache_max_size: config.cache.as_ref().map_or(0, |c| c.max_size),
+        upstream_group_count: config.upstream_groups.as_ref().map_or(0, |g| g.len()),
+        remote_source_count: config.remote_rules.sources.len(),
+    };
+    let remote_source_statuses: Arc<RwLock<Vec<RemoteSourceStatus>>> = Arc::new(RwLock::new(
+        config
+            .remote_rules
+            .sources
+            .iter()
+            .map(|src| RemoteSourceStatus {
+                url: src.url.clone(),
+                status: "pending".to_string(),
+                last_updated: 0,
+                rule_count: 0,
+                error_message: None,
+            })
+            .collect(),
+    ));
+
+    let admin_server = AdminServer::new(admin_listen_addr)
+        .with_cache(Arc::clone(&cache))
+        .with_auth(admin_auth)
+        .with_upstream(Arc::clone(&upstream))
+        .with_version(env!("CARGO_PKG_VERSION"))
+        .with_router(Arc::clone(&router))
+        .with_config_summary(config_summary)
+        .with_remote_source_statuses(Arc::clone(&remote_source_statuses));
+
+    if !config.remote_rules.sources.is_empty() {
+        let reload_router = Arc::clone(&router);
+        let reload_statuses = Arc::clone(&remote_source_statuses);
+        let remote_rules_config = config.remote_rules.clone();
+        let static_rules = config.static_rules.clone().unwrap_or_default();
+        let http_client_config = config.http_client.clone().unwrap_or_default();
+
+        tokio::spawn(async move {
+            run_reload_task(
+                remote_rules_config,
+                static_rules,
+                http_client_config,
+                reload_router,
+                reload_statuses,
+            )
+            .await;
+        });
+    }
+
     let handler = Arc::new(RequestHandler::new(cache, router, upstream));
 
-    // 创建DNS服务器配置
+    let rate_limiter = config.server.rate_limit.as_ref().map(|rl| {
+        info!(
+            "Rate limiting enabled, max {} requests/second, per-IP max {} requests/second",
+            rl.max_requests_per_second, rl.per_ip_max_requests_per_second
+        );
+        RateLimiter::new_with_per_ip(
+            rl.max_requests_per_second,
+            rl.per_ip_max_requests_per_second,
+        )
+    });
+
     let server_config = DnsServerConfig {
         udp_bind_addr: config.server.listen_udp.parse()?,
         tcp_bind_addr: config.server.listen_tcp.parse()?,
         tcp_timeout: config.server.tcp_timeout,
-        // DNS 服务器当前并不依赖 HTTP 监听地址；若未配置，则使用一个占位地址避免 panic。
         http_bind_addr: config
             .server
             .listen_http
@@ -324,35 +264,251 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
             .unwrap_or("127.0.0.1:0")
             .parse()?,
         http_timeout: config.server.http_timeout,
+        rate_limiter: rate_limiter.clone(),
+        udp_recv_buffer: config.server.udp_socket.recv_buffer,
+        udp_send_buffer: config.server.udp_socket.send_buffer,
+        udp_socket_count: config.server.udp_socket.socket_count,
     };
 
-    // 创建 DNS 服务器
     let dns_server = DnsServer::new(server_config, handler.clone());
 
-    // 启动 DoH 服务器
     let doh_server = if let Some(ref listen_http) = config.server.listen_http {
-        info!(
-            "DNS server initialized with UDP: {:?}, TCP: {:?}, HTTP: {:?}",
-            config.server.listen_udp, config.server.listen_tcp, config.server.listen_http
-        );
-        // 创建 DoH 服务器
+        let tls_cert = config.server.tls_cert.clone();
+        let tls_key = config.server.tls_key.clone();
         Some(DoHServer::new(
             listen_http.parse()?,
-            config.server.http_timeout,
-            handler,
+            handler.clone(),
+            rate_limiter,
+            tls_cert,
+            tls_key,
         ))
     } else {
-        info!(
-            "DNS server initialized with UDP: {:?}, TCP: {:?}",
-            config.server.listen_udp, config.server.listen_tcp
-        );
         None
     };
 
-    // 返回应用组件
     Ok(AppComponents {
         doh_server,
         dns_server,
         admin_server,
     })
+}
+
+async fn run_panic_guarded<F>(task_name: &str, task: F)
+where
+    F: std::future::Future<Output = ()> + Send + 'static,
+{
+    match tokio::spawn(task).await {
+        Ok(()) => {}
+        Err(e) if e.is_panic() => {
+            error!(
+                "{} iteration panicked: {}; keeping previous router, will retry at next interval",
+                task_name, e
+            );
+        }
+        Err(e) => {
+            warn!("{} task cancelled: {}", task_name, e);
+        }
+    }
+}
+
+async fn run_reload_task(
+    remote_rules_config: loadants::RemoteRulesConfig,
+    static_rules: Vec<loadants::RouteRuleConfig>,
+    http_client_config: loadants::HttpClientConfig,
+    router: Arc<RwLock<Arc<Router>>>,
+    statuses: Arc<RwLock<Vec<RemoteSourceStatus>>>,
+) {
+    let mut ticker = interval(Duration::from_secs(
+        remote_rules_config.reload_interval_secs,
+    ));
+    ticker.tick().await;
+
+    loop {
+        ticker.tick().await;
+        info!("Starting scheduled remote rules reload");
+
+        let iteration_config = remote_rules_config.clone();
+        let iteration_rules = static_rules.clone();
+        let iteration_client = http_client_config.clone();
+        let iteration_router = Arc::clone(&router);
+        let iteration_statuses = Arc::clone(&statuses);
+
+        run_panic_guarded(
+            "Remote rules reload",
+            reload_once(
+                iteration_config,
+                iteration_rules,
+                iteration_client,
+                iteration_router,
+                iteration_statuses,
+            ),
+        )
+        .await;
+    }
+}
+
+async fn reload_once(
+    remote_rules_config: loadants::RemoteRulesConfig,
+    static_rules: Vec<loadants::RouteRuleConfig>,
+    http_client_config: loadants::HttpClientConfig,
+    router: Arc<RwLock<Arc<Router>>>,
+    statuses: Arc<RwLock<Vec<RemoteSourceStatus>>>,
+) {
+    let load_result = load_and_merge_rules(
+        &remote_rules_config.sources,
+        &static_rules,
+        &http_client_config,
+        &remote_rules_config.snapshot,
+    )
+    .await;
+
+    let summary = match load_result {
+        Ok(s) => s,
+        Err(e) => {
+            warn!("Remote rules reload failed: {}, keeping previous router", e);
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+            let mut guards = statuses.write().await;
+            for g in guards.iter_mut() {
+                g.status = "failed".to_string();
+                g.last_updated = now;
+                g.rule_count = 0;
+                g.error_message = Some(format!("{e}"));
+            }
+            return;
+        }
+    };
+
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    let new_statuses: Vec<RemoteSourceStatus> = remote_rules_config
+        .sources
+        .iter()
+        .map(|config| {
+            let url = &config.url;
+            let is_successful = summary.successful_sources.contains(url);
+            let failed_entry = summary.failed_sources.iter().find(|f| &f.url == url);
+            let rule_count = summary
+                .merged_rules
+                .iter()
+                .filter(|rule| {
+                    rule.metadata.source_id.as_ref().map(|s| s.as_str()) == Some(url.as_str())
+                })
+                .count();
+            let status = if is_successful { "ok" } else { "failed" };
+            let error_message = failed_entry.map(|f| f.error.clone());
+            RemoteSourceStatus {
+                url: url.clone(),
+                status: status.to_string(),
+                last_updated: now,
+                rule_count,
+                error_message,
+            }
+        })
+        .collect();
+
+    {
+        let mut guards = statuses.write().await;
+        *guards = new_statuses;
+    }
+
+    match evaluate_remote_rule_startup(summary) {
+        Ok(summary) => match Router::new_with_metadata(summary.merged_rules) {
+            Ok(new_router) => {
+                let new_router = Arc::new(new_router);
+                let mut writer = router.write().await;
+                *writer = new_router;
+                info!("Remote rules reloaded successfully");
+            }
+            Err(e) => {
+                warn!(
+                    "Failed to build router from reloaded rules: {}, keeping previous router",
+                    e
+                );
+            }
+        },
+        Err(e) => {
+            warn!(
+                "Remote rules reload evaluation failed: {}, keeping previous router",
+                e
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    #[tokio::test]
+    async fn test_reload_guard_contains_iteration_panic() {
+        // 单次迭代 panic 不得向外传播，否则刷新循环会静默退出且永不恢复
+        run_panic_guarded("test", async {
+            panic!("simulated remote rule parse panic");
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_reload_guard_runs_normal_iteration() {
+        let completed = Arc::new(AtomicBool::new(false));
+        let flag = Arc::clone(&completed);
+        run_panic_guarded("test", async move {
+            flag.store(true, Ordering::SeqCst);
+        })
+        .await;
+        assert!(
+            completed.load(Ordering::SeqCst),
+            "normal iteration should run to completion"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_reload_once_swaps_router_and_updates_statuses() {
+        let mut remote_rules_config = loadants::RemoteRulesConfig::default();
+        remote_rules_config.snapshot.enabled = false;
+
+        let static_rules = vec![loadants::RouteRuleConfig {
+            match_type: loadants::MatchType::Wildcard,
+            patterns: vec!["*".to_string()],
+            action: loadants::RouteAction::Forward,
+            target: Some("default".to_string()),
+        }];
+
+        let router: Arc<RwLock<Arc<Router>>> = Arc::new(RwLock::new(Arc::new(
+            Router::new(Vec::new()).expect("empty router should build"),
+        )));
+        let statuses = Arc::new(RwLock::new(vec![RemoteSourceStatus {
+            url: "https://example.com/rules.txt".to_string(),
+            status: "pending".to_string(),
+            last_updated: 0,
+            rule_count: 0,
+            error_message: None,
+        }]));
+
+        reload_once(
+            remote_rules_config,
+            static_rules,
+            loadants::HttpClientConfig::default(),
+            Arc::clone(&router),
+            Arc::clone(&statuses),
+        )
+        .await;
+
+        assert_eq!(
+            router.read().await.rule_count(),
+            1,
+            "router should be rebuilt from merged rules"
+        );
+        assert!(
+            statuses.read().await.is_empty(),
+            "statuses should be rebuilt from source list"
+        );
+    }
 }

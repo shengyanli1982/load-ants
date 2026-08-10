@@ -1,4 +1,4 @@
-use crate::{error::AppError, r#const::http_headers};
+use crate::error::AppError;
 use hickory_proto::{
     op::{Message, MessageType, Query, ResponseCode},
     rr::{
@@ -6,20 +6,15 @@ use hickory_proto::{
         Name, RData, Record, RecordType,
     },
 };
-use serde_json::{json, Value as JsonValue};
+use serde_json::Value as JsonValue;
 use std::net::{Ipv4Addr, Ipv6Addr};
 use tracing::{debug, warn};
 
-// JSON字段常量
+// DNS JSON 字段常量。
 pub mod json_fields {
-    // 请求字段
     pub const NAME: &str = "name";
     pub const TYPE: &str = "type";
-    #[allow(dead_code)]
-    pub const DO: &str = "do";
     pub const CD: &str = "cd";
-    #[allow(dead_code)]
-    pub const CT: &str = "ct";
 
     // 响应字段
     pub const TC: &str = "TC";
@@ -37,11 +32,7 @@ pub mod json_fields {
     pub const EDNS_CLIENT_SUBNET: &str = "edns_client_subnet";
 }
 
-// DNS常量
-#[allow(dead_code)]
-pub const DNS_CLASS_IN: u16 = 1;
-
-// DNS状态码常量
+// DNS 状态码常量。
 pub mod dns_status {
     pub const NO_ERROR: u64 = 0;
     pub const FORM_ERR: u64 = 1;
@@ -51,7 +42,7 @@ pub mod dns_status {
     pub const REFUSED: u64 = 5;
 }
 
-// DNS记录段名称
+// DNS 记录分区名称。
 pub mod dns_section {
     pub const ANSWER: &str = "Answer";
     pub const AUTHORITY: &str = "Authority";
@@ -74,52 +65,18 @@ fn normalize_txt_data(raw: &str) -> String {
 }
 
 impl JsonConverter {
-    // 将DNS消息转换为DNS JSON格式
-    // https://developers.google.com/speed/public-dns/docs/doh/json
-    #[allow(dead_code)]
-    pub fn message_to_json(&self, query: &Message) -> Result<JsonValue, AppError> {
-        // 创建一个JSON对象以发送给DoH服务器
-        let query_param = match query.queries().first() {
-            Some(q) => q,
-            None => return Err(AppError::Internal("DNS query is empty".to_string())),
-        };
-
-        // 基于Google DNS-over-HTTPS JSON API格式
-        let mut json_data = json!({
-            json_fields::NAME: query_param.name().to_string(),
-            json_fields::TYPE: u16::from(query_param.query_type()),
-        });
-
-        // 可选参数: 当查询类别不是IN(1)时启用DNSSEC
-        if u16::from(query_param.query_class()) != DNS_CLASS_IN {
-            // do参数: DNSSEC OK 标志
-            json_data[json_fields::DO] = json!(true);
-        }
-
-        // cd参数: Checking Disabled 标志，默认为false (启用DNSSEC验证)
-        json_data[json_fields::CD] = json!(false);
-
-        // ct参数: 期望的响应内容类型，指定为JSON格式
-        json_data[json_fields::CT] = json!(http_headers::content_types::DNS_JSON);
-
-        // 不添加edns_client_subnet参数，使用默认值
-        // 此处不添加content-type参数，由调用方在HTTP头中设置
-
-        Ok(json_data)
-    }
-
-    // 解析DNS JSON响应为DNS消息
-    // https://developers.google.com/speed/public-dns/docs/doh/json
+    // 解析 DNS JSON 响应并还原为 DNS 消息。
+    // 参考：https://developers.google.com/speed/public-dns/docs/doh/json
     pub fn json_to_message(
         &self,
         json_response: &[u8],
         query: &Message,
     ) -> Result<Message, AppError> {
-        // 解析JSON响应
+        // 解析 JSON 响应。
         let json: JsonValue = serde_json::from_slice(json_response)
             .map_err(|e| AppError::Upstream(format!("Failed to parse JSON response: {}", e)))?;
 
-        // 创建新的DNS响应消息
+        // 创建新的 DNS 响应消息。
         let mut response = Message::new();
         response.set_id(query.id());
         response.set_message_type(MessageType::Response);
@@ -135,7 +92,7 @@ impl JsonConverter {
         if let Some(rd) = json.get(json_fields::RD).and_then(|rd| rd.as_bool()) {
             response.set_recursion_desired(rd);
         } else {
-            // 默认使用查询中的递归期望设置
+            // 缺省时沿用原始查询中的递归期望设置。
             response.set_recursion_desired(query.recursion_desired());
         }
 
@@ -143,11 +100,11 @@ impl JsonConverter {
         if let Some(ra) = json.get(json_fields::RA).and_then(|ra| ra.as_bool()) {
             response.set_recursion_available(ra);
         } else {
-            // 默认为true，Google Public DNS总是支持递归
+            // 缺省时按 `true` 处理，符合 Google Public DNS 的常见行为。
             response.set_recursion_available(true);
         }
 
-        // AD - 认证数据标志 (DNSSEC验证)
+        // AD 表示认证数据标志，用于表达 DNSSEC 校验结果。
         if let Some(ad) = json.get(json_fields::AD).and_then(|ad| ad.as_bool()) {
             response.set_authentic_data(ad);
         }
@@ -157,7 +114,7 @@ impl JsonConverter {
             response.set_checking_disabled(cd);
         }
 
-        // 处理Status字段，映射到响应码
+        // 将 `Status` 字段映射为标准响应码。
         if let Some(status) = json.get(json_fields::STATUS).and_then(|s| s.as_u64()) {
             let rcode = match status {
                 dns_status::NO_ERROR => ResponseCode::NoError,
@@ -171,7 +128,7 @@ impl JsonConverter {
             response.set_response_code(rcode);
         }
 
-        // 填充 Question/Query：优先使用 JSON 响应里的 Question（如果存在且可解析），否则回退到原始 query。
+        // 优先使用响应里的 `Question` 段；若缺失或无法解析则回退到原始查询。
         let mut added_query = false;
         if let Some(questions) = json.get(json_fields::QUESTION).and_then(|q| q.as_array()) {
             for question in questions {
@@ -193,9 +150,9 @@ impl JsonConverter {
             }
         }
 
-        // 如果状态不是成功，可能不需要进一步处理（但处理Question部分）
+        // 非成功响应通常不再附带可用记录，此时保留已补齐的查询段即可返回。
         if response.response_code() != ResponseCode::NoError {
-            // 如果JSON包含Comment字段，记录为调试信息
+            // 如果响应包含 `Comment` 字段，则作为调试信息输出。
             if let Some(comment) = json.get(json_fields::COMMENT).and_then(|c| c.as_str()) {
                 debug!("DNS JSON response comment: {}", comment);
             }
@@ -288,8 +245,8 @@ impl JsonConverter {
                     }
                 }
                 RecordType::TXT => {
-                    // Google's JSON format for TXT provides a single string. We'll treat it as a single entry.
-                    // For multiple strings, the format would be more complex.
+                    // Google 的 JSON 格式通常把 TXT 记录压成单个字符串，这里按单段 TXT 处理。
+                    // 如果服务端返回多段 TXT，需要引入更复杂的拆分逻辑。
                     let txt_data = TXT::new(vec![normalize_txt_data(data)]);
                     Some(Record::from_rdata(name, ttl as u32, RData::TXT(txt_data)))
                 }
@@ -371,7 +328,7 @@ impl JsonConverter {
             }
         }
 
-        // 处理edns_client_subnet字段
+        // 处理 `edns_client_subnet` 字段。
         if let Some(ecs) = json
             .get(json_fields::EDNS_CLIENT_SUBNET)
             .and_then(|e| e.as_str())

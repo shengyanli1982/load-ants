@@ -1,107 +1,141 @@
 # Prometheus 监控
 
-在生产环境中，对应用进行有效的监控是确保服务质量和快速排查问题的关键。Load Ants 通过标准的 `Prometheus` 指标为你提供了强大的可观测性能力。
+Load Ants 通过 `/metrics` 暴露 Prometheus 指标，用于观察请求量、缓存命中、上游健康和路由行为。
 
-### 通过 Prometheus 进行监控
+## 启用方式
 
-Load Ants 内置了一个 Prometheus 导出器，可以暴露详细的内部状态指标，以便被 Prometheus 服务器抓取和存储。
-
-#### 步骤一：启用 Metrics 端点
-
-指标端点是 `admin`（健康检查与管理）服务的一部分。当前版本中，`admin` 服务默认会启动并监听在 `127.0.0.1:9000`；你可以通过配置 `admin` 块来修改其监听地址。
+`/metrics` 端点由 Admin 服务器提供。默认监听地址是 `127.0.0.1:9000`，可通过配置修改：
 
 ```yaml
-# 健康检查与管理服务器设置（可选）
 admin:
-    listen: "127.0.0.1:9000" # Admin 服务监听地址和端口
+  listen: "127.0.0.1:9000"
 ```
 
-- **访问路径**: 指标端点会 **自动** 在 `admin` 服务的 `/metrics` 路径上可用。在这个例子中，URL 将是 `http://127.0.0.1:9000/metrics`。
-- **无需额外配置**: 你 **不能** 在 `config.yaml` 中配置路径或禁用它。它的生命周期与 `admin` 服务绑定。
-
-> **安全警告**: 指标端点与 Admin API 使用相同的监听地址和端口。请务必遵循[安全最佳实践](./security.md#3-保护-admin-api)来保护这个端点，例如使用防火墙或反向代理，防止未授权的访问。
-
-#### 步骤二：配置 Prometheus 来抓取指标
-
-在你的 `prometheus.yml` 配置文件中，添加一个新的抓取任务来指向 Load Ants。
+对应抓取地址示例：
 
 ```yaml
 scrape_configs:
-    - job_name: "load-ants"
-      static_configs:
-          - targets: ["<load_ants_host>:9000"] # 将此处替换为你的 admin 服务地址
+  - job_name: "load-ants"
+    static_configs:
+      - targets: ["<load_ants_host>:9000"]
 ```
 
-重启 Prometheus 后，它将开始定期从 Load Ants 拉取指标数据。
+若配置了 `admin.auth.token`，抓取时需携带 Bearer token：
 
-#### 关键指标深度解读
+```yaml
+scrape_configs:
+  - job_name: "load-ants"
+    bearer_token: "your_secret_token"
+    static_configs:
+      - targets: ["<load_ants_host>:9000"]
+```
 
-Load Ants 提供了丰富的指标，以下是几个核心指标的分组说明。所有指标均以 `loadants_` 为前缀。
+建议只在受控网络内暴露该端点，并结合防火墙或反向代理限制访问。
 
-##### 1. 请求处理和性能
+## 核心指标
 
-- **`loadants_dns_requests_total`**: 按协议（UDP/TCP）分类的已处理 DNS 请求总数。
-    - _标签_: `protocol`
-- **`loadants_dns_request_duration_seconds`**: DNS 请求处理时长的直方图。
-    - _标签_: `protocol`, `query_type`
-    - _用途_: 监控服务延迟，计算 P95/P99 响应时间。
-- **`loadants_http_requests_total`**: 按状态码分类的已处理 DoH 请求总数。
-    - _标签_: `status_code`
+### 请求处理
 
-##### 2. 缓存效率
+- `loadants_dns_requests_total`
+  - 标签：`protocol`
+- `loadants_dns_request_duration_seconds`
+  - 标签：`protocol`, `query_type`
+- `loadants_dns_request_processing_duration_seconds`
+  - 标签：`processing_stage`, `query_type`
+  - `processing_stage` 取值为 `cached`（缓存命中）或 `resolved`（经上游解析）
+- `loadants_dns_request_errors_total`
+  - 标签：`error_type`
+- `loadants_http_requests_total`
+  - 标签：`status_code`
+- `loadants_http_request_duration_seconds`
+  - 标签：`query_type`, `status_code`
+- `loadants_http_request_errors_total`
+  - 标签：`error_type`
+- `loadants_dns_query_type_total`
+  - 标签：`type`（记录类型，如 `A`、`AAAA`、`MX`、`TXT`，未识别类型归为 `OTHER`）
+- `loadants_dns_response_codes_total`
+  - 标签：`rcode`（响应码，如 `NOERROR`、`NXDOMAIN`、`SERVFAIL`，未识别响应码归为 `OTHER`）
 
-- **`loadants_cache_entries`**: DNS 缓存中的当前条目数 (Gauge)。
-- **`loadants_cache_capacity`**: DNS 缓存的最大容量 (Gauge)。
-- **`loadants_cache_operations_total`**: 按操作类型分类的缓存操作总数。
-    - _标签_: `operation` (`hit`, `miss`, `insert`, `insert_error`, `clear`)
-    - _用途_: 计算缓存命中率 `rate(loadants_cache_operations_total{operation="hit"}[5m]) / rate(loadants_cache_operations_total{operation=~"hit|miss"}[5m])`。
-- **`loadants_cache_ttl_seconds`**: 缓存条目 TTL 的直方图（秒）。
-    - _标签_: `source` (`original`, `min_ttl`, `adjusted`, `negative_ttl`)
-    - _用途_: 观察 TTL 分布，以及 `min_ttl` / 负向缓存是否频繁介入。
+### 运行状态
 
-##### 3. 上游解析器
+- `loadants_inflight_requests`
+  - 无标签；当前正在处理中的 DNS 请求数
+- `loadants_tcp_pool_connections`
+  - 无标签；当前连接池中的 TCP 连接数
 
-> **指标升级说明（Breaking Change）**  
-> 新版本已将 `loadants_upstream_*` 系列指标从“仅 DoH”升级为“DoH + DNS(UDP/TCP)”通用指标，并新增了两个标签维度：
->
-> - `upstream_protocol`: `doh|dns`
-> - `upstream_transport`: `http|udp|tcp`  
->   因此如果你之前在 Grafana/PromQL 中只按 `group/server` 聚合或过滤，需要把新标签纳入查询（或用 `sum by (...)` 忽略它们）。
+### 缓存
 
-- **`loadants_upstream_requests_total`**: 发送到上游解析器的请求总数。
-    - _标签_: `upstream_protocol`, `upstream_transport`, `group`, `server`
-    - _说明_:
-        - `doh/http`：DoH 上游（`server` 通常为 Host）。
-        - `dns/udp|dns/tcp`：传统 DNS 上游（`server` 通常为 IP 字符串）。
-        - 当 `dns_client.prefer_tcp=false` 且 UDP 响应 `TC=1` 触发回退时：**同一条逻辑请求可能会分别产生一条 `dns/udp` 与一条 `dns/tcp` 的请求计数**（按“尝试次数”计数，这是预期行为）。
-- **`loadants_upstream_errors_total`**: 上游解析器错误总数。
-    - _标签_: `upstream_protocol`, `upstream_transport`, `error_type`, `group`, `server`
-    - _用途_: 快速定位出问题的上游服务器或组，并设置告警。
-- **`loadants_upstream_duration_seconds`**: 上游查询时长的直方图。
-    - _标签_: `upstream_protocol`, `upstream_transport`, `group`, `server`
-    - _用途_: 评估不同上游解析器的性能；对 `dns` 上游可以分别观察 `udp` 与 `tcp` 的延迟分布。
+- `loadants_cache_entries`
+- `loadants_cache_capacity`
+- `loadants_cache_operations_total`
+  - 标签：`operation`
+- `loadants_cache_ttl_seconds`
+  - 标签：`source`
 
-**PromQL 迁移示例**
+### 上游解析
 
-- 旧：只看某个组的上游请求速率（旧版无新标签）
-    - `rate(loadants_upstream_requests_total{group="public"}[5m])`
-- 新：保留新标签，分别看不同上游协议/传输
-    - `rate(loadants_upstream_requests_total{group="public"}[5m])`
-- 新：忽略 `upstream_protocol/upstream_transport`，得到与旧版更接近的聚合口径
-    - `sum by (group, server) (rate(loadants_upstream_requests_total[5m]))`
+- `loadants_upstream_requests_total`
+  - 标签：`upstream_protocol`, `upstream_transport`, `group`, `server`
+- `loadants_upstream_errors_total`
+  - 标签：`upstream_protocol`, `upstream_transport`, `error_type`, `group`, `server`
+- `loadants_upstream_duration_seconds`
+  - 标签：`upstream_protocol`, `upstream_transport`, `group`, `server`
+- `loadants_upstream_health_state`
+  - 标签：`group`, `server`
+  - 值语义：`0`=Unhealthy，`1`=HalfOpen，`2`=Healthy
+  - **破坏性变更提示**（2026-08）：旧版本中 `0` 表示 Healthy，升级后监控面板与告警规则需同步更新阈值
+- `loadants_circuit_breaker_transitions_total`
+  - 标签：`group`, `state_from`, `state_to`
+  - 统计上游健康状态迁移次数（如 Healthy→Unhealthy、Unhealthy→HalfOpen、HalfOpen→Healthy/Unhealthy）
+- `loadants_stale_fallback_total`
+  - 标签：`group`
+  - 统计上游转发失败时以过期缓存兜底响应的次数
 
-##### 4. 路由策略
+说明：
 
-- **`loadants_route_matches_total`**: 路由规则匹配总数。
-    - _标签_: `match_type` (`exact`, `wildcard`, `regex`), `target_group`, `rule_source`, `action` (`block`, `forward`)
-    - _用途_: 精确洞察你的路由规则是如何被使用的。
-    - _备注_: 远程规则在加载后会被合并进路由引擎；当前版本的匹配计数中，`rule_source` 可能统一为 `static`（即使规则源来自 `remote_rules`）。
-- **`loadants_route_rules_count`**: 当前活动的路由规则数量。
-    - _标签_: `match_type` (`exact`, `wildcard`, `regex`), `rule_source`
+- `upstream_protocol` 取值为 `doh` 或 `dns`
+- `upstream_transport` 取值为 `http`、`udp` 或 `tcp`
+- 当传统 DNS 上游先走 UDP、再因 `TC=1` 回退到 TCP 时，同一逻辑请求会产生两条上游请求计数（UDP 与 TCP 各一条），这是预期行为
 
----
+### 健康检查端点
 
-### 下一步
+`/health/live` 与 `/health/ready` 由 Admin 服务器提供，可用于探针与告警：
+
+- `/health/live`：存活探针（livenessProbe）端点，进程存活即返回 200
+- `/health/ready`：就绪探针（readinessProbe）端点，任一上游组存在服务器（servers>0）且全部不健康（healthy=0）时返回 503；其余情况返回 200
+
+### 路由策略
+
+- `loadants_route_matches_total`
+  - 标签：`rule_type`, `target_group`, `rule_source`, `action`
+  - `rule_source` 会按真实来源写入 `static` 或 `remote`
+  - 若规则来自远程源，内部还会保留来源标识，便于后续实现规则可解释性或热更新扩展
+
+- `loadants_route_rules_count`
+  - 标签：`rule_type`, `rule_source`
+  - 统计当前编译后有效规则数，不再把远程规则统一记成 `static`
+
+## PromQL 示例
+
+查看某个上游组的请求速率：
+
+```promql
+rate(loadants_upstream_requests_total{group="public"}[5m])
+```
+
+忽略 `upstream_protocol` 和 `upstream_transport` 做聚合：
+
+```promql
+sum by (group, server) (rate(loadants_upstream_requests_total[5m]))
+```
+
+查看路由匹配中远程规则的命中量：
+
+```promql
+rate(loadants_route_matches_total{rule_source="remote"}[5m])
+```
+
+## 下一步
 
 - [➡️ 了解安全注意事项](./security.md)
 - [➡️ 查看架构设计](../architecture/index.md)

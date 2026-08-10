@@ -116,6 +116,10 @@ async fn build_dns_manager(addr: SocketAddr, dns_config: DnsClientConfig) -> Ups
         })],
         retry: None,
         proxy: None,
+        tls_verify: None,
+        deny_answers: vec![],
+        case_randomization: false,
+        case_randomization_strict: false,
     }];
 
     UpstreamManager::new(groups, HttpClientConfig::default(), dns_config)
@@ -141,7 +145,9 @@ async fn test_dns_prefer_tcp_true_uses_tcp_only() {
             connect_timeout: 1,
             request_timeout: 2,
             prefer_tcp: true,
+            idle_connection_timeout: 30,
             tcp_reconnect: true,
+            max_tcp_connections: 256,
         },
     )
     .await;
@@ -172,7 +178,9 @@ async fn test_dns_udp_tc_triggers_tcp_retry() {
             connect_timeout: 1,
             request_timeout: 2,
             prefer_tcp: false,
+            idle_connection_timeout: 30,
             tcp_reconnect: true,
+            max_tcp_connections: 256,
         },
     )
     .await;
@@ -200,7 +208,9 @@ async fn test_dns_nxdomain_transparent() {
             connect_timeout: 1,
             request_timeout: 2,
             prefer_tcp: false,
+            idle_connection_timeout: 30,
             tcp_reconnect: true,
+            max_tcp_connections: 256,
         },
     )
     .await;

@@ -66,6 +66,14 @@ pub struct Args {
         default_value_t = shutdown_timeout::DEFAULT
     )]
     pub shutdown_timeout: u64,
+
+    // 输出 JSON Schema
+    #[arg(
+        long = "dump-schema",
+        action = ArgAction::SetTrue,
+        help = "Dump the JSON Schema of the configuration to stdout and exit"
+    )]
+    pub dump_schema: bool,
 }
 
 impl Args {

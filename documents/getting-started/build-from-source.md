@@ -1,29 +1,29 @@
 # 从源码构建
 
-对于希望深入了解项目、进行二次开发或在特定平台（官方未提供预编译版本）上运行 Load Ants 的开发者来说，从源码构建是一个很好的选择。
+若你要深入了解项目、二次开发，或在官方未提供预编译版本的平台上运行 Load Ants，可以从源码构建。
 
-本指南将引导你完成从克隆仓库到生成可执行文件的完整过程。
+本指南覆盖从克隆仓库到生成可执行文件的完整流程。
 
 ---
 
-### 环境要求
+## 环境要求
 
 在开始之前，请确保你的系统满足以下条件：
 
-- **Git**: 用于克隆项目源代码。
-- **Rust 工具链**: 这是构建项目的核心。建议使用与项目 CI 构建一致的版本：
+- **Git**：用于克隆项目源代码。
+- **Rust 工具链**：建议使用与项目 CI 构建一致的版本：
     - Rust `1.93.1` 或更高版本。
 
-- **系统编译环境**: 需要可用的 C/C++ 工具链（例如 Linux 的 `gcc/clang`、Windows 的 MinGW/MSVC、macOS 的 Xcode Command Line Tools）。若遇到 `openssl-sys` 相关编译/链接错误，请按平台安装 OpenSSL 与 `pkg-config`（或参考项目 CI 的构建脚本）。
-
-    如果你尚未安装 Rust，我们强烈建议通过 [rustup](https://rustup.rs/) 官方安装脚本来安装和管理你的 Rust 版本。`rustup` 会自动处理好编译器、包管理器 (`cargo`) 和标准库。
+    如果你尚未安装 Rust，强烈建议通过 [rustup](https://rustup.rs/) 官方安装脚本来安装和管理你的 Rust 版本。`rustup` 会自动处理好编译器、包管理器（`cargo`）和标准库。
 
     ```bash
     # 通过 rustup 安装 Rust
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
     ```
 
-### 步骤一：获取源代码
+- **系统编译环境**：需要可用的 C/C++ 工具链（例如 Linux 的 `gcc/clang`、Windows 的 MinGW/MSVC、macOS 的 Xcode Command Line Tools）。若遇到 `openssl-sys` 相关编译/链接错误，请按平台安装 OpenSSL 与 `pkg-config`（或参考项目 CI 的构建脚本）。
+
+## 步骤一：获取源代码
 
 使用 `git` 从 GitHub 克隆 Load Ants 的官方仓库。
 
@@ -32,31 +32,45 @@ git clone https://github.com/shengyanli1982/load-ants.git
 cd load-ants
 ```
 
-### 步骤二：构建项目
+## 步骤二：构建项目
 
-进入项目根目录后，使用 `cargo`（Rust 的包管理器和构建工具）来编译项目。
+进入项目根目录后，使用 `cargo`（Rust 的包管理器和构建工具）编译项目。
 
-我们推荐构建**发布版本**（release build），这会应用大量优化，使最终生成的可执行文件性能更高。
+推荐构建**发布版本**（release build）：该模式启用编译优化，生成的可执行文件性能优于调试版本。
 
 ```bash
 cargo build --release
 ```
 
-编译过程可能需要几分钟，`cargo` 会自动下载并编译所有依赖的库。
+编译过程约需数分钟，`cargo` 会自动下载并编译所有依赖的库。
 
-### 步骤三：运行可执行文件
+项目同时提供了 `Makefile`，封装了常用的构建与检查命令：
 
-构建成功后，你可以在 `target/release/` 目录下找到生成的可执行文件。
+```bash
+make build         # 构建调试版本
+make build-release # 构建发布版本
+make check         # 代码检查（格式检查 + clippy）
+make test          # 运行测试
+make bench         # 运行基准测试
+make fmt           # 格式化代码
+make cov           # 生成代码覆盖率报告（HTML，需安装 cargo-llvm-cov）
+```
 
-- **在 Linux / macOS 上**: 文件名为 `loadants`
-- **在 Windows 上**: 文件名为 `loadants.exe`
+> **注意**：Makefile 会自动按当前平台选择目标三元组并传入 `--target`，因此 `make build-release` 的产物位于 `target/<triple>/release/`（例如 `target/x86_64-unknown-linux-gnu/release/loadants`），而不是 `target/release/`。
+
+## 步骤三：运行可执行文件
+
+构建成功后，你可以在 `target/release/` 目录下找到生成的可执行文件（若使用 `make build-release`，则位于 `target/<triple>/release/`，见上文注意事项）。
+
+- **在 Linux / macOS 上**：文件名为 `loadants`
+- **在 Windows 上**：文件名为 `loadants.exe`
 
 现在，你可以像在 [快速上手](./index.md) 指南中一样运行它：
 
-1.  **准备配置文件**:
+1.  **准备配置文件**：
     将项目根目录下的 `config.default.yaml` 复制一份，重命名为 `config.yaml`，并放置在你希望运行程序的任何位置。
 
-2.  **运行程序**:
+2.  **运行程序**：
 
     将编译好的文件和配置文件放在一起运行。
 
@@ -68,14 +82,14 @@ cargo build --release
     .\target\release\loadants.exe -c .\config.yaml
     ```
 
-    > **注意**：如果你的 `config.yaml` 中配置了需要特权的端口（如 53），你可能需要使用 `sudo` 或以管理员身份运行此命令。
+    > **注意**：如果你的 `config.yaml` 中配置了特权端口（如 53），需使用 `sudo`（Linux/macOS）或以管理员身份（Windows）运行此命令。
 
-恭喜你，现在你已经成功地从源代码构建并运行了 Load Ants！
+恭喜你，已经从源代码构建并运行了 Load Ants！
 
 ---
 
-### 下一步
+## 下一步
 
 - [➡️ 探索不同的部署方式](../deployment/index.md)
 - [➡️ 学习核心概念](../concepts/index.md)
-- [➡️ 返回快速开始](./index.md)
+- [➡️ 返回快速上手](./index.md)

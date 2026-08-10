@@ -1,9 +1,10 @@
 use crate::r#const::retry_limits;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use validator::{Validate, ValidationError};
 
 // 认证类型枚举
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum AuthType {
     // HTTP基本认证
@@ -34,7 +35,7 @@ fn validate_bearer_auth(auth: &AuthConfig) -> Result<(), ValidationError> {
 }
 
 // 认证配置
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Validate)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Validate, JsonSchema)]
 #[validate(schema(
     function = "validate_basic_auth",
     message = "Basic authentication requires username and password"
@@ -56,20 +57,20 @@ pub struct AuthConfig {
 }
 
 // 重试配置
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Validate)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Validate, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub struct RetryConfig {
     // 重试次数
     #[validate(range(
-        min = retry_limits::MIN_ATTEMPTS,
-        max = retry_limits::MAX_ATTEMPTS,
+        min = "retry_limits::MIN_ATTEMPTS",
+        max = "retry_limits::MAX_ATTEMPTS",
         message = "Retry attempts must be between {} and {}"
     ))]
     pub attempts: u32,
     // 重试初始延迟（秒）
     #[validate(range(
-        min = retry_limits::MIN_DELAY,
-        max = retry_limits::MAX_DELAY,
+        min = "retry_limits::MIN_DELAY",
+        max = "retry_limits::MAX_DELAY",
         message = "Retry delay must be between {} and {} seconds"
     ))]
     pub delay: u32,

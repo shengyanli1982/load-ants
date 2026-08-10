@@ -59,4 +59,5 @@ EXPOSE 53/tcp 53/udp 8080/tcp
 
 # 默认运行服务端程序。
 # 假设服务端需要一个配置文件
+HEALTHCHECK --interval=30s --timeout=3s --retries=3 CMD wget -qO- http://localhost:9000/health/live || exit 1
 ENTRYPOINT ["/app/loadants"]

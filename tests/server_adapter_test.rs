@@ -1,8 +1,9 @@
 use hickory_proto::op::{Edns, Message, MessageType, OpCode, Query};
 use hickory_proto::rr::{Name, RecordType};
 use hickory_proto::serialize::binary::{BinDecodable, BinDecoder};
+use hickory_proto::xfer::Protocol;
 use hickory_server::authority::MessageRequest;
-use hickory_server::server::{Protocol, Request};
+use hickory_server::server::Request;
 use loadants::server::parse_request_message;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 

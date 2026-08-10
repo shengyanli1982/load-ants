@@ -1,19 +1,19 @@
-use hickory_proto::error::ProtoError;
+use hickory_proto::ProtoError;
 use std::io;
 use std::net::AddrParseError;
 use thiserror::Error;
 
-// 无效的代理配置错误
+/// 表示代理配置本身不合法。
 #[derive(Debug, Error)]
 #[error("Proxy configuration error: {0}")]
 pub struct InvalidProxyConfig(pub String);
 
-// HTTP客户端错误
+/// 表示 HTTP 客户端创建或调用过程中的错误。
 #[derive(Debug, Error)]
 #[error("HTTP client error: {0}")]
 pub struct HttpClientError(pub String);
 
-// Unified error type
+/// 统一的应用错误类型。
 #[derive(Error, Debug)]
 pub enum AppError {
     #[error("Configuration error: {0}")]
@@ -34,15 +34,10 @@ pub enum AppError {
     #[error("Upstream error: {0}")]
     Upstream(String),
 
-    #[error("Router error: {0}")]
-    #[allow(dead_code)]
-    Router(String),
-
     #[error("Cache error: {0}")]
     Cache(String),
 
     #[error("Timeout error")]
-    #[allow(dead_code)]
     Timeout,
 
     #[error("No available upstream servers")]
@@ -65,14 +60,6 @@ pub enum AppError {
 
     #[error("HTTP client error: {0}")]
     HttpError(#[from] HttpClientError),
-
-    #[error("Missing required configuration: {0}")]
-    #[allow(dead_code)]
-    MissingRequiredConfig(String),
-
-    #[error("Invalid load balancing strategy: {0}")]
-    #[allow(dead_code)]
-    InvalidLoadBalancingStrategy(String),
 
     #[error("Invalid shutdown timeout: must be between minimum and maximum values")]
     InvalidShutdownTimeout,
@@ -102,7 +89,7 @@ impl From<AddrParseError> for AppError {
     }
 }
 
-// Configuration error type
+/// 配置加载、解析与校验阶段使用的错误类型。
 #[derive(Error, Debug)]
 pub enum ConfigError {
     #[error("Failed to load configuration file: {0}")]
@@ -132,9 +119,8 @@ pub enum ConfigError {
     #[error("Invalid route rule: {0}")]
     InvalidRouteRule(String),
 
-    #[error("Invalid pattern: {0}")]
-    #[allow(dead_code)]
-    InvalidPattern(String),
+    #[error("Route rule conflict: {0}")]
+    RuleConflict(String),
 
     #[error("Invalid regular expression: {0}")]
     InvalidRegex(#[from] regex::Error),

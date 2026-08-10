@@ -1,6 +1,8 @@
 use crate::error::ConfigError;
 use crate::r#const::{http_client_limits, retry_limits, upstream_defaults};
+use crate::router::{RoutedRule, Router};
 use once_cell::sync::Lazy;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, collections::HashSet, fs, net::SocketAddr, path::Path, str::FromStr};
 use tracing::debug;
@@ -46,14 +48,6 @@ pub fn validate_url(url_str: &str) -> Result<(), ValidationError> {
     }
 }
 
-// 自定义验证函数 - 验证Forward动作时必须有target
-pub fn validate_forward_target(rule: &RouteRuleConfig) -> Result<(), ValidationError> {
-    if matches!(rule.action, RouteAction::Forward) && rule.target.is_none() {
-        return Err(ValidationError::new("missing_target_for_forward"));
-    }
-    Ok(())
-}
-
 // 自定义验证函数 - 验证上游组名称唯一性
 pub fn validate_unique_group_names(config: &Config) -> Result<(), ValidationError> {
     if let Some(groups) = &config.upstream_groups {
@@ -69,6 +63,52 @@ pub fn validate_unique_group_names(config: &Config) -> Result<(), ValidationErro
             }
         }
     }
+    Ok(())
+}
+
+// 自定义验证函数 - TLS cert/key 必须成对配置
+pub fn validate_tls_cert_key_pair(config: &Config) -> Result<(), ValidationError> {
+    let has_cert = config
+        .server
+        .tls_cert
+        .as_ref()
+        .is_some_and(|s| !s.is_empty());
+    let has_key = config
+        .server
+        .tls_key
+        .as_ref()
+        .is_some_and(|s| !s.is_empty());
+
+    if has_cert != has_key {
+        let mut err = ValidationError::new("tls_cert_key_pair_mismatch");
+        err.message = Some(Cow::from(
+            "server.tls_cert and server.tls_key must be configured together: both present or both absent".to_string(),
+        ));
+        return Err(err);
+    }
+
+    if has_cert && has_key {
+        let cert_path = config.server.tls_cert.as_ref().unwrap();
+        let key_path = config.server.tls_key.as_ref().unwrap();
+
+        if let Err(e) = std::fs::metadata(cert_path) {
+            let mut err = ValidationError::new("tls_cert_file_not_found");
+            err.message = Some(Cow::from(format!(
+                "TLS certificate file not accessible: {}: {}",
+                cert_path, e
+            )));
+            return Err(err);
+        }
+        if let Err(e) = std::fs::metadata(key_path) {
+            let mut err = ValidationError::new("tls_key_file_not_found");
+            err.message = Some(Cow::from(format!(
+                "TLS key file not accessible: {}: {}",
+                key_path, e
+            )));
+            return Err(err);
+        }
+    }
+
     Ok(())
 }
 
@@ -88,7 +128,7 @@ pub fn validate_group_references(config: &Config) -> Result<(), ValidationError>
     }
 
     // 收集远程规则中的 Forward targets
-    for rule in &config.remote_rules {
+    for rule in &config.remote_rules.sources {
         if let RouteAction::Forward = rule.action {
             if let Some(target) = &rule.target {
                 forward_targets.push(target.clone());
@@ -166,9 +206,10 @@ pub fn validate_keepalive(value: u32) -> Result<(), ValidationError> {
 }
 
 // 应用配置
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Validate)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Validate, JsonSchema)]
 #[validate(schema(function = "validate_unique_group_names"))]
 #[validate(schema(function = "validate_group_references"))]
+#[validate(schema(function = "validate_tls_cert_key_pair"))]
 #[serde(rename_all = "lowercase")]
 pub struct Config {
     // 服务器配置
@@ -201,7 +242,7 @@ pub struct Config {
     // 远程规则配置（可选）
     #[serde(default)]
     #[validate(nested)]
-    pub remote_rules: Vec<RemoteRuleConfig>,
+    pub remote_rules: RemoteRulesConfig,
 }
 
 impl Config {
@@ -212,12 +253,6 @@ impl Config {
         let config: Config = serde_yaml::from_str(&content).map_err(ConfigError::ParseError)?;
         config.validate()?;
         Ok(config)
-    }
-
-    // 创建一个带有默认值的配置
-    #[allow(dead_code)]
-    pub fn new_with_defaults() -> Self {
-        Self::default()
     }
 
     // 验证配置有效性
@@ -237,7 +272,7 @@ impl Config {
     /// 由二进制入口（例如 `src/main.rs`）在启动阶段显式调用，以保持现有库接口与测试兼容。
     pub fn validate_runtime_requirements(&self) -> ConfigResult<()> {
         let static_rules_count = self.static_rules.as_ref().map_or(0, |rules| rules.len());
-        let remote_rules_count = self.remote_rules.len();
+        let remote_rules_count = self.remote_rules.sources.len();
 
         if static_rules_count == 0 && remote_rules_count == 0 {
             return Err(ConfigError::ValidationError(
@@ -253,6 +288,7 @@ impl Config {
         });
         let has_forward_in_remote = self
             .remote_rules
+            .sources
             .iter()
             .any(|rule| matches!(rule.action, RouteAction::Forward));
 
@@ -261,6 +297,15 @@ impl Config {
                 "No forward rules configured: please add at least one rule with action 'forward'"
                     .to_string(),
             ));
+        }
+
+        if let Some(static_rules) = &self.static_rules {
+            let routed_rules: Vec<_> = static_rules
+                .iter()
+                .cloned()
+                .map(RoutedRule::from_static)
+                .collect();
+            Router::validate_rule_conflicts(&routed_rules)?;
         }
 
         Ok(())
@@ -336,6 +381,10 @@ impl Default for Config {
                     delay: retry_limits::DEFAULT_DELAY,
                 }),
                 proxy: None,
+                tls_verify: None,
+                deny_answers: Vec::new(),
+                case_randomization: false,
+                case_randomization_strict: false,
             }]),
             static_rules: Some(vec![RouteRuleConfig {
                 match_type: MatchType::Wildcard,
@@ -343,7 +392,7 @@ impl Default for Config {
                 action: RouteAction::Forward,
                 target: Some(upstream_defaults::DEFAULT_GROUP_NAME.to_string()),
             }]),
-            remote_rules: Vec::new(),
+            remote_rules: RemoteRulesConfig::default(),
         }
     }
 }
