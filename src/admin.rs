@@ -2,10 +2,11 @@ use crate::cache::{CacheDumpResponse, CacheRestoreRequest, CacheRestoreStats, Dn
 use crate::config::AdminAuthConfig;
 use crate::error::AppError;
 use crate::metrics;
+use crate::r#const::subsystem_names;
 use crate::router::Router as RoutingEngine;
 use crate::upstream::UpstreamManager;
 use axum::{
-    extract::{Request, State},
+    extract::{ConnectInfo, Request, State},
     http::StatusCode,
     middleware::{from_fn_with_state, Next},
     response::{IntoResponse, Response},
@@ -21,7 +22,7 @@ use subtle::ConstantTimeEq;
 use tokio::net::TcpListener;
 use tokio::sync::{watch, RwLock};
 use tokio_graceful_shutdown::{IntoSubsystem, SubsystemHandle};
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 #[derive(Clone)]
 pub struct ConfigSummary {
@@ -156,14 +157,20 @@ impl AdminServer {
         let app = Router::new().merge(health_routes).merge(protected_routes);
 
         let listener = TcpListener::bind(self.listen_addr).await?;
-        info!("Admin server listening on {}", self.listen_addr);
+        info!(transport = "admin", addr = %self.listen_addr, "Listener ready");
 
         let mut shutdown_rx = self.shutdown_requested.subscribe();
 
-        let server = axum::serve(listener, app);
+        let server = axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        );
         let server_with_graceful_shutdown = server.with_graceful_shutdown(async move {
             let _ = shutdown_rx.wait_for(|requested| *requested).await;
-            info!("Admin server received shutdown signal");
+            info!(
+                subsystem = subsystem_names::ADMIN_SERVER,
+                "Shutdown requested"
+            );
         });
 
         server_with_graceful_shutdown.await?;
@@ -189,10 +196,13 @@ impl IntoSubsystem<AppError> for AdminServer {
         };
 
         if let Err(err) = result {
-            error!("Admin server error: {}", err);
+            error!(
+                error = &err as &dyn std::error::Error,
+                "Failed to run admin server"
+            );
             Err(err)
         } else {
-            info!("Admin server stopped");
+            info!(status = "graceful", "Admin server stopped");
             Ok(())
         }
     }
@@ -259,6 +269,7 @@ async fn health_ready_handler(State(state): State<Arc<AdminState>>) -> (StatusCo
 
 async fn auth_middleware(
     State(auth_state): State<Option<AdminAuthConfig>>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     request: Request,
     next: Next,
 ) -> Response {
@@ -277,6 +288,12 @@ async fn auth_middleware(
         });
 
         if !is_authenticated {
+            warn!(
+                client_ip = %addr.ip(),
+                path = %request.uri().path(),
+                method = %request.method(),
+                "Admin authentication failed"
+            );
             return (
                 StatusCode::UNAUTHORIZED,
                 Json(json!({
@@ -309,13 +326,14 @@ fn constant_time_eq(a: &str, b: &str) -> bool {
 
 async fn refresh_cache_handler(
     State(state): State<Arc<AdminState>>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     match &state.cache {
         Some(cache) => {
             if cache.is_enabled() {
                 cache.clear().await;
 
-                info!("DNS cache has been cleared");
+                info!(client_ip = %addr.ip(), "Cache cleared");
 
                 Ok(Json(json!({
                     "status": "success",
@@ -434,6 +452,7 @@ async fn info_handler(State(state): State<Arc<AdminState>>) -> Json<Value> {
 
 async fn cache_dump_handler(
     State(state): State<Arc<AdminState>>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
 ) -> Result<Json<CacheDumpResponse>, (StatusCode, Json<Value>)> {
     match &state.cache {
         Some(cache) => {
@@ -448,7 +467,7 @@ async fn cache_dump_handler(
             }
 
             let entries = cache.iter_entries();
-            info!("Cache dump: {} entries dumped", entries.len());
+            info!(client_ip = %addr.ip(), entries = entries.len(), "Cache dumped");
             Ok(Json(CacheDumpResponse { entries }))
         }
         None => Err((
@@ -463,6 +482,7 @@ async fn cache_dump_handler(
 
 async fn cache_restore_handler(
     State(state): State<Arc<AdminState>>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Json(body): Json<CacheRestoreRequest>,
 ) -> Result<Json<CacheRestoreStats>, (StatusCode, Json<Value>)> {
     match &state.cache {
@@ -489,8 +509,11 @@ async fn cache_restore_handler(
             }
 
             info!(
-                "Cache restore completed: loaded={}, skipped_expired={}, failed={}",
-                total_loaded, total_skipped_expired, total_failed
+                client_ip = %addr.ip(),
+                loaded = total_loaded,
+                skipped_expired = total_skipped_expired,
+                failed = total_failed,
+                "Cache restore completed"
             );
 
             Ok(Json(CacheRestoreStats {

@@ -8,7 +8,7 @@ use hickory_proto::{
 };
 use serde_json::Value as JsonValue;
 use std::net::{Ipv4Addr, Ipv6Addr};
-use tracing::{debug, warn};
+use tracing::{debug, trace};
 
 // DNS JSON 字段常量。
 pub mod json_fields {
@@ -154,7 +154,7 @@ impl JsonConverter {
         if response.response_code() != ResponseCode::NoError {
             // 如果响应包含 `Comment` 字段，则作为调试信息输出。
             if let Some(comment) = json.get(json_fields::COMMENT).and_then(|c| c.as_str()) {
-                debug!("DNS JSON response comment: {}", comment);
+                trace!(comment = %comment, "DoH JSON response comment");
             }
 
             return Ok(response);
@@ -172,7 +172,12 @@ impl JsonConverter {
             let name = match Name::parse(name, None) {
                 Ok(n) => n,
                 Err(e) => {
-                    warn!("Failed to parse {} record name {}: {}", section, name, e);
+                    debug!(
+                        section = %section,
+                        name = %name,
+                        error = %e,
+                        "Failed to parse record name"
+                    );
                     return None;
                 }
             };
@@ -190,7 +195,13 @@ impl JsonConverter {
                         Some(Record::from_rdata(name, ttl as u32, RData::A(rdata)))
                     }
                     Err(e) => {
-                        warn!("Failed to parse A record data {}: {}", data, e);
+                        debug!(
+                            section = %section,
+                            record_type = "A",
+                            data = %data,
+                            error = %e,
+                            "Failed to parse record data"
+                        );
                         None
                     }
                 },
@@ -210,7 +221,13 @@ impl JsonConverter {
                         Some(Record::from_rdata(name, ttl as u32, RData::AAAA(rdata)))
                     }
                     Err(e) => {
-                        warn!("Failed to parse AAAA record data {}: {}", data, e);
+                        debug!(
+                            section = %section,
+                            record_type = "AAAA",
+                            data = %data,
+                            error = %e,
+                            "Failed to parse record data"
+                        );
                         None
                     }
                 },
@@ -220,7 +237,13 @@ impl JsonConverter {
                         Some(Record::from_rdata(name, ttl as u32, RData::CNAME(rdata)))
                     }
                     Err(e) => {
-                        warn!("Failed to parse CNAME record data {}: {}", data, e);
+                        debug!(
+                            section = %section,
+                            record_type = "CNAME",
+                            data = %data,
+                            error = %e,
+                            "Failed to parse record data"
+                        );
                         None
                     }
                 },
@@ -236,11 +259,21 @@ impl JsonConverter {
                                 RData::MX(MX::new(preference, exchange)),
                             ))
                         } else {
-                            warn!("Failed to parse MX record data '{}'", data);
+                            debug!(
+                                section = %section,
+                                record_type = "MX",
+                                data = %data,
+                                "Failed to parse record data"
+                            );
                             None
                         }
                     } else {
-                        warn!("Invalid MX record data format '{}'", data);
+                        debug!(
+                            section = %section,
+                            record_type = "MX",
+                            data = %data,
+                            "Failed to parse record data"
+                        );
                         None
                     }
                 }
@@ -265,11 +298,21 @@ impl JsonConverter {
                                 RData::SRV(SRV::new(priority, weight, port, target)),
                             ))
                         } else {
-                            warn!("Failed to parse SRV record data '{}'", data);
+                            debug!(
+                                section = %section,
+                                record_type = "SRV",
+                                data = %data,
+                                "Failed to parse record data"
+                            );
                             None
                         }
                     } else {
-                        warn!("Invalid SRV record data format '{}'", data);
+                        debug!(
+                            section = %section,
+                            record_type = "SRV",
+                            data = %data,
+                            "Failed to parse record data"
+                        );
                         None
                     }
                 }
@@ -279,7 +322,13 @@ impl JsonConverter {
                         Some(Record::from_rdata(name, ttl as u32, RData::PTR(rdata)))
                     }
                     Err(e) => {
-                        warn!("Failed to parse PTR record data {}: {}", data, e);
+                        debug!(
+                            section = %section,
+                            record_type = "PTR",
+                            data = %data,
+                            error = %e,
+                            "Failed to parse record data"
+                        );
                         None
                     }
                 },
@@ -289,13 +338,24 @@ impl JsonConverter {
                         Some(Record::from_rdata(name, ttl as u32, RData::NS(rdata)))
                     }
                     Err(e) => {
-                        warn!("Failed to parse NS record data {}: {}", data, e);
+                        debug!(
+                            section = %section,
+                            record_type = "NS",
+                            data = %data,
+                            error = %e,
+                            "Failed to parse record data"
+                        );
                         None
                     }
                 },
                 _ => {
                     // 对于其他记录类型，尝试作为未知记录处理
-                    warn!("Unsupported record type: {:?}, data: {}", record_type, data);
+                    debug!(
+                        section = %section,
+                        record_type = %record_type,
+                        data = %data,
+                        "Failed to parse record"
+                    );
                     None
                 }
             }
@@ -333,7 +393,7 @@ impl JsonConverter {
             .get(json_fields::EDNS_CLIENT_SUBNET)
             .and_then(|e| e.as_str())
         {
-            debug!("EDNS Client Subnet from DNS JSON response: {}", ecs);
+            trace!(ecs = %ecs, "EDNS Client Subnet in DoH JSON response");
             // 这里可以添加EDNS处理代码，但由于复杂性，我们只记录不处理
             // 以后如果具体需求，可以添加处理代码
         }

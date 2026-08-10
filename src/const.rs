@@ -254,6 +254,7 @@ pub mod subsystem_names {
     pub const ADMIN_SERVER: &str = "admin_server";
     // DoH服务器子系统
     pub const DOH_SERVER: &str = "doh_server";
+    pub const SHUTDOWN_TIMER: &str = "shutdown_timer";
 }
 
 // 速率限制配置常量

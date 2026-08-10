@@ -6,12 +6,15 @@ use crate::{
         UpstreamScheme,
     },
     error::AppError,
-    metrics::METRICS,
+    metrics::{normalize_response_code, METRICS},
     r#const::{
         error_labels, protocol_labels, upstream_labels, upstream_protocol_labels,
         upstream_transport_labels,
     },
-    upstream::{doh::DoHClient, http_client::HttpClient},
+    upstream::{
+        doh::DoHClient,
+        http_client::{strip_url_userinfo, HttpClient},
+    },
 };
 pub struct GroupHealthInfo {
     pub servers: usize,
@@ -40,7 +43,7 @@ use hickory_proto::rr::{RData, RecordType};
 use ipnet::IpNet;
 use reqwest_middleware::ClientWithMiddleware;
 use std::{collections::HashMap, net::IpAddr, sync::Arc, time::Instant};
-use tracing::{debug, error, warn};
+use tracing::{debug, info, warn};
 
 use super::dns_client::{DnsClient, DnsTransport};
 
@@ -81,6 +84,17 @@ impl UpstreamManager {
             case_randomization_strict,
         } in groups
         {
+            let server_count = servers.len();
+            let scheme_str = match &scheme {
+                UpstreamScheme::Doh => "doh",
+                UpstreamScheme::Dns => "dns",
+            };
+            let strategy_str = match &strategy {
+                LoadBalancingStrategy::RoundRobin => "roundrobin",
+                LoadBalancingStrategy::Weighted => "weighted",
+                LoadBalancingStrategy::Random => "random",
+            };
+
             let lb: Arc<dyn LoadBalancer> = match strategy {
                 LoadBalancingStrategy::RoundRobin => {
                     Arc::new(RoundRobinBalancer::new(&name, servers))
@@ -109,14 +123,24 @@ impl UpstreamManager {
                         s.parse::<IpNet>()
                             .map_err(|e| {
                                 warn!(
-                                    "Invalid CIDR in deny_answers for group '{}': {} - {}",
-                                    name, s, e
+                                    group = %name,
+                                    cidr = %s,
+                                    error = %e,
+                                    "Failed to parse deny_answers CIDR"
                                 );
                             })
                             .ok()
                     })
                     .collect()
             };
+
+            info!(
+                group = %name,
+                scheme = scheme_str,
+                strategy = strategy_str,
+                servers = server_count,
+                "Upstream group ready"
+            );
 
             group_map.insert(
                 name,
@@ -182,12 +206,19 @@ impl UpstreamManager {
     }
 
     pub async fn forward(&self, query: &Message, group_name: &str) -> Result<Message, AppError> {
-        debug!("Forwarding request to upstream group: {}", group_name);
+        debug!(
+            group = %group_name,
+            "Forwarding request to upstream group"
+        );
 
         let group_state = match self.groups.get(group_name) {
             Some(state) => state,
             None => {
-                error!("Upstream group not found: {}", group_name);
+                debug!(
+                    group = %group_name,
+                    reason = "group_not_found",
+                    "Failed to select upstream path"
+                );
                 return Err(AppError::UpstreamGroupNotFound(group_name.to_string()));
             }
         };
@@ -203,7 +234,12 @@ impl UpstreamManager {
             let selected_server = match load_balancer.select_server(&tried_indices) {
                 Ok(s) => s,
                 Err(e) => {
-                    error!("Failed to select upstream server: {}", e);
+                    debug!(
+                        group = %group_name,
+                        reason = "select_failed",
+                        error = %e,
+                        "Failed to select upstream path"
+                    );
 
                     let upstream_protocol = match scheme {
                         UpstreamScheme::Doh => upstream_protocol_labels::DOH,
@@ -239,7 +275,11 @@ impl UpstreamManager {
             match scheme {
                 UpstreamScheme::Doh => {
                     let Some(server) = selected_server.as_doh() else {
-                        error!("Invalid upstream server type for group: {}", group_name);
+                        debug!(
+                            group = %group_name,
+                            reason = "invalid_server_type",
+                            "Failed to select upstream path"
+                        );
                         return Err(AppError::Upstream(
                             "Invalid upstream server type for this group".to_string(),
                         ));
@@ -249,7 +289,7 @@ impl UpstreamManager {
                     debug!(
                         attempt = attempt + 1,
                         max_attempts,
-                        server = %server.url.as_str(),
+                        server = %strip_url_userinfo(server.url.as_str()),
                         "Selected upstream DoH server"
                     );
 
@@ -268,7 +308,11 @@ impl UpstreamManager {
                     let client = match &group_state.client {
                         Some(c) => c,
                         None => {
-                            error!("HTTP client not found for group: {}", group_name);
+                            debug!(
+                                group = %group_name,
+                                reason = "http_client_missing",
+                                "Failed to select upstream path"
+                            );
                             return Err(AppError::UpstreamGroupNotFound(group_name.to_string()));
                         }
                     };
@@ -288,6 +332,16 @@ impl UpstreamManager {
                                     server_host,
                                 ])
                                 .observe(duration.as_secs_f64());
+
+                            debug!(
+                                group = %group_name,
+                                server = %strip_url_userinfo(server.url.as_str()),
+                                transport = upstream_transport_labels::HTTP,
+                                rcode = normalize_response_code(response.response_code()),
+                                answers = response.answer_count(),
+                                duration_ms = duration.as_secs_f64() * 1000.0,
+                                "Upstream response received"
+                            );
 
                             if !group_state.deny_cidrs.is_empty()
                                 && !Self::filter_denied_answers(
@@ -313,11 +367,12 @@ impl UpstreamManager {
                         }
                         Err(e) => {
                             debug!(
-                                server = %server.url.as_str(),
+                                group = %group_name,
+                                server = %strip_url_userinfo(server.url.as_str()),
                                 attempt = attempt + 1,
                                 max_attempts,
                                 error = %e,
-                                "Upstream DoH request failed, will retry if possible"
+                                "Upstream request attempt failed"
                             );
 
                             load_balancer.report_failure(selected_server, group_name);
@@ -339,7 +394,11 @@ impl UpstreamManager {
                 }
                 UpstreamScheme::Dns => {
                     let Some(server) = selected_server.as_dns() else {
-                        error!("Invalid upstream server type for group: {}", group_name);
+                        debug!(
+                            group = %group_name,
+                            reason = "invalid_server_type",
+                            "Failed to select upstream path"
+                        );
                         return Err(AppError::Upstream(
                             "Invalid upstream server type for this group".to_string(),
                         ));
@@ -392,6 +451,29 @@ impl UpstreamManager {
                                     .observe(attempt.duration.as_secs_f64());
                             }
 
+                            let success_transport = response.attempts.last().map_or(
+                                upstream_transport_labels::UNKNOWN,
+                                |a| match a.transport {
+                                    DnsTransport::Udp => upstream_transport_labels::UDP,
+                                    DnsTransport::Tcp => upstream_transport_labels::TCP,
+                                },
+                            );
+                            let attempts_duration_ms: f64 = response
+                                .attempts
+                                .iter()
+                                .map(|a| a.duration.as_secs_f64())
+                                .sum::<f64>()
+                                * 1000.0;
+                            debug!(
+                                group = %group_name,
+                                server = %server.addr,
+                                transport = success_transport,
+                                rcode = normalize_response_code(response.message.response_code()),
+                                answers = response.message.answer_count(),
+                                duration_ms = attempts_duration_ms,
+                                "Upstream response received"
+                            );
+
                             let mut msg = response.message;
                             if !group_state.deny_cidrs.is_empty()
                                 && !Self::filter_denied_answers(&mut msg, &group_state.deny_cidrs)
@@ -414,11 +496,12 @@ impl UpstreamManager {
                         }
                         Err(e) => {
                             debug!(
+                                group = %group_name,
                                 server = %server.addr,
                                 attempt = attempt + 1,
                                 max_attempts,
                                 error = %e.error,
-                                "Upstream DNS request failed, will retry if possible"
+                                "Upstream request attempt failed"
                             );
 
                             for dns_attempt in &e.attempts {

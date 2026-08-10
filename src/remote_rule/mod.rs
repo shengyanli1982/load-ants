@@ -12,7 +12,19 @@ use crate::config::{
 };
 use crate::error::AppError;
 use crate::router::{RoutedRule, RuleMetadata};
-use tracing::{error, warn};
+use tracing::warn;
+
+pub(crate) fn strip_url_userinfo(url_str: &str) -> String {
+    let Some(scheme_end) = url_str.find("://") else {
+        return url_str.to_string();
+    };
+    let rest = &url_str[scheme_end + 3..];
+    let authority_end = rest.find('/').map_or(rest.len(), |pos| pos);
+    if let Some(at_pos) = rest[..authority_end].find('@') {
+        return format!("{}{}", &url_str[..scheme_end + 3], &rest[at_pos + 1..]);
+    }
+    url_str.to_string()
+}
 
 pub type RemoteRuleResult = Result<RemoteRuleLoadSummary, AppError>;
 
@@ -60,7 +72,13 @@ pub fn evaluate_remote_rule_startup(
         .failed_sources
         .iter()
         .filter(|failure| failure.failure_policy == RemoteRuleFailurePolicy::Strict)
-        .map(|failure| format!("{} ({})", failure.url, failure.error))
+        .map(|failure| {
+            format!(
+                "{} ({})",
+                strip_url_userinfo(failure.url.as_str()),
+                failure.error
+            )
+        })
         .collect::<Vec<_>>()
         .join("; ");
 
@@ -154,8 +172,8 @@ pub async fn load_and_merge_rules(
                         }
                     }
 
-                    error!(
-                        url = %failure.url,
+                    warn!(
+                        url = %strip_url_userinfo(failure.url.as_str()),
                         action = %<&'static str>::from(failure.action),
                         failure_policy = %failure.failure_policy,
                         error = %failure.error,
@@ -196,8 +214,8 @@ pub async fn load_and_merge_rules(
                     }
                 }
 
-                error!(
-                    url = %failure.url,
+                warn!(
+                    url = %strip_url_userinfo(failure.url.as_str()),
                     action = %<&'static str>::from(failure.action),
                     failure_policy = %failure.failure_policy,
                     error = %failure.error,
