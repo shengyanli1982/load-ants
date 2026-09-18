@@ -1,6 +1,6 @@
 use crate::{
     cache_labels, error_labels,
-    metrics::{normalize_query_type_label, METRICS},
+    metrics::{normalize_query_type_label, normalize_response_code, METRICS},
     processing_labels, AppError, CacheKey, CacheResult, CoalescingMap, DnsCache, RouteAction,
     Router, UpstreamManager,
 };
@@ -8,7 +8,7 @@ use hickory_proto::op::{Edns, Message, MessageType, ResponseCode};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error};
 
 const COALESCE_WAIT_TIMEOUT: Duration =
     Duration::from_secs(crate::r#const::http_client_limits::DEFAULT_REQUEST_TIMEOUT);
@@ -97,11 +97,7 @@ impl RequestHandler {
             .with_label_values(&[query_type_label])
             .inc();
 
-        debug!(
-            "Received DNS query: {} ({})",
-            query_name.to_utf8(),
-            query_type
-        );
+        debug!("Query received");
 
         // Only allocate a CacheKey when caching is enabled; when disabled,
         // skip cache lookup, coalescing and key construction entirely.
@@ -118,14 +114,7 @@ impl RequestHandler {
         };
 
         let cache_result = self
-            .check_cache(
-                request,
-                cache_key.as_ref(),
-                query_name,
-                query_type,
-                query_type_label,
-                &start_time,
-            )
+            .check_cache(request, cache_key.as_ref(), query_type_label, &start_time)
             .await;
 
         match cache_result {
@@ -149,7 +138,7 @@ impl RequestHandler {
                             .await?
                     }
                     RouteAction::Block => {
-                        debug!("Blocking domain: {}", query_name.to_utf8());
+                        debug!("Query blocked");
                         Self::create_error_response(request, ResponseCode::Refused)?
                     }
                 };
@@ -161,9 +150,10 @@ impl RequestHandler {
                     .observe(duration.as_secs_f64());
 
                 debug!(
-                    duration = ?duration,
-                    query = %query_name.to_utf8(),
-                    "DNS request resolved"
+                    duration_ms = duration.as_secs_f64() * 1000.0,
+                    rcode = normalize_response_code(response.response_code()),
+                    answers = response.answer_count(),
+                    "Query resolved"
                 );
 
                 return Ok(response);
@@ -196,14 +186,13 @@ impl RequestHandler {
                         .await?
                 }
                 RouteAction::Block => {
-                    debug!("Blocking domain: {}", query_name.to_utf8());
+                    debug!("Query blocked");
                     Self::create_error_response(request, ResponseCode::Refused)?
                 }
             };
             response.set_id(request.id());
 
-            self.cache_response(request, response.clone(), query_name)
-                .await;
+            self.cache_response(request, response.clone()).await;
 
             let result = if response.response_code() == ResponseCode::ServFail {
                 Err(format!(
@@ -222,9 +211,10 @@ impl RequestHandler {
                 .observe(duration.as_secs_f64());
 
             debug!(
-                duration = ?duration,
-                query = %query_name.to_utf8(),
-                "DNS request resolved"
+                duration_ms = duration.as_secs_f64() * 1000.0,
+                rcode = normalize_response_code(response.response_code()),
+                answers = response.answer_count(),
+                "Query resolved"
             );
 
             Ok(response)
@@ -277,8 +267,6 @@ impl RequestHandler {
         &self,
         request: &Message,
         cache_key: Option<&CacheKey>,
-        query_name: &hickory_proto::rr::Name,
-        query_type: hickory_proto::rr::RecordType,
         query_type_label: &'static str,
         start_time: &Instant,
     ) -> CacheResult {
@@ -296,11 +284,7 @@ impl RequestHandler {
 
         match result {
             CacheResult::Fresh(cached_response) => {
-                debug!(
-                    query = %query_name.to_utf8(),
-                    query_type = %query_type,
-                    "Cache hit"
-                );
+                debug!("Cache hit");
 
                 let mut response = cached_response;
                 response.set_id(request.id());
@@ -314,11 +298,7 @@ impl RequestHandler {
                 CacheResult::Fresh(response)
             }
             CacheResult::Stale(stale_response) => {
-                debug!(
-                    query = %query_name.to_utf8(),
-                    query_type = %query_type,
-                    "Cache stale, serving stale response, revalidating in background"
-                );
+                debug!("Cache stale served, background revalidation scheduled");
 
                 let mut response = stale_response;
                 response.set_id(request.id());
@@ -342,8 +322,7 @@ impl RequestHandler {
                     .cache_entries
                     .set(self.cache.approximate_len() as i64);
                 debug!(
-                    query = %query_name.to_utf8(),
-                    cache_check_duration = ?cache_check_time.elapsed(),
+                    duration_ms = cache_check_time.elapsed().as_secs_f64() * 1000.0,
                     "Cache miss"
                 );
                 CacheResult::Miss
@@ -355,7 +334,16 @@ impl RequestHandler {
         let cache_key = match CacheKey::from_message(request) {
             Some(k) => k,
             None => {
-                warn!("Background refresh: cannot create cache key");
+                let query = request
+                    .queries()
+                    .first()
+                    .map(|q| q.name().to_utf8())
+                    .unwrap_or_default();
+                debug!(
+                    query = %query,
+                    reason = "no_cache_key",
+                    "Background revalidation failed"
+                );
                 return;
             }
         };
@@ -384,15 +372,15 @@ impl RequestHandler {
                     let query = match request.queries().first() {
                         Some(q) => q,
                         None => {
-                            warn!("Background refresh: no query in request");
+                            debug!(reason = "no_query", "Background revalidation failed");
                             return;
                         }
                     };
                     let query_name = query.name();
 
                     debug!(
-                        "Background revalidation started for {}",
-                        query_name.to_utf8()
+                        query = %query_name.to_utf8(),
+                        "Background revalidation started"
                     );
 
                     let route_match = {
@@ -400,10 +388,11 @@ impl RequestHandler {
                         match router_guard.find_match(query_name) {
                             Ok(m) => m,
                             Err(e) => {
-                                warn!(
-                                    "Background revalidation route failed: {} - {}",
-                                    query_name.to_utf8(),
-                                    e
+                                debug!(
+                                    query = %query_name.to_utf8(),
+                                    reason = "route_match_failed",
+                                    error = %e,
+                                    "Background revalidation failed"
                                 );
                                 _guard
                                     .entry
@@ -417,8 +406,9 @@ impl RequestHandler {
 
                     if route_match.action == RouteAction::Block {
                         debug!(
-                            "Background revalidation: blocking domain {}",
-                            query_name.to_utf8()
+                            query = %query_name.to_utf8(),
+                            reason = "blocked",
+                            "Background revalidation skipped"
                         );
                         return;
                     }
@@ -426,9 +416,10 @@ impl RequestHandler {
                     let target_group = match &route_match.target {
                         Some(g) => g,
                         None => {
-                            warn!(
-                                "Background revalidation: forward action missing target - {}",
-                                query_name.to_utf8()
+                            debug!(
+                                query = %query_name.to_utf8(),
+                                reason = "missing_target",
+                                "Background revalidation failed"
                             );
                             return;
                         }
@@ -438,20 +429,28 @@ impl RequestHandler {
                     match result {
                         Ok(response) => {
                             if let Err(e) = cache.insert(&request, response.clone()).await {
-                                warn!("Background revalidation cache insert failed: {}", e);
+                                debug!(
+                                    query = %query_name.to_utf8(),
+                                    reason = "cache_insert_failed",
+                                    error = %e,
+                                    "Background revalidation failed"
+                                );
                             } else {
-                                info!(
-                                    "Background revalidation completed for {}",
-                                    query_name.to_utf8()
+                                debug!(
+                                    query = %query_name.to_utf8(),
+                                    "Background revalidation completed"
                                 );
                             }
                             METRICS.cache_entries.set(cache.approximate_len() as i64);
                             _guard.entry.cell.set(Ok(response)).ok();
                         }
                         Err(e) => {
-                            warn!(
-                                "Background revalidation upstream failed: {} - {}",
-                                target_group, e
+                            debug!(
+                                query = %query_name.to_utf8(),
+                                group = %target_group,
+                                reason = "upstream_failed",
+                                error = %e,
+                                "Background revalidation failed"
                             );
                             _guard
                                 .entry
@@ -475,13 +474,17 @@ impl RequestHandler {
             Ok(m) => {
                 debug!(
                     query = %query_name.to_utf8(),
-                    route_match_duration = ?route_match_time.elapsed(),
+                    duration_ms = route_match_time.elapsed().as_secs_f64() * 1000.0,
                     "Route match found"
                 );
                 m
             }
             Err(e) => {
-                warn!("Route matching failed: {} - {}", query_name.to_utf8(), e);
+                debug!(
+                    query = %query_name.to_utf8(),
+                    error = %e,
+                    "Failed to match route"
+                );
 
                 METRICS
                     .dns_request_errors_total
@@ -513,9 +516,10 @@ impl RequestHandler {
         let target_group = match &route_match.target {
             Some(group) => group,
             None => {
-                error!(
-                    "Route rule configuration error: Forward action missing target group - {}",
-                    query_name.to_utf8()
+                debug!(
+                    query = %query_name.to_utf8(),
+                    reason = "target_missing",
+                    "Failed to resolve forward target"
                 );
 
                 METRICS
@@ -530,17 +534,14 @@ impl RequestHandler {
         let upstream_time = Instant::now();
         let result = self.upstream.forward(request, target_group).await;
         debug!(
-            target_group = %target_group,
-            query = %query_name.to_utf8(),
-            upstream_duration = ?upstream_time.elapsed(),
+            group = %target_group,
+            duration_ms = upstream_time.elapsed().as_secs_f64() * 1000.0,
             "Upstream forwarding completed"
         );
 
         match result {
             Ok(response) => Ok(response),
             Err(e) => {
-                error!("Upstream request failed: {} - {}", target_group, e);
-
                 METRICS
                     .dns_request_errors_total
                     .with_label_values(&[error_labels::UPSTREAM_ERROR])
@@ -553,9 +554,10 @@ impl RequestHandler {
                             .with_label_values(&[target_group])
                             .inc();
 
-                        warn!(
-                            query = %query_name.to_utf8(),
-                            "Upstream failure, serving stale cached response"
+                        debug!(
+                            group = %target_group,
+                            error = %e,
+                            "Stale response served after upstream failure"
                         );
 
                         let mut response = stale_response;
@@ -564,28 +566,28 @@ impl RequestHandler {
                     }
                 }
 
+                error!(
+                    group = %target_group,
+                    error = &e as &dyn std::error::Error,
+                    "Failed to forward request to upstream"
+                );
+
                 Self::create_error_response(request, ResponseCode::ServFail)
             }
         }
     }
 
-    async fn cache_response(
-        &self,
-        request: &Message,
-        response: Message,
-        query_name: &hickory_proto::rr::Name,
-    ) {
+    async fn cache_response(&self, request: &Message, response: Message) {
         if !self.cache.is_enabled() {
             return;
         }
 
         let cache_insert_time = Instant::now();
         if let Err(e) = self.cache.insert(request, response).await {
-            warn!("Cache insertion failed: {}", e);
+            debug!(error = %e, "Failed to insert cache entry");
         } else {
             debug!(
-                query = %query_name.to_utf8(),
-                cache_insert_duration = ?cache_insert_time.elapsed(),
+                duration_ms = cache_insert_time.elapsed().as_secs_f64() * 1000.0,
                 "Cache insertion completed"
             );
         }

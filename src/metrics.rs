@@ -372,7 +372,11 @@ impl DnsMetrics {
         encoder
             .encode_utf8(&metric_families, &mut buffer)
             .unwrap_or_else(|e| {
-                error!("Failed to encode Prometheus metrics: {}", e);
+                error!(
+                    context = "export_metrics",
+                    error = %e,
+                    "Failed to encode Prometheus metrics"
+                );
             });
         buffer
     }
@@ -389,7 +393,11 @@ pub fn metrics_routes() -> Router {
             encoder
                 .encode_utf8(&metric_families, &mut buffer)
                 .unwrap_or_else(|e| {
-                    error!("Failed to encode Prometheus metrics: {}", e);
+                    error!(
+                        context = "metrics_route",
+                        error = %e,
+                        "Failed to encode Prometheus metrics"
+                    );
                     buffer = String::new();
                 });
             (

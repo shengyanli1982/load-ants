@@ -18,7 +18,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::task::AbortHandle;
 use tokio::time::{self, Duration as TokioDuration};
-use tracing::warn;
+use tracing::{debug, warn};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DnsTransport {
@@ -166,7 +166,7 @@ impl DnsClient {
                     Some(randomized)
                 }
                 Err(e) => {
-                    warn!("Failed to create randomized DNS name: {}", e);
+                    debug!(error = %e, "Failed to randomize query name");
                     None
                 }
             }
@@ -188,7 +188,8 @@ impl DnsClient {
                     warn!(
                         sent = %sent_name,
                         received = %response_name,
-                        "0x20 case verification failed: response domain case mismatch"
+                        reason = "case_mismatch",
+                        "0x20 case verification failed"
                     );
                     false
                 } else {
@@ -200,7 +201,8 @@ impl DnsClient {
             None => {
                 warn!(
                     sent = %sent_name,
-                    "0x20 case verification failed: response missing question section"
+                    reason = "missing_question",
+                    "0x20 case verification failed"
                 );
                 false
             }
@@ -283,7 +285,7 @@ impl DnsClient {
             if let Some(ref name) = sent_name {
                 let verified = Self::verify_response_case(&udp_response, name);
                 if !verified && case_randomization_strict {
-                    warn!("0x20 strict mode: discarding UDP response and falling back to TCP");
+                    debug!("0x20 strict fallback to TCP");
                     // 丢弃 UDP 响应，直接触发 TCP fallback
                     let start = Instant::now();
                     let tcp_result = self.send_tcp(addr, message).await;
@@ -456,10 +458,10 @@ impl DnsClient {
             METRICS
                 .tcp_pool_connections
                 .set(self.tcp_conns.len() as i64);
-            warn!(
-                evicted_addr = %key,
+            debug!(
+                addr = %key,
                 pool_size = self.tcp_conns.len(),
-                "TCP connection pool full, evicted oldest connection"
+                "TCP connection pool evicted oldest connection"
             );
         }
     }

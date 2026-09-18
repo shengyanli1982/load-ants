@@ -735,8 +735,13 @@ impl Router {
         let source_label = value.metadata.source_type.as_label();
 
         debug!(
-            "Rule match: {} {:?} match '{}' -> Pattern: '{}', Target: {}, Source: {}",
-            rule_type, action, domain, pattern, target_for_label, source_label
+            query = %domain,
+            rule_type,
+            action = %<&'static str>::from(action),
+            pattern = %pattern,
+            target = %target_for_label,
+            source = %source_label,
+            "Rule matched"
         );
 
         value.match_counter.inc();

@@ -273,8 +273,12 @@ impl DnsCache {
             .build_with_hasher(FxBuildHasher);
 
         info!(
-            "Creating DNS cache - Size: {}, Min TTL: {}s, Max TTL: {}s, Negative TTL: {}s, Stale-while-revalidate: {}s",
-            size, min_ttl, max_ttl, negative_ttl, stale_while_revalidate
+            max_entries = size,
+            min_ttl_s = min_ttl,
+            max_ttl_s = max_ttl,
+            negative_ttl_s = negative_ttl,
+            stale_while_revalidate_s = stale_while_revalidate,
+            "Cache ready"
         );
 
         METRICS.cache_capacity.set(size as i64);
@@ -470,8 +474,9 @@ impl DnsCache {
 
         if filtered_response.answer_count() == 0 && original_answer_count > 0 {
             warn!(
-                "Cache poisoning detected: all answer records rejected for query {} - domain mismatch",
-                query_name.to_utf8()
+                query = %query_name.to_utf8(),
+                reason = "all_answers_rejected",
+                "Cache poisoning detected"
             );
             return Ok(());
         }
@@ -505,7 +510,11 @@ impl DnsCache {
             effective_ttl: ttl,
         };
 
-        debug!("Added to cache - {} ({:?})", key.name, key.record_type);
+        debug!(
+            query = %key.name,
+            qtype = %key.record_type,
+            "Cache entry inserted"
+        );
         self.cache.insert(key, entry).await;
 
         METRICS
@@ -537,8 +546,9 @@ impl DnsCache {
                 | ResponseCode::NotImp
         ) {
             debug!(
-                "Response not cacheable: error response code {:?}",
-                response.response_code()
+                rcode = %response.response_code(),
+                reason = "error_rcode",
+                "Response not cacheable"
             );
             return false;
         }
@@ -585,9 +595,12 @@ impl DnsCache {
                 .with_label_values(&[ttl_source_labels::NEGATIVE_TTL])
                 .observe(ttl as f64);
 
+            let soa_minimum = soa_min_ttl.map_or_else(|| "none".to_string(), |v| v.to_string());
             debug!(
-                "Using negative cache TTL ({} seconds) for NXDOMAIN, SOA minimum: {:?}",
-                ttl, soa_min_ttl
+                ttl_s = ttl,
+                soa_minimum_s = %soa_minimum,
+                rcode = "NXDOMAIN",
+                "Negative cache TTL applied"
             );
 
             return ttl;
@@ -611,9 +624,12 @@ impl DnsCache {
                 .with_label_values(&[ttl_source_labels::NEGATIVE_TTL])
                 .observe(ttl as f64);
 
+            let soa_minimum = soa_min_ttl.map_or_else(|| "none".to_string(), |v| v.to_string());
             debug!(
-                "Using TTL ({} seconds) for NODATA response, SOA minimum: {:?}",
-                ttl, soa_min_ttl
+                ttl_s = ttl,
+                soa_minimum_s = %soa_minimum,
+                rcode = "NOERROR",
+                "Negative cache TTL applied"
             );
 
             return ttl;
@@ -739,8 +755,9 @@ impl DnsCache {
         // 跳过已过期条目
         if entry.expires_at <= now {
             debug!(
-                "Skipping expired cache entry during restore: {} (expired at {})",
-                entry.name, entry.expires_at
+                query = %entry.name,
+                expires_at = entry.expires_at,
+                "Skipped expired cache entry during restore"
             );
             return CacheRestoreStats {
                 loaded: 0,
@@ -753,9 +770,11 @@ impl DnsCache {
         let name = match Name::from_str(&entry.name) {
             Ok(n) => n,
             Err(e) => {
-                warn!(
-                    "Failed to parse name '{}' during restore: {}",
-                    entry.name, e
+                debug!(
+                    query = %entry.name,
+                    reason = "parse_name",
+                    error = %e,
+                    "Failed to restore cache entry"
                 );
                 return CacheRestoreStats {
                     loaded: 0,
@@ -769,9 +788,11 @@ impl DnsCache {
         let record_type = match RecordType::from_str(&entry.query_type) {
             Ok(rt) => rt,
             Err(e) => {
-                warn!(
-                    "Failed to parse record type '{}' during restore: {}",
-                    entry.query_type, e
+                debug!(
+                    query = %entry.name,
+                    reason = "parse_record_type",
+                    error = %e,
+                    "Failed to restore cache entry"
                 );
                 return CacheRestoreStats {
                     loaded: 0,
@@ -785,9 +806,11 @@ impl DnsCache {
         let wire_bytes = match from_hex(&entry.response_hex) {
             Ok(b) => b,
             Err(e) => {
-                warn!(
-                    "Failed to decode hex response for '{}' during restore: {}",
-                    entry.name, e
+                debug!(
+                    query = %entry.name,
+                    reason = "decode_hex",
+                    error = %e,
+                    "Failed to restore cache entry"
                 );
                 return CacheRestoreStats {
                     loaded: 0,
@@ -800,9 +823,11 @@ impl DnsCache {
         let message = match Message::from_vec(&wire_bytes) {
             Ok(m) => m,
             Err(e) => {
-                warn!(
-                    "Failed to parse DNS message for '{}' during restore: {}",
-                    entry.name, e
+                debug!(
+                    query = %entry.name,
+                    reason = "parse_message",
+                    error = %e,
+                    "Failed to restore cache entry"
                 );
                 return CacheRestoreStats {
                     loaded: 0,
@@ -835,7 +860,11 @@ impl DnsCache {
             effective_ttl: effective_ttl as u32,
         };
 
-        debug!("Restored cache entry: {} ({})", key.name, key.record_type);
+        debug!(
+            query = %key.name,
+            qtype = %key.record_type,
+            "Cache entry restored"
+        );
         self.cache.insert(key, cache_entry).await;
 
         CacheRestoreStats {
@@ -880,10 +909,10 @@ pub fn build_cname_chain(query_name: &Name, answers: &[Record]) -> Vec<Name> {
     }
 
     if depth >= MAX_CNAME_DEPTH && changed {
-        warn!(
-            "CNAME chain depth limit ({}) reached for {}",
-            MAX_CNAME_DEPTH,
-            query_name.to_utf8()
+        debug!(
+            query = %query_name.to_utf8(),
+            reason = "cname_depth_limit",
+            "CNAME chain depth limit reached"
         );
     }
 
@@ -900,10 +929,11 @@ pub fn filter_answer_records(query_name: &Name, mut response: Message) -> Messag
         .collect();
     let rejected_count = original_count as usize - valid.len();
     if rejected_count > 0 {
-        warn!(
-            "Rejected {} answer record(s) with mismatched domain for query {}",
-            rejected_count,
-            query_name.to_utf8()
+        debug!(
+            query = %query_name.to_utf8(),
+            rejected = rejected_count,
+            section = "answer",
+            "Rejected mismatched records"
         );
     }
     response.insert_answers(valid);
@@ -921,10 +951,11 @@ pub fn filter_response_records(query_name: &Name, mut response: Message) -> Mess
         .collect();
     let rejected_answer_count = original_answer_count as usize - valid_answers.len();
     if rejected_answer_count > 0 {
-        warn!(
-            "Rejected {} answer record(s) with mismatched domain for query {}",
-            rejected_answer_count,
-            query_name.to_utf8()
+        debug!(
+            query = %query_name.to_utf8(),
+            rejected = rejected_answer_count,
+            section = "answer",
+            "Rejected mismatched records"
         );
     }
 
@@ -954,10 +985,11 @@ pub fn filter_response_records(query_name: &Name, mut response: Message) -> Mess
     }
     let rejected_ns_count = original_ns_count - valid_ns.len();
     if rejected_ns_count > 0 {
-        warn!(
-            "Rejected {} NS record(s) with mismatched domain for query {}",
-            rejected_ns_count,
-            query_name.to_utf8()
+        debug!(
+            query = %query_name.to_utf8(),
+            rejected = rejected_ns_count,
+            section = "ns",
+            "Rejected mismatched records"
         );
     }
 
@@ -971,10 +1003,11 @@ pub fn filter_response_records(query_name: &Name, mut response: Message) -> Mess
         .collect();
     let rejected_additional_count = original_additional_count - valid_additional.len();
     if rejected_additional_count > 0 {
-        warn!(
-            "Rejected {} additional record(s) with mismatched domain for query {}",
-            rejected_additional_count,
-            query_name.to_utf8()
+        debug!(
+            query = %query_name.to_utf8(),
+            rejected = rejected_additional_count,
+            section = "additional",
+            "Rejected mismatched records"
         );
     }
 

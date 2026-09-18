@@ -4,7 +4,7 @@ use crate::metrics::{normalize_query_type_label, normalize_response_code, METRIC
 use crate::r#const::{error_labels, http_headers, processing_labels, protocol_labels};
 use axum::{
     body::Bytes,
-    extract::{ConnectInfo, Query, State},
+    extract::{rejection::QueryRejection, ConnectInfo, Query, State},
     http::{header, HeaderMap, HeaderValue, StatusCode},
     response::{IntoResponse, Json, Response},
 };
@@ -19,7 +19,7 @@ use std::borrow::Cow;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::time::Instant;
-use tracing::{debug, error, warn};
+use tracing::debug;
 
 const DEFAULT_CACHE_MAX_AGE: u32 = 60;
 
@@ -110,10 +110,10 @@ async fn process_dns_message(state: &AppState, dns_message: &Message) -> Result<
         Err(e) => {
             // RFC 8484 Section 4.2.1: DNS 处理失败必须以 HTTP 200 + DNS SERVFAIL 返回，
             // 而非 HTTP 5xx。HTTP 错误码仅用于 HTTP 协议层面的错误。
-            warn!(
+            debug!(
                 request_id = dns_message.id(),
                 error = %e,
-                "Upstream processing failed, returning DNS SERVFAIL per RFC 8484"
+                "Failed to process DNS query, returning SERVFAIL per RFC 8484"
             );
 
             let mut response = Message::new();
@@ -150,12 +150,25 @@ async fn process_dns_message(state: &AppState, dns_message: &Message) -> Result<
 pub async fn handle_doh_get(
     State(state): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    Query(params): Query<DohGetParams>,
+    params: Result<Query<DohGetParams>, QueryRejection>,
 ) -> impl IntoResponse {
     let start_time = Instant::now();
 
+    let Query(params) = match params {
+        Ok(params) => params,
+        Err(rej) => {
+            debug!(
+                client_ip = %addr.ip(),
+                error = %rej,
+                "Failed to parse query parameters"
+            );
+            return rej.into_response();
+        }
+    };
+
     if let Some(limiter) = &state.rate_limiter {
         if !limiter.check(addr.ip()) {
+            debug!(protocol = "doh", method = "GET", "Rate limit hit");
             METRICS
                 .http_request_errors_total
                 .with_label_values(&[error_labels::REQUEST_ERROR])
@@ -274,6 +287,7 @@ pub async fn handle_doh_post(
 
     if let Some(limiter) = &state.rate_limiter {
         if !limiter.check(addr.ip()) {
+            debug!(protocol = "doh", method = "POST", "Rate limit hit");
             METRICS
                 .http_request_errors_total
                 .with_label_values(&[error_labels::REQUEST_ERROR])
@@ -385,12 +399,30 @@ pub async fn handle_doh_post(
 pub async fn handle_json_get(
     State(state): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    Query(params): Query<DohJsonGetParams>,
+    params: Result<Query<DohJsonGetParams>, QueryRejection>,
 ) -> impl IntoResponse {
     let start_time = Instant::now();
 
+    let Query(params) = match params {
+        Ok(params) => params,
+        Err(rej) => {
+            debug!(
+                client_ip = %addr.ip(),
+                error = %rej,
+                "Failed to parse query parameters"
+            );
+            return rej.into_response();
+        }
+    };
+
     if let Some(limiter) = &state.rate_limiter {
         if !limiter.check(addr.ip()) {
+            debug!(
+                protocol = "doh",
+                method = "JSON",
+                client_ip = %addr.ip(),
+                "Rate limit hit"
+            );
             METRICS
                 .http_request_errors_total
                 .with_label_values(&[error_labels::REQUEST_ERROR])
@@ -613,10 +645,10 @@ fn record_doh_metrics(
             }
 
             debug!(
-                client_ip = %client_addr,
+                client_ip = %client_addr.ip(),
                 status_code = %status,
-                duration = ?start_time.elapsed(),
-                "Finished processing DoH request"
+                duration_ms = duration * 1000.0,
+                "DoH request completed"
             );
         }
         Err(status) => {
@@ -625,19 +657,20 @@ fn record_doh_metrics(
                     .http_request_errors_total
                     .with_label_values(&[err_type])
                     .inc();
-                error!(
-                    client_ip = %client_addr,
+                debug!(
+                    client_ip = %client_addr.ip(),
                     status_code = %status,
                     error_type = err_type,
-                    duration = ?start_time.elapsed(),
-                    "Failed to process DoH request"
+                    duration_ms = duration * 1000.0,
+                    "DoH request failed"
                 );
             } else {
-                warn!(
-                    client_ip = %client_addr,
+                debug!(
+                    client_ip = %client_addr.ip(),
                     status_code = %status,
-                    duration = ?start_time.elapsed(),
-                    "Processed DoH request with an unspecified error"
+                    reason = "unspecified",
+                    duration_ms = duration * 1000.0,
+                    "DoH request failed"
                 );
             }
         }

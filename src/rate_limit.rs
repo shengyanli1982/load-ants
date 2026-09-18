@@ -68,7 +68,7 @@ impl RateLimiter {
                         counters_clone.retain(|_, v: &mut IpCounter| {
                             fresh - v.window_start_secs.load(Ordering::Relaxed) < 120
                         });
-                        debug!("Rate limiter cleanup, active IPs: {}", counters_clone.len());
+                        debug!(active_ips = counters_clone.len(), "Rate limiter cleanup");
                     }
                 }
             });

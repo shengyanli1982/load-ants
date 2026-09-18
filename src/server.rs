@@ -1,7 +1,7 @@
 use crate::error::AppError;
 use crate::handler::RequestHandler as DnsRequestHandler;
 use crate::metrics::{normalize_query_type_label, normalize_response_code, METRICS};
-use crate::r#const::{error_labels, protocol_labels};
+use crate::r#const::{error_labels, protocol_labels, subsystem_names};
 use crate::rate_limit::RateLimiter;
 use hickory_proto::op::{Header, Message, MessageType, OpCode, ResponseCode};
 use hickory_proto::rr::RecordType;
@@ -82,10 +82,7 @@ impl RequestHandler for HandlerAdapter {
         if let Some(limiter) = &self.rate_limiter {
             let src_ip = request.src().ip();
             if !limiter.check(src_ip) {
-                warn!(
-                    client_ip = %request.src(),
-                    "DNS request rate limited"
-                );
+                debug!(protocol = %protocol, "Rate limit hit");
                 METRICS
                     .dns_request_errors_total
                     .with_label_values(&[error_labels::REQUEST_ERROR])
@@ -104,7 +101,7 @@ impl RequestHandler for HandlerAdapter {
 
         // 检查是否为查询请求或支持的操作码
         if request.op_code() != OpCode::Query {
-            debug!("Unsupported operation code: {:?}", request.op_code());
+            debug!(opcode = ?request.op_code(), "Unsupported operation code");
 
             // 记录错误
             METRICS
@@ -123,14 +120,21 @@ impl RequestHandler for HandlerAdapter {
             return response_handler
                 .send_response(response)
                 .await
-                .unwrap_or_else(|e| {
-                    error!("Error sending response: {}", e);
+                .unwrap_or_else(|_| {
+                    debug!(
+                        client_ip = %request.src().ip(),
+                        protocol = %protocol,
+                        "Failed to send response"
+                    );
                     ResponseInfo::from(header)
                 });
         }
 
         if request.message_type() != MessageType::Query {
-            debug!("Unsupported message type: {:?}", request.message_type());
+            debug!(
+                message_type = ?request.message_type(),
+                "Unsupported message type"
+            );
 
             // 记录错误
             METRICS
@@ -149,8 +153,12 @@ impl RequestHandler for HandlerAdapter {
             return response_handler
                 .send_response(response)
                 .await
-                .unwrap_or_else(|e| {
-                    error!("Error sending response: {}", e);
+                .unwrap_or_else(|_| {
+                    debug!(
+                        client_ip = %request.src().ip(),
+                        protocol = %protocol,
+                        "Failed to send response"
+                    );
                     ResponseInfo::from(header)
                 });
         }
@@ -163,17 +171,17 @@ impl RequestHandler for HandlerAdapter {
             .unwrap_or(RecordType::A);
         let query_type_label = normalize_query_type_label(query_type);
 
-        debug!(
-            protocol = %protocol,
-            client = %request.src(),
-            query_type = %query_type,
-            "DNS query request received"
-        );
+        debug!(protocol = %protocol, "DNS request received");
 
         let message = match parse_request_message(request) {
             Ok(message) => message,
             Err(e) => {
-                error!("Failed to parse request message: {}", e);
+                debug!(
+                    client_ip = %request.src().ip(),
+                    protocol = %protocol,
+                    error = %e,
+                    "Failed to parse request message"
+                );
 
                 METRICS
                     .dns_request_errors_total
@@ -198,8 +206,12 @@ impl RequestHandler for HandlerAdapter {
                 return response_handler
                     .send_response(response)
                     .await
-                    .unwrap_or_else(|e| {
-                        error!("Error sending response: {}", e);
+                    .unwrap_or_else(|_| {
+                        debug!(
+                            client_ip = %request.src().ip(),
+                            protocol = %protocol,
+                            "Failed to send response"
+                        );
                         ResponseInfo::from(header)
                     });
             }
@@ -247,15 +259,19 @@ impl RequestHandler for HandlerAdapter {
                 response_handler
                     .send_response(response)
                     .await
-                    .unwrap_or_else(|e| {
+                    .unwrap_or_else(|_| {
                         let mut err_header = Header::new();
                         err_header.set_response_code(ResponseCode::ServFail);
-                        error!("Error sending response: {}", e);
+                        debug!(
+                            client_ip = %request.src().ip(),
+                            protocol = %protocol,
+                            "Failed to send response"
+                        );
                         ResponseInfo::from(err_header)
                     })
             }
             Err(e) => {
-                error!("Error processing DNS request: {}", e);
+                debug!(error = %e, "Failed to process request");
 
                 // 记录错误
                 METRICS
@@ -281,8 +297,12 @@ impl RequestHandler for HandlerAdapter {
                 response_handler
                     .send_response(response)
                     .await
-                    .unwrap_or_else(|e| {
-                        error!("Error sending response: {}", e);
+                    .unwrap_or_else(|_| {
+                        debug!(
+                            client_ip = %request.src().ip(),
+                            protocol = %protocol,
+                            "Failed to send response"
+                        );
                         ResponseInfo::from(header)
                     })
             }
@@ -347,36 +367,36 @@ impl IntoSubsystem<AppError> for DnsServer {
                 Domain::IPV6
             };
             let s = Socket::new(domain, SocketType::DGRAM, Some(Protocol::UDP)).map_err(|e| {
-                error!("Failed to create UDP socket with socket2: {}", e);
+                error!(addr = %addr, error = %e, "Failed to create UDP socket");
                 AppError::Io(e)
             })?;
             s.set_recv_buffer_size(self.config.udp_recv_buffer)
                 .map_err(|e| {
-                    error!("Failed to set recv buffer size: {}", e);
+                    error!(addr = %addr, error = %e, "Failed to set recv buffer size");
                     AppError::Io(e)
                 })?;
             s.set_send_buffer_size(self.config.udp_send_buffer)
                 .map_err(|e| {
-                    error!("Failed to set send buffer size: {}", e);
+                    error!(addr = %addr, error = %e, "Failed to set send buffer size");
                     AppError::Io(e)
                 })?;
             if socket_count > 1 {
                 s.set_reuse_address(true).map_err(|e| {
-                    error!("Failed to set SO_REUSEADDR: {}", e);
+                    error!(addr = %addr, error = %e, "Failed to set SO_REUSEADDR");
                     AppError::Io(e)
                 })?;
                 #[cfg(unix)]
                 s.set_reuse_port(true).map_err(|e| {
-                    error!("Failed to set SO_REUSEPORT: {}", e);
+                    error!(addr = %addr, error = %e, "Failed to set SO_REUSEPORT");
                     AppError::Io(e)
                 })?;
             }
             s.bind(&addr.into()).map_err(|e| {
-                error!("Failed to bind UDP socket: {}", e);
+                error!(addr = %addr, error = %e, "Failed to bind UDP socket");
                 AppError::Io(e)
             })?;
             s.set_nonblocking(true).map_err(|e| {
-                error!("Failed to set nonblocking: {}", e);
+                error!(addr = %addr, error = %e, "Failed to set nonblocking");
                 AppError::Io(e)
             })?;
             let std_socket: std::net::UdpSocket = s.into();
@@ -384,33 +404,30 @@ impl IntoSubsystem<AppError> for DnsServer {
 
             match socket {
                 Ok(s) => {
-                    info!(
-                        "DNS server UDP socket {}/{} listening on {}",
-                        i + 1,
-                        socket_count,
-                        addr
-                    );
+                    debug!(addr = %addr, index = i + 1, "UDP socket bound");
                     server.register_socket(s);
                 }
                 Err(e) => {
-                    error!("Failed to bind UDP socket: {}", e);
+                    error!(addr = %addr, error = %e, "Failed to register UDP socket");
                     return Err(AppError::Io(e));
                 }
             }
         }
         info!(
-            "DNS server UDP listening on {} with {} socket(s)",
-            self.config.udp_bind_addr, socket_count
+            transport = "udp",
+            addr = %self.config.udp_bind_addr,
+            sockets = socket_count,
+            "Listener ready"
         );
 
         // 绑定 TCP 端口
         let tcp_listener = match TcpListener::bind(self.config.tcp_bind_addr).await {
             Ok(listener) => {
-                info!("DNS server TCP listening on {}", self.config.tcp_bind_addr);
+                info!(transport = "tcp", addr = %self.config.tcp_bind_addr, "Listener ready");
                 listener
             }
             Err(e) => {
-                error!("Failed to bind TCP listener: {}", e);
+                error!(addr = %self.config.tcp_bind_addr, error = %e, "Failed to bind TCP listener");
                 return Err(AppError::Io(e));
             }
         };
@@ -423,23 +440,23 @@ impl IntoSubsystem<AppError> for DnsServer {
         tokio::select! {
             result = server.block_until_done() => {
                 if let Err(e) = result {
-                    error!("DNS server error: {}", e);
+                    error!(error = %e, "Failed to run DNS server");
                 } else {
-                    info!("DNS server completed normally");
+                    info!("DNS server completed");
                 }
                 Ok(())
             }
             _ = subsys.on_shutdown_requested() => {
-                info!("Shutdown requested, stopping DNS server");
+                info!(subsystem = subsystem_names::DNS_SERVER, "Shutdown requested");
 
                 // 使用timeout包装graceful shutdown
                 match tokio::time::timeout(
                     std::time::Duration::from_secs(15),
                     server.shutdown_gracefully()
                 ).await {
-                    Ok(Ok(_)) => info!("DNS server shutdown completed successfully"),
-                    Ok(Err(e)) => warn!("DNS server shutdown error: {}", e),
-                    Err(_) => warn!("DNS server shutdown timed out")
+                    Ok(Ok(_)) => info!(status = "graceful", "DNS server stopped"),
+                    Ok(Err(e)) => warn!(status = "error", error = %e, "DNS server stopped"),
+                    Err(_) => warn!(status = "timeout", "DNS server stopped")
                 }
 
                 Ok(())

@@ -11,11 +11,11 @@ use loadants::{
 use mimalloc::MiMalloc;
 use std::process;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
 use tokio::time::interval;
 use tokio_graceful_shutdown::{IntoSubsystem, SubsystemBuilder, Toplevel};
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 #[global_allocator]
 static GLOBAL: MiMalloc = mimalloc::MiMalloc;
@@ -44,7 +44,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     init_logging(&args);
 
     if let Err(e) = args.validation() {
-        error!("Invalid command line arguments: {}", e);
+        error!(
+            error = &e as &dyn std::error::Error,
+            "Failed to validate command line arguments"
+        );
         process::exit(1);
     }
 
@@ -56,21 +59,45 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    info!("Starting Load Ants DNS UDP/TCP to DoH Proxy");
+    info!(version = env!("CARGO_PKG_VERSION"), "Starting loadants");
 
     let config = match Config::from_file(&args.config) {
         Ok(config) => {
-            info!("Successfully loaded configuration: {:?}", args.config);
+            info!(path = %args.config.display(), "Configuration loaded");
+            let cache_enabled = config.cache.as_ref().is_some_and(|c| c.enabled);
+            let cache_max_entries = if cache_enabled {
+                config.cache.as_ref().map_or(0, |c| c.max_size)
+            } else {
+                0
+            };
+            info!(
+                listen_udp = %config.server.listen_udp,
+                listen_tcp = %config.server.listen_tcp,
+                listen_http = config.server.listen_http.as_deref().unwrap_or("none"),
+                doh = if config.server.listen_http.is_some() { "on" } else { "off" },
+                cache = if cache_enabled { "on" } else { "off" },
+                cache_max_entries = cache_max_entries,
+                upstream_groups = config.upstream_groups.as_ref().map_or(0, |g| g.len()),
+                remote_rule_sources = config.remote_rules.sources.len(),
+                rate_limit = if config.server.rate_limit.is_some() { "on" } else { "off" },
+                "Configuration summary"
+            );
             config
         }
         Err(e) => {
-            error!("Failed to load configuration file: {}", e);
+            error!(
+                error = &e as &dyn std::error::Error,
+                "Failed to load configuration file"
+            );
             process::exit(1);
         }
     };
 
     if let Err(e) = config.validate_runtime_requirements() {
-        error!("Invalid configuration: {}", e);
+        error!(
+            error = &e as &dyn std::error::Error,
+            "Failed to validate configuration"
+        );
         process::exit(1);
     }
 
@@ -82,10 +109,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let components = match create_components(config).await {
         Ok(components) => components,
         Err(e) => {
-            error!("Failed to create application components: {}", e);
+            error!(
+                error = &e as &dyn std::error::Error,
+                "Failed to create application components"
+            );
             process::exit(1);
         }
     };
+
+    let shutdown_started_at: Arc<std::sync::Mutex<Option<Instant>>> =
+        Arc::new(std::sync::Mutex::new(None));
+    let shutdown_timer_state = Arc::clone(&shutdown_started_at);
 
     let toplevel = Toplevel::new(|s| async move {
         let dns_server = components.dns_server;
@@ -104,23 +138,50 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 move |s| async move { doh_server.run(s).await },
             ));
         }
+        s.start(SubsystemBuilder::new(
+            subsystem_names::SHUTDOWN_TIMER,
+            move |s| async move {
+                s.on_shutdown_requested().await;
+                *shutdown_timer_state.lock().unwrap() = Some(Instant::now());
+                Ok::<(), AppError>(())
+            },
+        ));
     });
 
-    info!("All services started, waiting for requests...");
+    info!("Service tasks dispatched");
     match toplevel
         .catch_signals()
         .handle_shutdown_requests(Duration::from_secs(args.shutdown_timeout))
         .await
     {
         Ok(_) => {
-            info!("Application gracefully shut down");
+            let elapsed_ms = shutdown_elapsed_ms(&shutdown_started_at);
+            info!(
+                elapsed_ms = elapsed_ms,
+                status = "graceful",
+                "Shutdown complete"
+            );
             Ok(())
         }
         Err(e) => {
-            error!("Application shutdown error: {}", e);
+            let elapsed_ms = shutdown_elapsed_ms(&shutdown_started_at);
+            error!(
+                elapsed_ms = elapsed_ms,
+                status = "error",
+                error = &e as &dyn std::error::Error,
+                "Shutdown failed"
+            );
             process::exit(1);
         }
     }
+}
+
+fn shutdown_elapsed_ms(started_at: &std::sync::Mutex<Option<Instant>>) -> u64 {
+    started_at
+        .lock()
+        .unwrap()
+        .map(|t| t.elapsed().as_millis() as u64)
+        .unwrap_or(0)
 }
 
 struct AppComponents {
@@ -164,7 +225,10 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
     {
         Ok(manager) => Arc::new(manager),
         Err(e) => {
-            error!("Failed to initialize upstream manager: {}", e);
+            error!(
+                error = &e as &dyn std::error::Error,
+                "Failed to initialize upstream manager"
+            );
             return Err(e);
         }
     };
@@ -172,7 +236,10 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
     let router = match build_router(&config).await {
         Ok(router) => router,
         Err(e) => {
-            error!("Failed to initialize routing engine: {}", e);
+            error!(
+                error = &e as &dyn std::error::Error,
+                "Failed to initialize routing engine"
+            );
             return Err(e);
         }
     };
@@ -181,8 +248,8 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
         Some(admin_config) => admin_config.listen.parse()?,
         None => {
             info!(
-                "Admin server using default address {}",
-                server_defaults::DEFAULT_ADMIN_LISTEN
+                addr = server_defaults::DEFAULT_ADMIN_LISTEN,
+                "Admin listen address defaulted"
             );
             server_defaults::DEFAULT_ADMIN_LISTEN.parse()?
         }
@@ -244,8 +311,9 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
 
     let rate_limiter = config.server.rate_limit.as_ref().map(|rl| {
         info!(
-            "Rate limiting enabled, max {} requests/second, per-IP max {} requests/second",
-            rl.max_requests_per_second, rl.per_ip_max_requests_per_second
+            max_rps = rl.max_requests_per_second,
+            per_ip_rps = rl.per_ip_max_requests_per_second,
+            "Rate limiter ready"
         );
         RateLimiter::new_with_per_ip(
             rl.max_requests_per_second,
@@ -301,12 +369,13 @@ where
         Ok(()) => {}
         Err(e) if e.is_panic() => {
             error!(
-                "{} iteration panicked: {}; keeping previous router, will retry at next interval",
-                task_name, e
+                task = %task_name,
+                error = &e as &dyn std::error::Error,
+                "Task iteration panicked"
             );
         }
         Err(e) => {
-            warn!("{} task cancelled: {}", task_name, e);
+            warn!(task = %task_name, error = %e, "Task cancelled");
         }
     }
 }
@@ -325,7 +394,7 @@ async fn run_reload_task(
 
     loop {
         ticker.tick().await;
-        info!("Starting scheduled remote rules reload");
+        debug!("Remote rules reload started");
 
         let iteration_config = remote_rules_config.clone();
         let iteration_rules = static_rules.clone();
@@ -354,6 +423,8 @@ async fn reload_once(
     router: Arc<RwLock<Arc<Router>>>,
     statuses: Arc<RwLock<Vec<RemoteSourceStatus>>>,
 ) {
+    let reload_started = Instant::now();
+
     let load_result = load_and_merge_rules(
         &remote_rules_config.sources,
         &static_rules,
@@ -365,7 +436,11 @@ async fn reload_once(
     let summary = match load_result {
         Ok(s) => s,
         Err(e) => {
-            warn!("Remote rules reload failed: {}, keeping previous router", e);
+            warn!(
+                elapsed_ms = reload_started.elapsed().as_millis() as u64,
+                error = %e,
+                "Failed to reload remote rules"
+            );
             let now = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or_default()
@@ -418,25 +493,30 @@ async fn reload_once(
     }
 
     match evaluate_remote_rule_startup(summary) {
-        Ok(summary) => match Router::new_with_metadata(summary.merged_rules) {
-            Ok(new_router) => {
-                let new_router = Arc::new(new_router);
-                let mut writer = router.write().await;
-                *writer = new_router;
-                info!("Remote rules reloaded successfully");
+        Ok(summary) => {
+            let rule_count = summary.merged_rules.len();
+            let sources_ok = summary.successful_sources.len();
+            let sources_failed = summary.failed_sources.len();
+            match Router::new_with_metadata(summary.merged_rules) {
+                Ok(new_router) => {
+                    let new_router = Arc::new(new_router);
+                    let mut writer = router.write().await;
+                    *writer = new_router;
+                    info!(
+                        rules = rule_count,
+                        sources_ok = sources_ok,
+                        sources_failed = sources_failed,
+                        elapsed_ms = reload_started.elapsed().as_millis() as u64,
+                        "Remote rules reload completed"
+                    );
+                }
+                Err(e) => {
+                    warn!(error = %e, "Failed to build router from reloaded rules");
+                }
             }
-            Err(e) => {
-                warn!(
-                    "Failed to build router from reloaded rules: {}, keeping previous router",
-                    e
-                );
-            }
-        },
+        }
         Err(e) => {
-            warn!(
-                "Remote rules reload evaluation failed: {}, keeping previous router",
-                e
-            );
+            warn!(error = %e, "Failed to evaluate reloaded rules");
         }
     }
 }

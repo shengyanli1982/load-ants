@@ -137,9 +137,9 @@ async fn test_handle_doh_get_success() {
 #[tokio::test]
 async fn test_handle_doh_get_missing_param() {
     // 创建空查询参数
-    let query_params = AxumQuery(DohGetParams {
+    let query_params = Ok(AxumQuery(DohGetParams {
         dns: "".to_string(),
-    });
+    }));
 
     // 创建测试处理器
     let handler = create_test_handler(Some(create_test_dns_response()));
@@ -165,9 +165,9 @@ async fn test_handle_doh_get_missing_param() {
 #[tokio::test]
 async fn test_handle_doh_get_invalid_base64() {
     // 创建查询参数，使用无效的base64
-    let query_params = AxumQuery(DohGetParams {
+    let query_params = Ok(AxumQuery(DohGetParams {
         dns: "invalid-base64".to_string(),
-    });
+    }));
 
     // 创建测试处理器
     let handler = create_test_handler(Some(create_test_dns_response()));
@@ -193,9 +193,9 @@ async fn test_handle_doh_get_invalid_base64() {
 #[tokio::test]
 async fn test_handle_doh_get_invalid_dns_message() {
     // 创建查询参数，使用有效的base64但无效的DNS消息
-    let query_params = AxumQuery(DohGetParams {
+    let query_params = Ok(AxumQuery(DohGetParams {
         dns: URL_SAFE_NO_PAD.encode(b"not-a-dns-message"),
-    });
+    }));
 
     // 创建测试处理器
     let handler = create_test_handler(Some(create_test_dns_response()));
@@ -220,9 +220,9 @@ async fn test_handle_doh_get_invalid_dns_message() {
 // 测试DoH GET请求处理器错误（上游失败应返回 HTTP 200 + DNS SERVFAIL per RFC 8484）
 #[tokio::test]
 async fn test_handle_doh_get_handler_error() {
-    let query_params = AxumQuery(DohGetParams {
+    let query_params = Ok(AxumQuery(DohGetParams {
         dns: URL_SAFE_NO_PAD.encode(encode_dns_message(&create_test_dns_query())),
-    });
+    }));
 
     let handler = create_test_handler(None);
     let app_state = AppState {
@@ -463,14 +463,14 @@ async fn test_handle_json_get_success() {
 #[tokio::test]
 async fn test_handle_json_get_missing_name() {
     // 创建空查询参数
-    let query_params = AxumQuery(DohJsonGetParams {
+    let query_params = Ok(AxumQuery(DohJsonGetParams {
         name: "".to_string(),
         r#type: None,
         cd: None,
         do_flag: None,
         ct: None,
         ecs: None,
-    });
+    }));
 
     // 创建测试处理器
     let handler = create_test_handler(Some(create_test_dns_response()));
@@ -496,14 +496,14 @@ async fn test_handle_json_get_missing_name() {
 #[tokio::test]
 async fn test_handle_json_get_invalid_type() {
     // 创建无效类型的查询参数
-    let query_params = AxumQuery(DohJsonGetParams {
+    let query_params = Ok(AxumQuery(DohJsonGetParams {
         name: "example.com".to_string(),
         r#type: Some("INVALID".to_string()),
         cd: None,
         do_flag: None,
         ct: None,
         ecs: None,
-    });
+    }));
 
     // 创建测试处理器
     let handler = create_test_handler(Some(create_test_dns_response()));
@@ -529,14 +529,14 @@ async fn test_handle_json_get_invalid_type() {
 #[tokio::test]
 async fn test_handle_json_get_invalid_domain() {
     // 创建无效域名的查询参数
-    let query_params = AxumQuery(DohJsonGetParams {
+    let query_params = Ok(AxumQuery(DohJsonGetParams {
         name: "invalid-domain-[-".to_string(),
         r#type: Some("A".to_string()),
         cd: None,
         do_flag: None,
         ct: None,
         ecs: None,
-    });
+    }));
 
     // 创建测试处理器
     let handler = create_test_handler(Some(create_test_dns_response()));
@@ -561,14 +561,14 @@ async fn test_handle_json_get_invalid_domain() {
 // 测试JSON GET请求处理器错误（上游失败应返回 HTTP 200 + DNS SERVFAIL per RFC 8484）
 #[tokio::test]
 async fn test_handle_json_get_handler_error() {
-    let query_params = AxumQuery(DohJsonGetParams {
+    let query_params = Ok(AxumQuery(DohJsonGetParams {
         name: "example.com".to_string(),
         r#type: Some("A".to_string()),
         cd: None,
         do_flag: None,
         ct: None,
         ecs: None,
-    });
+    }));
 
     let handler = create_test_handler(None);
     let app_state = AppState {

@@ -9,6 +9,18 @@ use retry_policies::Jitter;
 use std::time::Duration;
 use tracing::debug;
 
+pub(crate) fn strip_url_userinfo(url_str: &str) -> String {
+    let Some(scheme_end) = url_str.find("://") else {
+        return url_str.to_string();
+    };
+    let rest = &url_str[scheme_end + 3..];
+    let authority_end = rest.find('/').map_or(rest.len(), |pos| pos);
+    if let Some(at_pos) = rest[..authority_end].find('@') {
+        return format!("{}{}", &url_str[..scheme_end + 3], &rest[at_pos + 1..]);
+    }
+    url_str.to_string()
+}
+
 /// 统一封装上游 HTTP 客户端构建与请求发送逻辑。
 pub struct HttpClient;
 
@@ -20,9 +32,11 @@ impl HttpClient {
         retry_config: Option<&RetryConfig>,
         tls_verify: Option<bool>,
     ) -> Result<ClientWithMiddleware, AppError> {
+        let proxy_label = proxy.map_or_else(|| "none".to_string(), strip_url_userinfo);
         debug!(
-            "Creating HTTP client for upstream, config: {:?}, proxy: {:?}, retry_config: {:?}",
-            config, proxy, retry_config
+            proxy = %proxy_label,
+            retry = if retry_config.is_some() { "on" } else { "off" },
+            "HTTP client created"
         );
 
         let mut client_builder = reqwest::ClientBuilder::new()
