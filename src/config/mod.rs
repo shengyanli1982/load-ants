@@ -248,7 +248,10 @@ pub struct Config {
 impl Config {
     // 从文件加载配置
     pub fn from_file<P: AsRef<Path>>(path: P) -> ConfigResult<Self> {
-        debug!("Loading configuration file: {:?}", path.as_ref());
+        debug!(
+            path = %path.as_ref().display(),
+            "Loading configuration file"
+        );
         let content = fs::read_to_string(path).map_err(ConfigError::LoadError)?;
         let config: Config = serde_yaml::from_str(&content).map_err(ConfigError::ParseError)?;
         config.validate()?;

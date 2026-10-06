@@ -74,14 +74,14 @@ async fn metrics_recording_paths_use_bounded_query_type_labels() {
         let response = handle_json_get(
             State(app_state.clone()),
             ConnectInfo(addr),
-            Query(DohJsonGetParams {
+            Ok(Query(DohJsonGetParams {
                 name: "example.com".to_string(),
                 r#type: Some(raw.to_string()),
                 cd: None,
                 do_flag: None,
                 ct: None,
                 ecs: None,
-            }),
+            })),
         )
         .await
         .into_response();

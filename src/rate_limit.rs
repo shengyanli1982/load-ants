@@ -1,4 +1,5 @@
 use dashmap::DashMap;
+use rustc_hash::FxBuildHasher;
 use std::net::IpAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -13,7 +14,7 @@ struct IpCounter {
 }
 
 pub struct RateLimiter {
-    counters: Arc<DashMap<IpAddr, IpCounter>>,
+    counters: Arc<DashMap<IpAddr, IpCounter, FxBuildHasher>>,
     max_per_second: u32,
     per_ip_max_per_second: u32,
     global_count: AtomicU64,
@@ -49,7 +50,9 @@ impl RateLimiter {
 
     pub fn new_with_per_ip(max_per_second: u32, per_ip_max_per_second: u32) -> Arc<Self> {
         let now_secs = current_epoch_secs();
-        let counters = Arc::new(DashMap::new());
+        // OPT-1b: FxBuildHasher 替换默认 SipHash（IpAddr 键哈希占 ratelimit 组 ~24%），
+        // 与 src/coalesce.rs 的 DashMap 用法一致。
+        let counters = Arc::new(DashMap::with_hasher(FxBuildHasher));
         let cached = Arc::new(AtomicU64::new(now_secs));
 
         let cleanup_handle = {
@@ -68,7 +71,7 @@ impl RateLimiter {
                         counters_clone.retain(|_, v: &mut IpCounter| {
                             fresh - v.window_start_secs.load(Ordering::Relaxed) < 120
                         });
-                        debug!("Rate limiter cleanup, active IPs: {}", counters_clone.len());
+                        debug!(active_ips = counters_clone.len(), "Rate limiter cleanup");
                     }
                 }
             });
@@ -89,18 +92,30 @@ impl RateLimiter {
     pub fn check(&self, ip: IpAddr) -> bool {
         let now_secs = self.cached_epoch_secs.load(Ordering::Relaxed);
 
-        let global = reset_if_needed(&self.global_count, &self.global_window_start_secs, now_secs);
-        if global >= self.max_per_second as u64 {
+        // D-07: per-IP 判定先行——被 per-IP 限制拒绝的请求不得消耗全局配额，
+        // 否则单 IP 滥用流量即可耗尽全局计数，令其他合法客户端全部被拒。
+        //
+        // OPT-1a: get-first——已存在 IP 走 shard 共享读锁（IpCounter 内部为
+        // AtomicU64，读锁下 fetch_add/CAS 语义不变），仅新 IP 首查回退 entry()
+        // 独占写锁。get 未命中时 dashmap 在返回 None 前已释放读锁，与 else 分支
+        // 的写锁不重叠，无自死锁。check-then-insert 竞窗最坏为新 IP 首包并发
+        // 各建一次计数器、map 保留其一，原子计数语义无损。
+        let per_ip = if let Some(counter) = self.counters.get(&ip) {
+            reset_if_needed(&counter.count, &counter.window_start_secs, now_secs)
+        } else {
+            let entry = self.counters.entry(ip).or_insert_with(|| IpCounter {
+                count: AtomicU64::new(0),
+                window_start_secs: AtomicU64::new(now_secs),
+            });
+            reset_if_needed(&entry.count, &entry.window_start_secs, now_secs)
+        };
+
+        if per_ip >= self.per_ip_max_per_second as u64 {
             return false;
         }
 
-        let entry = self.counters.entry(ip).or_insert_with(|| IpCounter {
-            count: AtomicU64::new(0),
-            window_start_secs: AtomicU64::new(now_secs),
-        });
-
-        let per_ip = reset_if_needed(&entry.count, &entry.window_start_secs, now_secs);
-        per_ip < self.per_ip_max_per_second as u64
+        let global = reset_if_needed(&self.global_count, &self.global_window_start_secs, now_secs);
+        global < self.max_per_second as u64
     }
 
     pub fn max_per_second(&self) -> u32 {

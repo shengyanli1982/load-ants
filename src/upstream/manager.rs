@@ -5,13 +5,16 @@ use crate::{
         DnsClientConfig, HttpClientConfig, LoadBalancingStrategy, UpstreamGroupConfig,
         UpstreamScheme,
     },
-    error::AppError,
-    metrics::METRICS,
+    error::{AppError, ConfigError},
+    metrics::{normalize_response_code, METRICS},
     r#const::{
-        error_labels, protocol_labels, upstream_labels, upstream_protocol_labels,
+        coalesce_limits, error_labels, protocol_labels, upstream_labels, upstream_protocol_labels,
         upstream_transport_labels,
     },
-    upstream::{doh::DoHClient, http_client::HttpClient},
+    upstream::{
+        doh::DoHClient,
+        http_client::{strip_url_userinfo, HttpClient},
+    },
 };
 pub struct GroupHealthInfo {
     pub servers: usize,
@@ -39,12 +42,18 @@ use hickory_proto::op::{Message, ResponseCode};
 use hickory_proto::rr::{RData, RecordType};
 use ipnet::IpNet;
 use reqwest_middleware::ClientWithMiddleware;
-use std::{collections::HashMap, net::IpAddr, sync::Arc, time::Instant};
-use tracing::{debug, error, warn};
+use std::{
+    collections::HashMap,
+    net::IpAddr,
+    sync::Arc,
+    time::{Duration, Instant},
+};
+use tracing::{debug, info, warn};
 
 use super::dns_client::{DnsClient, DnsTransport};
 
-struct UpstreamGroupState {
+#[doc(hidden)] // 仅为 tests/ 集成测试断言 forward_deadline 派生值而公开，非稳定 API
+pub struct UpstreamGroupState {
     lb: Arc<dyn LoadBalancer>,
     scheme: UpstreamScheme,
     strategy: LoadBalancingStrategy,
@@ -52,11 +61,18 @@ struct UpstreamGroupState {
     deny_cidrs: Vec<IpNet>,
     case_randomization: bool,
     case_randomization_strict: bool,
+    /// 覆盖本组全部转发 attempts 的总 deadline（= 单请求超时 × 服务器台数，
+    /// 由运行时配置派生，见 D-04）。
+    pub forward_deadline: Duration,
 }
 
 pub struct UpstreamManager {
-    groups: HashMap<String, UpstreamGroupState>,
+    #[doc(hidden)] // 仅为 tests/ 集成测试断言各组 forward_deadline 而公开，非稳定 API
+    pub groups: HashMap<String, UpstreamGroupState>,
     dns_client: DnsClient,
+    /// 所有上游组中最坏的转发总 deadline；无上游组时为兜底默认值。
+    /// `RequestHandler` 据此派生 coalesce follower 等待时长。
+    max_forward_deadline: Duration,
 }
 
 impl UpstreamManager {
@@ -66,7 +82,10 @@ impl UpstreamManager {
         dns_config: DnsClientConfig,
     ) -> Result<Self, AppError> {
         let mut group_map = HashMap::with_capacity(groups.len());
+        // dns_config 随后被 move 进 DnsClient，先取出派生 deadline 所需的单请求超时。
+        let dns_request_timeout = dns_config.request_timeout;
         let dns_client = DnsClient::new(dns_config);
+        let mut max_forward_deadline = Duration::ZERO;
 
         for UpstreamGroupConfig {
             name,
@@ -81,6 +100,26 @@ impl UpstreamManager {
             case_randomization_strict,
         } in groups
         {
+            let server_count = servers.len();
+            // D-04: 总转发 deadline 从运行时配置派生 = 单请求超时 × 服务器台数（至少 1 台）。
+            // DoH 组用 http_client.request_timeout，DNS 组用 dns_client.request_timeout。
+            let per_request_timeout = match &scheme {
+                UpstreamScheme::Doh => http_config.request_timeout,
+                UpstreamScheme::Dns => dns_request_timeout,
+            };
+            let forward_deadline =
+                Duration::from_secs(per_request_timeout.saturating_mul(server_count.max(1) as u64));
+            max_forward_deadline = max_forward_deadline.max(forward_deadline);
+            let scheme_str = match &scheme {
+                UpstreamScheme::Doh => "doh",
+                UpstreamScheme::Dns => "dns",
+            };
+            let strategy_str = match &strategy {
+                LoadBalancingStrategy::RoundRobin => "roundrobin",
+                LoadBalancingStrategy::Weighted => "weighted",
+                LoadBalancingStrategy::Random => "random",
+            };
+
             let lb: Arc<dyn LoadBalancer> = match strategy {
                 LoadBalancingStrategy::RoundRobin => {
                     Arc::new(RoundRobinBalancer::new(&name, servers))
@@ -100,23 +139,29 @@ impl UpstreamManager {
                 None
             };
 
-            let deny_cidrs: Vec<IpNet> = if deny_answers.is_empty() {
-                Vec::new()
-            } else {
-                deny_answers
-                    .iter()
-                    .filter_map(|s| {
-                        s.parse::<IpNet>()
-                            .map_err(|e| {
-                                warn!(
-                                    "Invalid CIDR in deny_answers for group '{}': {} - {}",
-                                    name, s, e
-                                );
-                            })
-                            .ok()
-                    })
-                    .collect()
-            };
+            // D-15: 非法 CIDR 在构造期 fail fast——防污染过滤不允许静默降级带病运行。
+            // 错误信息由启动链路最终层统一以 ERROR 记录一次，此处只返回 Err。
+            let mut deny_cidrs: Vec<IpNet> = Vec::with_capacity(deny_answers.len());
+            for cidr in &deny_answers {
+                match cidr.parse::<IpNet>() {
+                    Ok(parsed) => deny_cidrs.push(parsed),
+                    Err(e) => {
+                        return Err(AppError::Config(ConfigError::InvalidUpstreamConfig(
+                            format!(
+                                "upstream group '{name}': invalid deny_answers CIDR '{cidr}': {e}"
+                            ),
+                        )))
+                    }
+                }
+            }
+
+            info!(
+                group = %name,
+                scheme = scheme_str,
+                strategy = strategy_str,
+                servers = server_count,
+                "Upstream group ready"
+            );
 
             group_map.insert(
                 name,
@@ -128,13 +173,22 @@ impl UpstreamManager {
                     deny_cidrs,
                     case_randomization,
                     case_randomization_strict,
+                    forward_deadline,
                 },
             );
         }
 
+        // 无上游组时使用兜底 deadline，与旧默认请求超时对齐。
+        let max_forward_deadline = if group_map.is_empty() {
+            Duration::from_secs(coalesce_limits::FALLBACK_FORWARD_DEADLINE_SECS)
+        } else {
+            max_forward_deadline
+        };
+
         Ok(Self {
             groups: group_map,
             dns_client,
+            max_forward_deadline,
         })
     }
 
@@ -142,7 +196,18 @@ impl UpstreamManager {
         Ok(Self {
             groups: HashMap::new(),
             dns_client: DnsClient::new(DnsClientConfig::default()),
+            max_forward_deadline: Duration::from_secs(
+                coalesce_limits::FALLBACK_FORWARD_DEADLINE_SECS,
+            ),
         })
+    }
+
+    /// 返回所有上游组中最坏的转发总 deadline（各组 = 单请求超时 × 服务器台数的最大值）。
+    ///
+    /// `RequestHandler` 以此为基数（另加 margin）派生 coalesce follower 等待时长，
+    /// 保证 follower 等待不短于 leader 最坏转发时长（D-04）。无上游组时返回兜底默认值。
+    pub fn max_forward_deadline(&self) -> Duration {
+        self.max_forward_deadline
     }
 
     fn is_denied(ip: IpAddr, deny_cidrs: &[IpNet]) -> bool {
@@ -182,16 +247,51 @@ impl UpstreamManager {
     }
 
     pub async fn forward(&self, query: &Message, group_name: &str) -> Result<Message, AppError> {
-        debug!("Forwarding request to upstream group: {}", group_name);
+        debug!(
+            group = %group_name,
+            "Forwarding request to upstream group"
+        );
 
         let group_state = match self.groups.get(group_name) {
             Some(state) => state,
             None => {
-                error!("Upstream group not found: {}", group_name);
+                debug!(
+                    group = %group_name,
+                    reason = "group_not_found",
+                    "Failed to select upstream path"
+                );
                 return Err(AppError::UpstreamGroupNotFound(group_name.to_string()));
             }
         };
 
+        // D-04: 覆盖全部 attempts 的总转发 deadline（= 单请求超时 × 服务器台数，
+        // 由运行时配置派生）。超时即取消整个逐台重试链并返回 Err(AppError::Timeout)，
+        // 走既有错误路径（handler 侧 stale fallback / SERVFAIL + metrics）。
+        let forward_deadline = group_state.forward_deadline;
+        match tokio::time::timeout(
+            forward_deadline,
+            self.forward_attempts(query, group_name, group_state),
+        )
+        .await
+        {
+            Ok(result) => result,
+            Err(_elapsed) => {
+                debug!(
+                    group = %group_name,
+                    "Failed to forward within total deadline"
+                );
+                Err(AppError::Timeout)
+            }
+        }
+    }
+
+    /// 执行逐台重试的转发链（内部不设总时限，由 `forward` 以总 deadline 约束）。
+    async fn forward_attempts(
+        &self,
+        query: &Message,
+        group_name: &str,
+        group_state: &UpstreamGroupState,
+    ) -> Result<Message, AppError> {
         let load_balancer = &group_state.lb;
         let scheme = &group_state.scheme;
 
@@ -203,7 +303,12 @@ impl UpstreamManager {
             let selected_server = match load_balancer.select_server(&tried_indices) {
                 Ok(s) => s,
                 Err(e) => {
-                    error!("Failed to select upstream server: {}", e);
+                    debug!(
+                        group = %group_name,
+                        reason = "select_failed",
+                        error = %e,
+                        "Failed to select upstream path"
+                    );
 
                     let upstream_protocol = match scheme {
                         UpstreamScheme::Doh => upstream_protocol_labels::DOH,
@@ -239,7 +344,11 @@ impl UpstreamManager {
             match scheme {
                 UpstreamScheme::Doh => {
                     let Some(server) = selected_server.as_doh() else {
-                        error!("Invalid upstream server type for group: {}", group_name);
+                        debug!(
+                            group = %group_name,
+                            reason = "invalid_server_type",
+                            "Failed to select upstream path"
+                        );
                         return Err(AppError::Upstream(
                             "Invalid upstream server type for this group".to_string(),
                         ));
@@ -249,7 +358,7 @@ impl UpstreamManager {
                     debug!(
                         attempt = attempt + 1,
                         max_attempts,
-                        server = %server.url.as_str(),
+                        server = %strip_url_userinfo(server.url.as_str()),
                         "Selected upstream DoH server"
                     );
 
@@ -268,7 +377,11 @@ impl UpstreamManager {
                     let client = match &group_state.client {
                         Some(c) => c,
                         None => {
-                            error!("HTTP client not found for group: {}", group_name);
+                            debug!(
+                                group = %group_name,
+                                reason = "http_client_missing",
+                                "Failed to select upstream path"
+                            );
                             return Err(AppError::UpstreamGroupNotFound(group_name.to_string()));
                         }
                     };
@@ -288,6 +401,16 @@ impl UpstreamManager {
                                     server_host,
                                 ])
                                 .observe(duration.as_secs_f64());
+
+                            debug!(
+                                group = %group_name,
+                                server = %strip_url_userinfo(server.url.as_str()),
+                                transport = upstream_transport_labels::HTTP,
+                                rcode = normalize_response_code(response.response_code()),
+                                answers = response.answer_count(),
+                                duration_ms = duration.as_secs_f64() * 1000.0,
+                                "Upstream response received"
+                            );
 
                             if !group_state.deny_cidrs.is_empty()
                                 && !Self::filter_denied_answers(
@@ -313,11 +436,12 @@ impl UpstreamManager {
                         }
                         Err(e) => {
                             debug!(
-                                server = %server.url.as_str(),
+                                group = %group_name,
+                                server = %strip_url_userinfo(server.url.as_str()),
                                 attempt = attempt + 1,
                                 max_attempts,
                                 error = %e,
-                                "Upstream DoH request failed, will retry if possible"
+                                "Upstream request attempt failed"
                             );
 
                             load_balancer.report_failure(selected_server, group_name);
@@ -339,7 +463,11 @@ impl UpstreamManager {
                 }
                 UpstreamScheme::Dns => {
                     let Some(server) = selected_server.as_dns() else {
-                        error!("Invalid upstream server type for group: {}", group_name);
+                        debug!(
+                            group = %group_name,
+                            reason = "invalid_server_type",
+                            "Failed to select upstream path"
+                        );
                         return Err(AppError::Upstream(
                             "Invalid upstream server type for this group".to_string(),
                         ));
@@ -392,6 +520,29 @@ impl UpstreamManager {
                                     .observe(attempt.duration.as_secs_f64());
                             }
 
+                            let success_transport = response.attempts.last().map_or(
+                                upstream_transport_labels::UNKNOWN,
+                                |a| match a.transport {
+                                    DnsTransport::Udp => upstream_transport_labels::UDP,
+                                    DnsTransport::Tcp => upstream_transport_labels::TCP,
+                                },
+                            );
+                            let attempts_duration_ms: f64 = response
+                                .attempts
+                                .iter()
+                                .map(|a| a.duration.as_secs_f64())
+                                .sum::<f64>()
+                                * 1000.0;
+                            debug!(
+                                group = %group_name,
+                                server = %server.addr,
+                                transport = success_transport,
+                                rcode = normalize_response_code(response.message.response_code()),
+                                answers = response.message.answer_count(),
+                                duration_ms = attempts_duration_ms,
+                                "Upstream response received"
+                            );
+
                             let mut msg = response.message;
                             if !group_state.deny_cidrs.is_empty()
                                 && !Self::filter_denied_answers(&mut msg, &group_state.deny_cidrs)
@@ -414,11 +565,12 @@ impl UpstreamManager {
                         }
                         Err(e) => {
                             debug!(
+                                group = %group_name,
                                 server = %server.addr,
                                 attempt = attempt + 1,
                                 max_attempts,
                                 error = %e.error,
-                                "Upstream DNS request failed, will retry if possible"
+                                "Upstream request attempt failed"
                             );
 
                             for dns_attempt in &e.attempts {

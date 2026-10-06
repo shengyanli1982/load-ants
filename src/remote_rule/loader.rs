@@ -1,6 +1,5 @@
 use crate::config::{HttpClientConfig, MatchType, RemoteRuleConfig, RouteRuleConfig};
 use crate::error::AppError;
-use crate::r#const::rule_action_labels;
 use crate::upstream::HttpClient;
 use bytes::BytesMut;
 use futures_util::StreamExt;
@@ -8,6 +7,7 @@ use reqwest_middleware::ClientWithMiddleware;
 use tracing::{debug, info};
 
 use super::parser::{RuleParser, V2RayRuleParser};
+use super::strip_url_userinfo;
 
 /// 远程规则加载器
 pub struct RemoteRuleLoader {
@@ -37,7 +37,10 @@ impl RemoteRuleLoader {
 
     /// 加载远程规则
     pub async fn load(&self) -> Result<Vec<RouteRuleConfig>, AppError> {
-        debug!("Loading domains from URL: {:?}", self.config.url);
+        debug!(
+            url = %strip_url_userinfo(self.config.url.as_str()),
+            "Loading domains from remote source"
+        );
 
         // 构建请求
         let mut request = self.client.get(&self.config.url);
@@ -128,12 +131,6 @@ impl RemoteRuleLoader {
             }
         }
 
-        // 获取规则动作标签
-        let action_label = match self.config.action {
-            crate::config::RouteAction::Forward => rule_action_labels::FORWARD,
-            crate::config::RouteAction::Block => rule_action_labels::BLOCK,
-        };
-
         // 创建精确匹配规则（如果有）
         if !exact_patterns.is_empty() {
             route_rules.push(RouteRuleConfig {
@@ -165,13 +162,12 @@ impl RemoteRuleLoader {
         }
 
         info!(
-            "Loaded {} domains from {:?} ({}): {} exact, {} wildcard, {} regex",
-            exact_count + wildcard_count + regex_count,
-            self.config.url,
-            action_label,
-            exact_count,
-            wildcard_count,
-            regex_count
+            rules = exact_count + wildcard_count + regex_count,
+            url = %strip_url_userinfo(self.config.url.as_str()),
+            exact = exact_count,
+            wildcard = wildcard_count,
+            regex = regex_count,
+            "Remote rule source loaded"
         );
 
         Ok(route_rules)

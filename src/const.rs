@@ -54,6 +54,15 @@ pub mod http_client_limits {
     pub const MAX_KEEPALIVE: u32 = 600;
 }
 
+// coalesce 合并等待限制
+pub mod coalesce_limits {
+    // follower 等待时长在 leader 最坏转发总 deadline 之上预留的余量（秒）
+    pub const WAIT_MARGIN_SECS: u64 = 1;
+    // 无上游组时的兜底总转发 deadline（秒），与 HTTP 默认请求超时保持一致
+    pub const FALLBACK_FORWARD_DEADLINE_SECS: u64 =
+        super::http_client_limits::DEFAULT_REQUEST_TIMEOUT;
+}
+
 // DNS Client（传统 UDP/TCP 上游）配置限制
 pub mod dns_client_limits {
     pub const DEFAULT_CONNECT_TIMEOUT: u64 = 2;
@@ -191,6 +200,97 @@ pub mod ttl_source_labels {
     pub const NEGATIVE_TTL: &str = "negative_ttl";
 }
 
+//
+// OPT-2: 有界标签集预解析下标。
+// 每个 *_indices 模块与对应 *_labels 模块一一对应：`ALL[i]` 即下标 `i` 的标签值，
+// metrics.rs 构造期按 `ALL` 顺序一次性 with_label_values 预解析 child 句柄，
+// 热路径以下标直接索引，消除每 op 的 RwLock + 哈希 + Arc clone/drop 查找开销。
+// 约束：仅允许收录有界标签维度；ALL 顺序与下标常量必须保持一致
+// （tests/metrics_preresolved_export_test.rs 有一致性护栏）。
+//
+
+// 协议下标（dns_requests_total / dns_request_duration_seconds 的 protocol 维）
+pub mod protocol_indices {
+    use super::protocol_labels;
+    pub const UDP: usize = 0;
+    pub const TCP: usize = 1;
+    pub const UNKNOWN: usize = 2;
+    pub const ALL: [&str; 3] = [
+        protocol_labels::UDP,
+        protocol_labels::TCP,
+        protocol_labels::UNKNOWN,
+    ];
+}
+
+// 处理阶段下标（dns_request_processing_duration_seconds 的 processing_stage 维）
+pub mod processing_indices {
+    use super::processing_labels;
+    pub const CACHED: usize = 0;
+    pub const RESOLVED: usize = 1;
+    pub const ALL: [&str; 2] = [processing_labels::CACHED, processing_labels::RESOLVED];
+}
+
+// 错误类型下标（dns_request_errors_total 的 error_type 维）。
+// 仅收录该 metric 实际使用的有界值；SELECT_ERROR 只流入 upstream_errors_total
+// （无界维度、保持 with_label_values），不在此预解析、不物化零值序列。
+pub mod error_indices {
+    use super::error_labels;
+    pub const EMPTY_QUERY: usize = 0;
+    pub const ROUTE_ERROR: usize = 1;
+    pub const MISSING_TARGET: usize = 2;
+    pub const UPSTREAM_ERROR: usize = 3;
+    pub const UNSUPPORTED_OPCODE: usize = 4;
+    pub const UNSUPPORTED_MESSAGE_TYPE: usize = 5;
+    pub const HANDLER_ERROR: usize = 6;
+    pub const REQUEST_ERROR: usize = 7;
+    pub const ALL: [&str; 8] = [
+        error_labels::EMPTY_QUERY,
+        error_labels::ROUTE_ERROR,
+        error_labels::MISSING_TARGET,
+        error_labels::UPSTREAM_ERROR,
+        error_labels::UNSUPPORTED_OPCODE,
+        error_labels::UNSUPPORTED_MESSAGE_TYPE,
+        error_labels::HANDLER_ERROR,
+        error_labels::REQUEST_ERROR,
+    ];
+}
+
+// 缓存操作下标（cache_operations_total 的 operation 维）
+pub mod cache_op_indices {
+    use super::cache_labels;
+    pub const HIT: usize = 0;
+    pub const MISS: usize = 1;
+    pub const INSERT_ERROR: usize = 2;
+    pub const INSERT: usize = 3;
+    pub const CLEAR: usize = 4;
+    pub const STALE: usize = 5;
+    pub const ALL: [&str; 6] = [
+        cache_labels::HIT,
+        cache_labels::MISS,
+        cache_labels::INSERT_ERROR,
+        cache_labels::INSERT,
+        cache_labels::CLEAR,
+        cache_labels::STALE,
+    ];
+}
+
+// TTL 来源下标（cache_ttl_seconds 的 source 维）
+pub mod ttl_source_indices {
+    use super::ttl_source_labels;
+    pub const ORIGINAL: usize = 0;
+    pub const MIN_TTL: usize = 1;
+    pub const MAX_TTL: usize = 2;
+    pub const ADJUSTED: usize = 3;
+    pub const NEGATIVE_TTL: usize = 4;
+    pub const ALL: [&str; 5] = [
+        ttl_source_labels::ORIGINAL,
+        ttl_source_labels::MIN_TTL,
+        ttl_source_labels::MAX_TTL,
+        ttl_source_labels::ADJUSTED,
+        ttl_source_labels::NEGATIVE_TTL,
+    ];
+}
+
 // 上游标签
 pub mod upstream_labels {
     pub const UNKNOWN: &str = "unknown";
@@ -254,6 +354,7 @@ pub mod subsystem_names {
     pub const ADMIN_SERVER: &str = "admin_server";
     // DoH服务器子系统
     pub const DOH_SERVER: &str = "doh_server";
+    pub const SHUTDOWN_TIMER: &str = "shutdown_timer";
 }
 
 // 速率限制配置常量

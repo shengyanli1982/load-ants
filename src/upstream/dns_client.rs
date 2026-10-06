@@ -18,7 +18,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::task::AbortHandle;
 use tokio::time::{self, Duration as TokioDuration};
-use tracing::warn;
+use tracing::{debug, warn};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DnsTransport {
@@ -166,7 +166,7 @@ impl DnsClient {
                     Some(randomized)
                 }
                 Err(e) => {
-                    warn!("Failed to create randomized DNS name: {}", e);
+                    debug!(error = %e, "Failed to randomize query name");
                     None
                 }
             }
@@ -180,7 +180,8 @@ impl DnsClient {
     /// 验证响应中的域名大小写是否与发送时一致（0x20 验证）。
     /// 返回 true 表示验证通过，false 表示验证失败（大小写不匹配或缺失 question
     /// section，可能是伪造响应）。
-    fn verify_response_case(response: &Message, sent_name: &str) -> bool {
+    #[doc(hidden)] // 仅为 tests/ 集成测试直接验证 0x20 逻辑而公开，非稳定 API
+    pub fn verify_response_case(response: &Message, sent_name: &str) -> bool {
         match response.queries().first() {
             Some(q) => {
                 let response_name = q.name().to_ascii();
@@ -188,7 +189,8 @@ impl DnsClient {
                     warn!(
                         sent = %sent_name,
                         received = %response_name,
-                        "0x20 case verification failed: response domain case mismatch"
+                        reason = "case_mismatch",
+                        "0x20 case verification failed"
                     );
                     false
                 } else {
@@ -200,7 +202,8 @@ impl DnsClient {
             None => {
                 warn!(
                     sent = %sent_name,
-                    "0x20 case verification failed: response missing question section"
+                    reason = "missing_question",
+                    "0x20 case verification failed"
                 );
                 false
             }
@@ -283,7 +286,7 @@ impl DnsClient {
             if let Some(ref name) = sent_name {
                 let verified = Self::verify_response_case(&udp_response, name);
                 if !verified && case_randomization_strict {
-                    warn!("0x20 strict mode: discarding UDP response and falling back to TCP");
+                    debug!("0x20 strict fallback to TCP");
                     // 丢弃 UDP 响应，直接触发 TCP fallback
                     let start = Instant::now();
                     let tcp_result = self.send_tcp(addr, message).await;
@@ -376,7 +379,8 @@ impl DnsClient {
         conn_result
     }
 
-    async fn send_udp(&self, addr: SocketAddr, message: &Message) -> Result<Message, AppError> {
+    #[doc(hidden)] // 仅为 tests/ 集成测试验证并发首连行为而公开，非稳定 API
+    pub async fn send_udp(&self, addr: SocketAddr, message: &Message) -> Result<Message, AppError> {
         // 不持有 DashMap 锁跨 connect().await：先在锁外完成建连再插入。
         // 并发重复建连时后写覆盖先写（与 TCP 连接池语义一致），各调用方持有
         // 各自的连接克隆，被覆盖的连接不影响在途请求。
@@ -456,10 +460,10 @@ impl DnsClient {
             METRICS
                 .tcp_pool_connections
                 .set(self.tcp_conns.len() as i64);
-            warn!(
-                evicted_addr = %key,
+            debug!(
+                addr = %key,
                 pool_size = self.tcp_conns.len(),
-                "TCP connection pool full, evicted oldest connection"
+                "TCP connection pool evicted oldest connection"
             );
         }
     }
@@ -490,109 +494,5 @@ impl Drop for DnsClient {
         if let Some(handle) = self.cleanup_handle.take() {
             handle.abort();
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::config::DnsClientConfig;
-    use hickory_proto::op::MessageType;
-    use hickory_proto::rr::RecordType;
-    use std::net::Ipv4Addr;
-    use std::str::FromStr;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    use tokio::net::UdpSocket;
-
-    fn response_with_question(name_ascii: &str) -> Message {
-        let mut response = Message::new();
-        response.set_message_type(MessageType::Response);
-        let name = Name::from_ascii(name_ascii).expect("valid DNS name");
-        response.add_query(Query::query(name, RecordType::A));
-        response
-    }
-
-    #[test]
-    fn verify_response_case_fails_when_question_section_missing() {
-        let response = Message::new();
-        assert!(
-            !DnsClient::verify_response_case(&response, "Example.com."),
-            "missing question section must fail 0x20 verification"
-        );
-    }
-
-    #[test]
-    fn verify_response_case_passes_on_exact_case_match() {
-        let response = response_with_question("Example.com.");
-        assert!(DnsClient::verify_response_case(&response, "Example.com."));
-    }
-
-    #[test]
-    fn verify_response_case_fails_on_case_mismatch() {
-        let response = response_with_question("example.com.");
-        assert!(!DnsClient::verify_response_case(&response, "Example.com."));
-    }
-
-    #[tokio::test]
-    async fn send_udp_concurrent_first_connect_keeps_all_queries_successful() {
-        let server_socket = UdpSocket::bind((Ipv4Addr::LOCALHOST, 0))
-            .await
-            .expect("bind test UDP server");
-        let server_addr = server_socket.local_addr().expect("server addr");
-        let received = Arc::new(AtomicUsize::new(0));
-        {
-            let received = received.clone();
-            tokio::spawn(async move {
-                let mut buf = [0u8; 2048];
-                loop {
-                    let Ok((len, peer)) = server_socket.recv_from(&mut buf).await else {
-                        break;
-                    };
-                    received.fetch_add(1, Ordering::SeqCst);
-                    let Ok(query) = Message::from_vec(&buf[..len]) else {
-                        continue;
-                    };
-                    let mut response = Message::new();
-                    response.set_id(query.id());
-                    response.set_message_type(MessageType::Response);
-                    if let Some(q) = query.queries().first() {
-                        response.add_query(q.clone());
-                    }
-                    let Ok(bytes) = response.to_vec() else {
-                        continue;
-                    };
-                    let _ = server_socket.send_to(&bytes, peer).await;
-                }
-            });
-        }
-
-        let client = Arc::new(DnsClient::new(DnsClientConfig::default()));
-        let barrier = Arc::new(tokio::sync::Barrier::new(8));
-        let mut handles = Vec::new();
-        for _ in 0..8 {
-            let client = client.clone();
-            let barrier = barrier.clone();
-            handles.push(tokio::spawn(async move {
-                let mut query = Message::new();
-                query.set_recursion_desired(true);
-                let name = Name::from_str("concurrent.example.com.").expect("valid name");
-                query.add_query(Query::query(name, RecordType::A));
-                barrier.wait().await;
-                client.send_udp(server_addr, &query).await
-            }));
-        }
-
-        for handle in handles {
-            let response = handle
-                .await
-                .expect("task join")
-                .expect("concurrent first-connect send_udp must succeed");
-            assert_eq!(response.queries().len(), 1);
-            assert_eq!(
-                response.queries()[0].name().to_ascii(),
-                "concurrent.example.com."
-            );
-        }
-        assert_eq!(received.load(Ordering::SeqCst), 8);
     }
 }

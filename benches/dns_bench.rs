@@ -8,6 +8,8 @@ use hickory_proto::{
 };
 use loadants::coalesce::CoalesceEntry;
 use loadants::config::{DnsUpstreamServerConfig, UpstreamServerConfig};
+use loadants::metrics::{query_type_index, METRICS};
+use loadants::r#const::protocol_indices;
 use loadants::{
     build_cname_chain, filter_response_records, CacheKey, CoalescingMap, DnsCache, LoadBalancer,
     MatchType, RateLimiter, RequestHandler, RoundRobinBalancer, RouteAction, RouteRuleConfig,
@@ -247,6 +249,23 @@ fn bench_rate_limiter_check(c: &mut Criterion) {
             }
         })
     });
+
+    // 放行路径 bench（hotspot-analysis-round1 §8-1）：check_10ips 的稳态是"配额耗尽
+    // 拒绝路径"（每 IP 超过 100K/s per-IP 限制），不覆盖正常放行成本。此处把
+    // per-IP 与全局配额都设为 u32::MAX，保证测量窗口内配额永不耗尽，每次 check
+    // 走完整放行路径（per-IP 原子计数 + 全局原子计数 + 两次比较）。
+    let allow_limiter = RateLimiter::new_with_per_ip(u32::MAX, u32::MAX);
+    let allow_ips: Vec<IpAddr> = (0..10)
+        .map(|i| IpAddr::V4(Ipv4Addr::new(10, 0, 1, i)))
+        .collect();
+
+    c.bench_function("rate_limiter/check_allow_path", |b| {
+        b.iter(|| {
+            for ip in &allow_ips {
+                let _ = allow_limiter.check(*ip);
+            }
+        })
+    });
 }
 
 fn bench_create_error_response(c: &mut Criterion) {
@@ -320,6 +339,46 @@ fn bench_handler_cache_hit_path(c: &mut Criterion) {
     rt.block_on(cache.insert(&query, response)).unwrap();
 
     c.bench_function("handler/cache_hit_path", |b| {
+        b.to_async(&rt).iter(|| async {
+            let _ = handler.handle_request(&query).await;
+        })
+    });
+}
+
+fn bench_handler_cache_miss_path(c: &mut Criterion) {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    // Enter the runtime so `tokio::spawn` inside UpstreamManager/RateLimiter construction works.
+    let _guard = rt.enter();
+
+    let cache = Arc::new(DnsCache::new(10_000, 60, 300, Some(30), Some(300)));
+    let router = Arc::new(Router::new(build_realistic_rules()).unwrap());
+    let router_lock = Arc::new(RwLock::new(router));
+    // `UpstreamManager::empty()` has no upstream groups, so `forward()` fails immediately
+    // with `UpstreamGroupNotFound` — the miss path stays fully offline and deterministic.
+    // ServFail responses are rejected by `DnsCache::is_cacheable`, so the query remains
+    // a true cache miss on every iteration (no cache pollution across the bench).
+    let upstream = Arc::new(UpstreamManager::empty().unwrap());
+
+    let handler = RequestHandler::new(cache.clone(), router_lock, upstream);
+
+    // Matches the global wildcard rule -> Forward("default-dns") -> group not found.
+    let query = {
+        let mut msg = Message::new();
+        msg.set_id(7);
+        msg.set_message_type(MessageType::Query);
+        msg.set_op_code(OpCode::Query);
+        msg.set_recursion_desired(true);
+        msg.add_query(Query::query(
+            Name::from_ascii("miss-path.example.com.").unwrap(),
+            RecordType::A,
+        ));
+        msg
+    };
+
+    // Exercises the full miss branch of handle_request: coalesce leader insert,
+    // route match, handle_forward failure, stale fallback lookup, ServFail error
+    // response construction, coalesce cell/guard teardown and metrics observation.
+    c.bench_function("handler/cache_miss_forward_fail_path", |b| {
         b.to_async(&rt).iter(|| async {
             let _ = handler.handle_request(&query).await;
         })
@@ -449,6 +508,111 @@ fn bench_filter_response_records(c: &mut Criterion) {
     });
 }
 
+/// Builds a realistic DNS query message (A record + EDNS0 OPT) in wire format.
+fn build_wire_query_bytes() -> Vec<u8> {
+    let mut msg = Message::new();
+    msg.set_id(0x1234);
+    msg.set_message_type(MessageType::Query);
+    msg.set_op_code(OpCode::Query);
+    msg.set_recursion_desired(true);
+    msg.add_query(Query::query(
+        Name::from_ascii("www.example.com.").unwrap(),
+        RecordType::A,
+    ));
+    let mut edns = Edns::new();
+    edns.set_max_payload(1232);
+    edns.set_version(0);
+    msg.set_edns(edns);
+    msg.to_vec().unwrap()
+}
+
+/// Builds a realistic DNS response message (CNAME chain + A record + EDNS0) in wire format.
+fn build_wire_response_bytes() -> Vec<u8> {
+    let mut msg = Message::new();
+    msg.set_id(0x1234);
+    msg.set_message_type(MessageType::Response);
+    msg.set_op_code(OpCode::Query);
+    msg.set_recursion_desired(true);
+    msg.set_recursion_available(true);
+    msg.set_response_code(ResponseCode::NoError);
+    msg.add_query(Query::query(
+        Name::from_ascii("www.example.com.").unwrap(),
+        RecordType::A,
+    ));
+    for record in build_cname_chain_answers() {
+        msg.add_answer(record);
+    }
+    let mut edns = Edns::new();
+    edns.set_max_payload(1232);
+    edns.set_version(0);
+    msg.set_edns(edns);
+    msg.to_vec().unwrap()
+}
+
+fn bench_wire_encode_decode(c: &mut Criterion) {
+    // Wire encode/decode runs once per request (server-side parse) and once per
+    // response (server-side emit); this is pure-CPU hot-path work owned by
+    // hickory_proto but directly attributable to loadants throughput.
+    let query_bytes = build_wire_query_bytes();
+    let query_msg = Message::from_vec(&query_bytes).unwrap();
+
+    c.bench_function("wire/query_encode", |b| {
+        b.iter(|| query_msg.to_vec().unwrap())
+    });
+    c.bench_function("wire/query_decode", |b| {
+        b.iter(|| Message::from_vec(&query_bytes).unwrap())
+    });
+
+    let response_bytes = build_wire_response_bytes();
+    let response_msg = Message::from_vec(&response_bytes).unwrap();
+
+    c.bench_function("wire/response_encode", |b| {
+        b.iter(|| response_msg.to_vec().unwrap())
+    });
+    c.bench_function("wire/response_decode", |b| {
+        b.iter(|| Message::from_vec(&response_bytes).unwrap())
+    });
+}
+
+fn bench_metrics_overhead(c: &mut Criterion) {
+    // Each request performs several label-lookups + counter/histogram updates
+    // (HandlerAdapter and RequestHandler combined: >= 5 metric ops per query).
+    // This bench quantifies the per-op cost of the global Prometheus registry path.
+    c.bench_function("metrics/counter_inc_with_label", |b| {
+        b.iter(|| {
+            METRICS.dns_requests_total.with_label_values(&["udp"]).inc();
+        })
+    });
+
+    c.bench_function("metrics/histogram_observe_with_labels", |b| {
+        b.iter(|| {
+            METRICS
+                .dns_request_duration_seconds
+                .with_label_values(&["udp", "A"])
+                .observe(0.001_5);
+        })
+    });
+}
+
+fn bench_metrics_pre_resolved(c: &mut Criterion) {
+    // OPT-2 对照组：预解析 child 句柄直接 inc/observe 的成本。
+    // 与 metrics/counter_inc_with_label、metrics/histogram_observe_with_labels
+    // 使用同一 metric、同一标签（dns_requests_total{udp} /
+    // dns_request_duration_seconds{udp,A}），同 session 复测即可量化
+    // 预解析消除的查找开销。上方两个既有 bench 保留为 with_label_values
+    // 库原语基准（查找成本对照），不得篡改。
+    c.bench_function("metrics/pre_resolved_counter_inc", |b| {
+        b.iter(|| METRICS.requests_by_protocol[protocol_indices::UDP].inc())
+    });
+
+    c.bench_function("metrics/pre_resolved_histogram_observe", |b| {
+        b.iter(|| {
+            METRICS.request_durations[protocol_indices::UDP][query_type_index(RecordType::A)]
+                .observe(0.001_5)
+        })
+    });
+}
+
 criterion_group!(
     benches,
     bench_router_find_match,
@@ -457,9 +621,13 @@ criterion_group!(
     bench_rate_limiter_check,
     bench_create_error_response,
     bench_handler_cache_hit_path,
+    bench_handler_cache_miss_path,
     bench_coalesce_entry_ops,
     bench_balancer_select,
     bench_cname_chain,
     bench_filter_response_records,
+    bench_wire_encode_decode,
+    bench_metrics_overhead,
+    bench_metrics_pre_resolved,
 );
 criterion_main!(benches);

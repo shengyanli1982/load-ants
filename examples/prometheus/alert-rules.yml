@@ -1,0 +1,140 @@
+# Load Ants — Prometheus 告警规则（即用型示例）
+#
+# 使用方式：在 prometheus.yml 中挂载本文件后重载配置：
+#
+#   rule_files:
+#     - "alert-rules.yml"   # 替换为本文件的实际路径
+#
+# 说明：
+# - 所有阈值均为保守建议值，请按实际流量规模与部署形态调整。
+# - 指标名称与标签以 src/metrics.rs 为准（2026-10 核实）。
+# - `loadants_upstream_health_state` 值语义：0=Unhealthy, 1=HalfOpen, 2=Healthy
+#   （2026-08 破坏性变更：旧版本 0 表示 Healthy，升级时注意规则方向）。
+# - 缓存投毒检测、0x20 大小写校验失败、deny_answers 全过滤三类安全事件
+#   无 metric 覆盖，仍以 WARN 日志输出，请通过日志告警通道接入。
+
+groups:
+  - name: loadants-upstream
+    rules:
+      # 单个上游服务器被熔断且持续未恢复
+      - alert: LoadAntsUpstreamServerUnhealthy
+        expr: "loadants_upstream_health_state == 0"
+        for: "5m"
+        labels:
+          severity: warning
+        annotations:
+          summary: "上游服务器 {{ $labels.group }}/{{ $labels.server }} 处于 Unhealthy 状态"
+          description: >-
+            该上游服务器已被熔断（health_state=0）持续 5 分钟。
+            单台不健康通常由负载均衡兜底，但会减少可用容量；
+            请检查该服务器的连通性与解析质量。
+
+      # 上游组内全部服务器不健康 —— 该组解析能力完全丧失
+      - alert: LoadAntsUpstreamGroupAllDown
+        expr: >-
+          count by (group) (loadants_upstream_health_state == 0)
+            ==
+          count by (group) (loadants_upstream_health_state)
+        for: "2m"
+        labels:
+          severity: critical
+        annotations:
+          summary: "上游组 {{ $labels.group }} 全部服务器不健康"
+          description: >-
+            该组所有上游服务器均被熔断持续 2 分钟，指向该组的路由将无法解析
+            （若启用 stale-while-revalidate，仅能以过期缓存兜底）。
+            立即检查上游可用性与网络出口。
+
+      # 熔断器进入熔断态（Healthy/HalfOpen -> Unhealthy 的状态迁移）
+      - alert: LoadAntsCircuitBreakerTripped
+        expr: 'increase(loadants_circuit_breaker_transitions_total{state_to="unhealthy"}[5m]) > 0'
+        labels:
+          severity: warning
+        annotations:
+          summary: "上游组 {{ $labels.group }} 熔断器触发（{{ $labels.state_from }} -> unhealthy）"
+          description: >-
+            最近 5 分钟内该组发生进入熔断态的状态迁移。
+            熔断 trip 事件即时告警（无 for 等待），用于在健康度指标恶化前捕获上游故障拐点。
+
+      # 上游错误速率持续偏高（阈值按流量规模调整）
+      - alert: LoadAntsUpstreamErrorRateHigh
+        expr: 'sum by (group, server) (rate(loadants_upstream_errors_total[5m])) > 1'
+        for: "5m"
+        labels:
+          severity: warning
+        annotations:
+          summary: "上游 {{ $labels.group }}/{{ $labels.server }} 错误速率超过 1 次/秒"
+          description: >-
+            该上游服务器的请求错误速率持续 5 分钟高于 1 次/秒
+            （error_type=request_error 为请求失败，select_error 为无可用路径）。
+            阈值 1/s 为保守建议值，请按流量规模调整；
+            低流量环境可改用比例判断（errors/requests）。
+
+      # 过期缓存兜底持续发生 —— 上游劣化的早期信号
+      - alert: LoadAntsStaleFallbackSustained
+        expr: 'sum by (group) (increase(loadants_stale_fallback_total[10m])) > 10'
+        labels:
+          severity: warning
+        annotations:
+          summary: "上游组 {{ $labels.group }} 持续以过期缓存兜底（10 分钟内 > 10 次）"
+          description: >-
+            上游转发失败后由 stale 缓存应答的次数在 10 分钟窗口内超过 10 次。
+            偶发兜底属自愈行为，持续兜底说明上游已劣化但可能尚未触发熔断。
+            阈值 10 次/10m 为保守建议值，请按流量规模调整。
+
+  - name: loadants-requests
+    rules:
+      # DNS 请求错误速率超阈（按 error_type 分维度）
+      - alert: LoadAntsDnsRequestErrorsHigh
+        expr: 'sum by (error_type) (rate(loadants_dns_request_errors_total[5m])) > 0.5'
+        for: "5m"
+        labels:
+          severity: warning
+        annotations:
+          summary: "DNS 请求错误（error_type={{ $labels.error_type }}）速率超过 0.5 次/秒"
+          description: >-
+            DNS 请求处理链路错误持续偏高。常见 error_type：
+            upstream_error（上游转发失败）、route_error/missing_target（路由配置问题）、
+            empty_query/unsupported_opcode/unsupported_message_type（异常客户端流量）。
+            阈值 0.5/s 为保守建议值，请按流量规模调整。
+
+      # 路由配置类错误 —— 正常情况应为零，出现即配置问题
+      - alert: LoadAntsDnsRoutingConfigError
+        expr: 'sum by (error_type) (increase(loadants_dns_request_errors_total{error_type=~"route_error|missing_target"}[10m])) > 0'
+        labels:
+          severity: warning
+        annotations:
+          summary: "出现路由配置类 DNS 错误（error_type={{ $labels.error_type }}）"
+          description: >-
+            route_error（路由匹配失败）与 missing_target（转发目标缺失）
+            在配置正确的系统中应为零。10 分钟窗口内出现任何一次，
+            请检查路由规则与上游组配置是否一致。
+
+      # DoH/HTTP 请求错误速率超阈（按 error_type 分维度）
+      - alert: LoadAntsHttpRequestErrorsHigh
+        expr: 'sum by (error_type) (rate(loadants_http_request_errors_total[5m])) > 0.5'
+        for: "5m"
+        labels:
+          severity: warning
+        annotations:
+          summary: "DoH 请求错误（error_type={{ $labels.error_type }}）速率超过 0.5 次/秒"
+          description: >-
+            DoH 请求处理错误持续偏高。error_type=request_error 包含速率限制拒绝
+            （突增可能是客户端异常或遭受请求洪水）；bad_request/message_encode_error/
+            unsupported_media_type 多为异常客户端流量；upstream_error 与上游劣化相关。
+            阈值 0.5/s 为保守建议值，请按流量规模调整。
+
+  - name: loadants-runtime
+    rules:
+      # TCP 连接池接近容量上限（默认上限 256）
+      - alert: LoadAntsTcpPoolNearCapacity
+        expr: "loadants_tcp_pool_connections > 204"
+        for: "5m"
+        labels:
+          severity: warning
+        annotations:
+          summary: "TCP 连接池使用量超过 204（默认上限 256 的 80%）"
+          description: >-
+            池化 TCP 连接数持续 5 分钟高于默认上限（dns_client.max_tcp_connections=256）
+            的 80%，继续增长将触发最老连接淘汰、增加重连开销。
+            若自定义了 max_tcp_connections，请同步调整阈值（建议仍取上限的 80%）。

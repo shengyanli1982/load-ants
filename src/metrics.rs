@@ -1,40 +1,73 @@
+use crate::r#const::{
+    cache_op_indices, error_indices, processing_indices, protocol_indices, ttl_source_indices,
+};
 use axum::http::{header, StatusCode};
 use axum::{routing::get, Router};
 use hickory_proto::op::ResponseCode;
 use hickory_proto::rr::RecordType;
 use once_cell::sync::Lazy;
-use prometheus::{opts, HistogramVec, IntCounterVec, IntGauge, IntGaugeVec, Registry};
+use prometheus::{
+    opts, Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
+};
 use tracing::error;
 
 pub static METRICS: Lazy<DnsMetrics> = Lazy::new(DnsMetrics::new);
-pub fn normalize_query_type_label(record_type: RecordType) -> &'static str {
+
+/// query_type 标签的有界枚举（13 值），与 [`query_type_index`] 的下标一一对应。
+/// OPT-2 预解析句柄按此顺序物化，导出口径与 normalize_query_type_label 完全一致。
+pub const QUERY_TYPE_LABELS: [&str; QUERY_TYPE_LABEL_COUNT] = [
+    "A", "AAAA", "ANAME", "CNAME", "MX", "NS", "PTR", "SOA", "SRV", "TXT", "HTTPS", "SVCB", "OTHER",
+];
+/// query_type 有界标签集大小
+pub const QUERY_TYPE_LABEL_COUNT: usize = 13;
+
+/// RecordType → [`QUERY_TYPE_LABELS`] 下标（O(1) 匹配，供预解析句柄索引）。
+pub fn query_type_index(record_type: RecordType) -> usize {
     match record_type {
-        RecordType::A => "A",
-        RecordType::AAAA => "AAAA",
-        RecordType::ANAME => "ANAME",
-        RecordType::CNAME => "CNAME",
-        RecordType::MX => "MX",
-        RecordType::NS => "NS",
-        RecordType::PTR => "PTR",
-        RecordType::SOA => "SOA",
-        RecordType::SRV => "SRV",
-        RecordType::TXT => "TXT",
-        RecordType::HTTPS => "HTTPS",
-        RecordType::SVCB => "SVCB",
-        _ => "OTHER",
+        RecordType::A => 0,
+        RecordType::AAAA => 1,
+        RecordType::ANAME => 2,
+        RecordType::CNAME => 3,
+        RecordType::MX => 4,
+        RecordType::NS => 5,
+        RecordType::PTR => 6,
+        RecordType::SOA => 7,
+        RecordType::SRV => 8,
+        RecordType::TXT => 9,
+        RecordType::HTTPS => 10,
+        RecordType::SVCB => 11,
+        _ => 12,
     }
 }
 
-pub fn normalize_response_code(rc: ResponseCode) -> &'static str {
+/// RecordType → 有界 query_type 标签（未知类型统一收敛为 "OTHER"）。
+pub fn normalize_query_type_label(record_type: RecordType) -> &'static str {
+    QUERY_TYPE_LABELS[query_type_index(record_type)]
+}
+
+/// rcode 标签的有界枚举（7 值），与 [`response_code_index`] 的下标一一对应。
+pub const RESPONSE_CODE_LABELS: [&str; RESPONSE_CODE_LABEL_COUNT] = [
+    "NOERROR", "FORMERR", "SERVFAIL", "NXDOMAIN", "NOTIMP", "REFUSED", "OTHER",
+];
+/// rcode 有界标签集大小
+pub const RESPONSE_CODE_LABEL_COUNT: usize = 7;
+
+/// ResponseCode → [`RESPONSE_CODE_LABELS`] 下标（O(1) 匹配，供预解析句柄索引）。
+pub fn response_code_index(rc: ResponseCode) -> usize {
     match rc {
-        ResponseCode::NoError => "NOERROR",
-        ResponseCode::FormErr => "FORMERR",
-        ResponseCode::ServFail => "SERVFAIL",
-        ResponseCode::NXDomain => "NXDOMAIN",
-        ResponseCode::NotImp => "NOTIMP",
-        ResponseCode::Refused => "REFUSED",
-        _ => "OTHER",
+        ResponseCode::NoError => 0,
+        ResponseCode::FormErr => 1,
+        ResponseCode::ServFail => 2,
+        ResponseCode::NXDomain => 3,
+        ResponseCode::NotImp => 4,
+        ResponseCode::Refused => 5,
+        _ => 6,
     }
+}
+
+/// ResponseCode → 有界 rcode 标签（未知响应码统一收敛为 "OTHER"）。
+pub fn normalize_response_code(rc: ResponseCode) -> &'static str {
+    RESPONSE_CODE_LABELS[response_code_index(rc)]
 }
 
 pub struct DnsMetrics {
@@ -86,6 +119,30 @@ pub struct DnsMetrics {
     pub stale_fallback_total: IntCounterVec,
     #[doc(hidden)]
     pub tcp_pool_connections: IntGauge,
+
+    // ── OPT-2: 有界标签集预解析 child 句柄 ──
+    // 构造期一次性 with_label_values 解析（IntCounter/Histogram 是底层 child 的
+    // 廉价 Arc 克隆，与上方 *Vec 内部为同一 metric 对象——增量对同一原子计数生效，
+    // /metrics 导出口径不变）。热路径直接索引，消除每 op 的
+    // RwLock + SipHash + Arc clone/drop 查找开销（Round1 profile: 占每 op ~85%）。
+    // 红线：仅收录有界标签维度；stale_fallback_total{group}、upstream_*{group,server}、
+    // route_matches_total{target_group} 等无界维度严禁预解析，保持 with_label_values。
+    /// dns_requests_total，按 protocol_indices（udp/tcp/unknown）索引
+    pub requests_by_protocol: [IntCounter; protocol_indices::ALL.len()],
+    /// dns_request_duration_seconds，按 [protocol_indices][query_type_index] 索引
+    pub request_durations: [[Histogram; QUERY_TYPE_LABEL_COUNT]; protocol_indices::ALL.len()],
+    /// dns_request_processing_duration_seconds，按 [processing_indices][query_type_index] 索引
+    pub processing_durations: [[Histogram; QUERY_TYPE_LABEL_COUNT]; processing_indices::ALL.len()],
+    /// dns_request_errors_total，按 error_indices 索引（仅收录该 metric 实际使用的有界值）
+    pub request_errors: [IntCounter; error_indices::ALL.len()],
+    /// dns_response_codes_total，按 response_code_index() 索引
+    pub response_codes: [IntCounter; RESPONSE_CODE_LABEL_COUNT],
+    /// dns_query_type_total，按 query_type_index() 索引
+    pub query_types: [IntCounter; QUERY_TYPE_LABEL_COUNT],
+    /// cache_operations_total，按 cache_op_indices 索引
+    pub cache_operations: [IntCounter; cache_op_indices::ALL.len()],
+    /// cache_ttl_seconds，按 ttl_source_indices 索引
+    pub cache_ttl_sources: [Histogram; ttl_source_indices::ALL.len()],
 }
 
 impl Default for DnsMetrics {
@@ -299,6 +356,47 @@ impl DnsMetrics {
         )
         .expect("metric name format valid");
 
+        // OPT-2: 构造期一次性预解析有界标签集的 child 句柄。
+        // with_label_values 返回的 IntCounter/Histogram 是 *Vec 内部 child 的 Arc 克隆
+        // （同一原子计数对象），因此注册表、metric 对象与导出口径完全不变；
+        // 代价是全部有界组合在启动时即物化为零值序列（数量固定，见
+        // tests/metrics_preresolved_export_test.rs 护栏）。
+        let requests_by_protocol: [IntCounter; protocol_indices::ALL.len()] =
+            std::array::from_fn(|i| {
+                dns_requests_total.with_label_values(&[protocol_indices::ALL[i]])
+            });
+        let request_durations: [[Histogram; QUERY_TYPE_LABEL_COUNT]; protocol_indices::ALL.len()] =
+            std::array::from_fn(|p| {
+                std::array::from_fn(|q| {
+                    dns_request_duration_seconds
+                        .with_label_values(&[protocol_indices::ALL[p], QUERY_TYPE_LABELS[q]])
+                })
+            });
+        let processing_durations: [[Histogram; QUERY_TYPE_LABEL_COUNT];
+            processing_indices::ALL.len()] = std::array::from_fn(|s| {
+            std::array::from_fn(|q| {
+                dns_request_processing_duration_seconds
+                    .with_label_values(&[processing_indices::ALL[s], QUERY_TYPE_LABELS[q]])
+            })
+        });
+        let request_errors: [IntCounter; error_indices::ALL.len()] = std::array::from_fn(|i| {
+            dns_request_errors_total.with_label_values(&[error_indices::ALL[i]])
+        });
+        let response_codes: [IntCounter; RESPONSE_CODE_LABEL_COUNT] = std::array::from_fn(|i| {
+            dns_response_codes_total.with_label_values(&[RESPONSE_CODE_LABELS[i]])
+        });
+        let query_types: [IntCounter; QUERY_TYPE_LABEL_COUNT] = std::array::from_fn(|i| {
+            dns_query_type_total.with_label_values(&[QUERY_TYPE_LABELS[i]])
+        });
+        let cache_operations: [IntCounter; cache_op_indices::ALL.len()] =
+            std::array::from_fn(|i| {
+                cache_operations_total.with_label_values(&[cache_op_indices::ALL[i]])
+            });
+        let cache_ttl_sources: [Histogram; ttl_source_indices::ALL.len()] =
+            std::array::from_fn(|i| {
+                cache_ttl_seconds.with_label_values(&[ttl_source_indices::ALL[i]])
+            });
+
         let metrics = DnsMetrics {
             registry,
             dns_requests_total,
@@ -324,6 +422,14 @@ impl DnsMetrics {
             inflight_requests,
             stale_fallback_total,
             tcp_pool_connections,
+            requests_by_protocol,
+            request_durations,
+            processing_durations,
+            request_errors,
+            response_codes,
+            query_types,
+            cache_operations,
+            cache_ttl_sources,
         };
 
         let collectors: Vec<Box<dyn prometheus::core::Collector + Send + Sync>> = vec![
@@ -372,7 +478,11 @@ impl DnsMetrics {
         encoder
             .encode_utf8(&metric_families, &mut buffer)
             .unwrap_or_else(|e| {
-                error!("Failed to encode Prometheus metrics: {}", e);
+                error!(
+                    context = "export_metrics",
+                    error = %e,
+                    "Failed to encode Prometheus metrics"
+                );
             });
         buffer
     }
@@ -389,7 +499,11 @@ pub fn metrics_routes() -> Router {
             encoder
                 .encode_utf8(&metric_families, &mut buffer)
                 .unwrap_or_else(|e| {
-                    error!("Failed to encode Prometheus metrics: {}", e);
+                    error!(
+                        context = "metrics_route",
+                        error = %e,
+                        "Failed to encode Prometheus metrics"
+                    );
                     buffer = String::new();
                 });
             (

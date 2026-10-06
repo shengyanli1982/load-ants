@@ -7,7 +7,7 @@ use loadants::config::{
     UpstreamGroupConfig, UpstreamScheme, UpstreamServerConfig,
 };
 use loadants::error::AppError;
-use loadants::upstream::UpstreamManager;
+use loadants::upstream::{JsonConverter, UpstreamManager};
 use reqwest::Url;
 use std::net::Ipv4Addr;
 use std::str::FromStr;
@@ -1186,4 +1186,241 @@ async fn test_json_edns_client_subnet() {
     // 但我们可以验证基本的DNS响应是否正确
     assert!(dns_response.recursion_desired());
     assert!(dns_response.recursion_available());
+}
+
+// ============================================================================
+// 以下测试为本轮新增回归测试（D-05 Answer 段错误传播 / D-03 负响应 SOA 保留
+// 派生），并非迁移自 src 内嵌测试（src/upstream/json.rs 从无内嵌测试）。
+// ============================================================================
+
+/// 构造最小 DNS 查询报文，作为 json_to_message 的 query 参数。
+fn build_query(name: &str, record_type: RecordType) -> Message {
+    let mut query = Message::new();
+    query.set_id(4242);
+    query.set_recursion_desired(true);
+    query.add_query(Query::query(
+        Name::parse(name, None).expect("valid test name"),
+        record_type,
+    ));
+    query
+}
+
+// ===== D-05: Answer 段白名单外且携带 data 的记录必须传播错误 =====
+
+/// Answer 段出现白名单外的 HTTPS(65) 记录且携带 data：
+/// 必须返回 Err（由 manager 换服务器重试），
+/// 不得静默产出 NOERROR + 0 answer 的错误响应（会被负缓存放大）。
+#[test]
+fn https_answer_with_data_returns_err() {
+    // HTTPS(65) 是浏览器普遍发起的查询类型，Google JSON 实测 data 形如 "1 . alpn=h2,h3"
+    let json = r#"{
+        "Status": 0, "TC": false, "RD": true, "RA": true, "AD": false, "CD": false,
+        "Question": [{"name": "example.com.", "type": 65}],
+        "Answer": [{"name": "example.com.", "type": 65, "TTL": 300, "data": "1 . alpn=\"h2,h3\""}]
+    }"#;
+    let query = build_query("example.com.", RecordType::HTTPS);
+
+    let result = JsonConverter.json_to_message(json.as_bytes(), &query);
+
+    assert!(
+        matches!(result, Err(AppError::Upstream(_))),
+        "Answer 段不支持的记录类型应返回 Err(AppError::Upstream)，实际: {:?}",
+        result.map(|m| format!("Ok(answers={})", m.answers().len()))
+    );
+}
+
+/// Answer 记录缺少 data 字段（如空 NODATA 标记）：维持现状——跳过且不报错。
+#[test]
+fn answer_record_without_data_field_is_skipped() {
+    let json = r#"{
+        "Status": 0, "TC": false, "RD": true, "RA": true, "AD": false, "CD": false,
+        "Question": [{"name": "example.com.", "type": 65}],
+        "Answer": [{"name": "example.com.", "type": 65, "TTL": 300}]
+    }"#;
+    let query = build_query("example.com.", RecordType::HTTPS);
+
+    let message = JsonConverter
+        .json_to_message(json.as_bytes(), &query)
+        .expect("缺少 data 字段的记录应跳过而非报错");
+
+    assert_eq!(message.response_code(), ResponseCode::NoError);
+    assert_eq!(message.answers().len(), 0);
+}
+
+/// Additional 段白名单外类型（如 RRSIG）维持宽容丢弃：
+/// 补充段记录缺失不构成错误负答案，不应使整个响应失败。
+#[test]
+fn unsupported_type_in_additional_section_is_skipped() {
+    let json = r#"{
+        "Status": 0, "TC": false, "RD": true, "RA": true, "AD": false, "CD": false,
+        "Question": [{"name": "example.com.", "type": 1}],
+        "Answer": [{"name": "example.com.", "type": 1, "TTL": 300, "data": "93.184.216.34"}],
+        "Additional": [{"name": "example.com.", "type": 46, "TTL": 300, "data": "A 13 0 300 68656c6c6f"}]
+    }"#;
+    let query = build_query("example.com.", RecordType::A);
+
+    let message = JsonConverter
+        .json_to_message(json.as_bytes(), &query)
+        .expect("Additional 段不支持的类型应宽容跳过");
+
+    assert_eq!(message.answers().len(), 1);
+    assert_eq!(message.additionals().len(), 0);
+}
+
+// ===== D-03: 负响应（NXDOMAIN/NODATA）必须保留 Authority 段 SOA =====
+
+/// NXDOMAIN 响应携带 Authority SOA（Google 实测 fixture）：
+/// 产出 Message 的 authority 段必须包含该 SOA（RFC 2308 负缓存 TTL 依赖 SOA.MINIMUM）。
+#[test]
+fn nxdomain_preserves_authority_soa() {
+    let json = r#"{
+        "Status": 3, "TC": false, "RD": true, "RA": true, "AD": false, "CD": false,
+        "Question": [{"name": "definitely-not-exists-xyz9.google.com.", "type": 1}],
+        "Authority": [{
+            "name": "google.com.", "type": 6, "TTL": 60,
+            "data": "ns1.google.com. dns-admin.google.com. 993584781 900 900 1800 60"
+        }],
+        "Comment": "Response from 216.239.36.10."
+    }"#;
+    let query = build_query("definitely-not-exists-xyz9.google.com.", RecordType::A);
+
+    let message = JsonConverter
+        .json_to_message(json.as_bytes(), &query)
+        .expect("NXDOMAIN 响应应正常解析");
+
+    assert_eq!(message.response_code(), ResponseCode::NXDomain);
+    assert_eq!(
+        message.name_servers().len(),
+        1,
+        "NXDOMAIN 的 Authority SOA 必须保留"
+    );
+    let soa_record = &message.name_servers()[0];
+    assert_eq!(soa_record.record_type(), RecordType::SOA);
+    assert_eq!(soa_record.ttl(), 60);
+    assert_eq!(
+        soa_record.name(),
+        &Name::parse("google.com.", None).expect("valid name")
+    );
+    match soa_record.data() {
+        RData::SOA(soa) => {
+            assert_eq!(
+                soa.mname(),
+                &Name::parse("ns1.google.com.", None).expect("valid name")
+            );
+            assert_eq!(
+                soa.rname(),
+                &Name::parse("dns-admin.google.com.", None).expect("valid name")
+            );
+            assert_eq!(soa.serial(), 993584781);
+            assert_eq!(soa.refresh(), 900);
+            assert_eq!(soa.retry(), 900);
+            assert_eq!(soa.expire(), 1800);
+            assert_eq!(soa.minimum(), 60);
+        }
+        other => panic!("期望 SOA rdata，实际: {:?}", other),
+    }
+}
+
+/// NODATA 响应（Status 0 + 0 Answer + Authority SOA，dns.google 实测 fixture）：
+/// 走主解析路径，SOA 同样必须保留。
+#[test]
+fn nodata_preserves_authority_soa() {
+    let json = r#"{
+        "Status": 0, "TC": false, "RD": true, "RA": true, "AD": false, "CD": false,
+        "Question": [{"name": "definitely-not-exists-xyz9.example.com.", "type": 1}],
+        "Authority": [{
+            "name": "example.com.", "type": 6, "TTL": 1800,
+            "data": "elliott.ns.cloudflare.com. dns.cloudflare.com. 2416374680 10000 2400 604800 1800"
+        }],
+        "Comment": "Response from 108.162.192.162."
+    }"#;
+    let query = build_query("definitely-not-exists-xyz9.example.com.", RecordType::A);
+
+    let message = JsonConverter
+        .json_to_message(json.as_bytes(), &query)
+        .expect("NODATA 响应应正常解析");
+
+    assert_eq!(message.response_code(), ResponseCode::NoError);
+    assert_eq!(message.answers().len(), 0);
+    assert_eq!(
+        message.name_servers().len(),
+        1,
+        "NODATA 的 Authority SOA 必须保留"
+    );
+    match message.name_servers()[0].data() {
+        RData::SOA(soa) => {
+            assert_eq!(soa.serial(), 2416374680);
+            assert_eq!(soa.minimum(), 1800);
+        }
+        other => panic!("期望 SOA rdata，实际: {:?}", other),
+    }
+}
+
+/// SOA 查询的 Answer 记录应被完整解析（SOA 进入白名单）。
+#[test]
+fn soa_answer_record_is_parsed() {
+    let json = r#"{
+        "Status": 0, "TC": false, "RD": true, "RA": true, "AD": true, "CD": false,
+        "Question": [{"name": "example.com.", "type": 6}],
+        "Answer": [{
+            "name": "example.com.", "type": 6, "TTL": 475,
+            "data": "elliott.ns.cloudflare.com. dns.cloudflare.com. 2416374680 10000 2400 604800 1800"
+        }]
+    }"#;
+    let query = build_query("example.com.", RecordType::SOA);
+
+    let message = JsonConverter
+        .json_to_message(json.as_bytes(), &query)
+        .expect("SOA 查询响应应正常解析");
+
+    assert_eq!(message.answers().len(), 1, "SOA Answer 记录不应被丢弃");
+    match message.answers()[0].data() {
+        RData::SOA(soa) => {
+            assert_eq!(
+                soa.mname(),
+                &Name::parse("elliott.ns.cloudflare.com.", None).expect("valid name")
+            );
+            assert_eq!(soa.serial(), 2416374680);
+            assert_eq!(soa.refresh(), 10000);
+            assert_eq!(soa.retry(), 2400);
+            assert_eq!(soa.expire(), 604800);
+            assert_eq!(soa.minimum(), 1800);
+        }
+        other => panic!("期望 SOA rdata，实际: {:?}", other),
+    }
+    assert_eq!(message.answers()[0].ttl(), 475);
+}
+
+/// 上游未返回 Authority 段的负响应：行为与现状一致（不报错）。
+#[test]
+fn negative_response_without_authority_is_unchanged() {
+    let json = r#"{
+        "Status": 3, "TC": false, "RD": true, "RA": true, "AD": false, "CD": false,
+        "Question": [{"name": "nonexistent.invalid.", "type": 1}]
+    }"#;
+    let query = build_query("nonexistent.invalid.", RecordType::A);
+
+    let message = JsonConverter
+        .json_to_message(json.as_bytes(), &query)
+        .expect("无 Authority 的负响应不应报错");
+
+    assert_eq!(message.response_code(), ResponseCode::NXDomain);
+    assert_eq!(message.name_servers().len(), 0);
+}
+
+/// SOA data 格式非法（字段数不足）：白名单类型 data 解析失败维持宽容丢弃，不报错。
+#[test]
+fn malformed_soa_data_is_skipped_without_error() {
+    let json = r#"{
+        "Status": 0, "TC": false, "RD": true, "RA": true, "AD": false, "CD": false,
+        "Question": [{"name": "example.com.", "type": 6}],
+        "Answer": [{"name": "example.com.", "type": 6, "TTL": 300, "data": "ns1.example.com. broken"}]
+    }"#;
+    let query = build_query("example.com.", RecordType::SOA);
+
+    let message = JsonConverter
+        .json_to_message(json.as_bytes(), &query)
+        .expect("SOA data 非法应跳过而非报错");
+
+    assert_eq!(message.answers().len(), 0);
 }

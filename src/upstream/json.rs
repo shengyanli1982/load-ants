@@ -2,13 +2,13 @@ use crate::error::AppError;
 use hickory_proto::{
     op::{Message, MessageType, Query, ResponseCode},
     rr::{
-        rdata::{self as HickoryRData, MX, SRV, TXT},
+        rdata::{self as HickoryRData, MX, SOA, SRV, TXT},
         Name, RData, Record, RecordType,
     },
 };
 use serde_json::Value as JsonValue;
 use std::net::{Ipv4Addr, Ipv6Addr};
-use tracing::{debug, warn};
+use tracing::{debug, trace};
 
 // DNS JSON 字段常量。
 pub mod json_fields {
@@ -65,8 +65,6 @@ fn normalize_txt_data(raw: &str) -> String {
 }
 
 impl JsonConverter {
-    // 解析 DNS JSON 响应并还原为 DNS 消息。
-    // 参考：https://developers.google.com/speed/public-dns/docs/doh/json
     pub fn json_to_message(
         &self,
         json_response: &[u8],
@@ -150,161 +148,318 @@ impl JsonConverter {
             }
         }
 
-        // 非成功响应通常不再附带可用记录，此时保留已补齐的查询段即可返回。
+        // 处理记录的辅助函数。
+        // - 解析成功：`Ok(Some(record))`；
+        // - 字段缺失（含无 `data` 字段）或白名单类型 data 解析失败：`Ok(None)`（宽容跳过，维持既有行为）；
+        // - Answer 段白名单外且携带 `data` 的记录：`Err` —— 静默丢弃会伪造
+        //   NOERROR + 0 answer 的错误响应并被负缓存放大，必须向上传播触发换服务器重试；
+        //   Authority/Additional 为补充段，缺失记录不构成错误负答案，维持宽容跳过。
+        let parse_record =
+            |record: &JsonValue, section: &str| -> Result<Option<Record>, AppError> {
+                // 获取记录的基本属性
+                let Some(name) = record.get(json_fields::NAME).and_then(|n| n.as_str()) else {
+                    return Ok(None);
+                };
+                let Some(r_type) = record.get(json_fields::TYPE).and_then(|t| t.as_u64()) else {
+                    return Ok(None);
+                };
+                let Some(ttl) = record.get(json_fields::TTL).and_then(|t| t.as_u64()) else {
+                    return Ok(None);
+                };
+                let Some(data) = record.get(json_fields::DATA).and_then(|d| d.as_str()) else {
+                    return Ok(None);
+                };
+
+                // 解析域名
+                let name = match Name::parse(name, None) {
+                    Ok(n) => n,
+                    Err(e) => {
+                        debug!(
+                            section = %section,
+                            name = %name,
+                            error = %e,
+                            "Failed to parse record name"
+                        );
+                        return Ok(None);
+                    }
+                };
+
+                // 记录类型
+                let record_type = RecordType::from(r_type as u16);
+
+                // 根据记录类型创建适当的RData
+                match record_type {
+                    RecordType::A => match data.parse::<Ipv4Addr>() {
+                        Ok(addr) => {
+                            let octets = addr.octets();
+                            let rdata =
+                                HickoryRData::A::new(octets[0], octets[1], octets[2], octets[3]);
+                            Ok(Some(Record::from_rdata(name, ttl as u32, RData::A(rdata))))
+                        }
+                        Err(e) => {
+                            debug!(
+                                section = %section,
+                                record_type = "A",
+                                data = %data,
+                                error = %e,
+                                "Failed to parse record data"
+                            );
+                            Ok(None)
+                        }
+                    },
+                    RecordType::AAAA => match data.parse::<Ipv6Addr>() {
+                        Ok(addr) => {
+                            let segments = addr.segments();
+                            let rdata = HickoryRData::AAAA::new(
+                                segments[0],
+                                segments[1],
+                                segments[2],
+                                segments[3],
+                                segments[4],
+                                segments[5],
+                                segments[6],
+                                segments[7],
+                            );
+                            Ok(Some(Record::from_rdata(
+                                name,
+                                ttl as u32,
+                                RData::AAAA(rdata),
+                            )))
+                        }
+                        Err(e) => {
+                            debug!(
+                                section = %section,
+                                record_type = "AAAA",
+                                data = %data,
+                                error = %e,
+                                "Failed to parse record data"
+                            );
+                            Ok(None)
+                        }
+                    },
+                    RecordType::CNAME => match Name::parse(data, None) {
+                        Ok(target) => {
+                            let rdata = HickoryRData::CNAME(target);
+                            Ok(Some(Record::from_rdata(
+                                name,
+                                ttl as u32,
+                                RData::CNAME(rdata),
+                            )))
+                        }
+                        Err(e) => {
+                            debug!(
+                                section = %section,
+                                record_type = "CNAME",
+                                data = %data,
+                                error = %e,
+                                "Failed to parse record data"
+                            );
+                            Ok(None)
+                        }
+                    },
+                    RecordType::MX => {
+                        let parts: Vec<&str> = data.split_whitespace().collect();
+                        if parts.len() == 2 {
+                            if let (Ok(preference), Ok(exchange)) =
+                                (parts[0].parse::<u16>(), Name::parse(parts[1], None))
+                            {
+                                Ok(Some(Record::from_rdata(
+                                    name,
+                                    ttl as u32,
+                                    RData::MX(MX::new(preference, exchange)),
+                                )))
+                            } else {
+                                debug!(
+                                    section = %section,
+                                    record_type = "MX",
+                                    data = %data,
+                                    "Failed to parse record data"
+                                );
+                                Ok(None)
+                            }
+                        } else {
+                            debug!(
+                                section = %section,
+                                record_type = "MX",
+                                data = %data,
+                                "Failed to parse record data"
+                            );
+                            Ok(None)
+                        }
+                    }
+                    RecordType::TXT => {
+                        // Google 的 JSON 格式通常把 TXT 记录压成单个字符串，这里按单段 TXT 处理。
+                        // 如果服务端返回多段 TXT，需要引入更复杂的拆分逻辑。
+                        let txt_data = TXT::new(vec![normalize_txt_data(data)]);
+                        Ok(Some(Record::from_rdata(
+                            name,
+                            ttl as u32,
+                            RData::TXT(txt_data),
+                        )))
+                    }
+                    RecordType::SRV => {
+                        let parts: Vec<&str> = data.split_whitespace().collect();
+                        if parts.len() == 4 {
+                            if let (Ok(priority), Ok(weight), Ok(port), Ok(target)) = (
+                                parts[0].parse::<u16>(),
+                                parts[1].parse::<u16>(),
+                                parts[2].parse::<u16>(),
+                                Name::parse(parts[3], None),
+                            ) {
+                                Ok(Some(Record::from_rdata(
+                                    name,
+                                    ttl as u32,
+                                    RData::SRV(SRV::new(priority, weight, port, target)),
+                                )))
+                            } else {
+                                debug!(
+                                    section = %section,
+                                    record_type = "SRV",
+                                    data = %data,
+                                    "Failed to parse record data"
+                                );
+                                Ok(None)
+                            }
+                        } else {
+                            debug!(
+                                section = %section,
+                                record_type = "SRV",
+                                data = %data,
+                                "Failed to parse record data"
+                            );
+                            Ok(None)
+                        }
+                    }
+                    RecordType::PTR => match Name::parse(data, None) {
+                        Ok(ptrdname) => {
+                            let rdata = HickoryRData::PTR(ptrdname);
+                            Ok(Some(Record::from_rdata(
+                                name,
+                                ttl as u32,
+                                RData::PTR(rdata),
+                            )))
+                        }
+                        Err(e) => {
+                            debug!(
+                                section = %section,
+                                record_type = "PTR",
+                                data = %data,
+                                error = %e,
+                                "Failed to parse record data"
+                            );
+                            Ok(None)
+                        }
+                    },
+                    RecordType::NS => match Name::parse(data, None) {
+                        Ok(target) => {
+                            let rdata = HickoryRData::NS(target);
+                            Ok(Some(Record::from_rdata(name, ttl as u32, RData::NS(rdata))))
+                        }
+                        Err(e) => {
+                            debug!(
+                                section = %section,
+                                record_type = "NS",
+                                data = %data,
+                                error = %e,
+                                "Failed to parse record data"
+                            );
+                            Ok(None)
+                        }
+                    },
+                    RecordType::SOA => {
+                        // Google/Cloudflare 的 JSON 将 SOA RDATA 表示为空格拼接的 zone file 格式字段：
+                        // "mname rname serial refresh retry expire minimum"
+                        let parts: Vec<&str> = data.split_whitespace().collect();
+                        if parts.len() == 7 {
+                            if let (
+                                Ok(mname),
+                                Ok(rname),
+                                Ok(serial),
+                                Ok(refresh),
+                                Ok(retry),
+                                Ok(expire),
+                                Ok(minimum),
+                            ) = (
+                                Name::parse(parts[0], None),
+                                Name::parse(parts[1], None),
+                                parts[2].parse::<u32>(),
+                                parts[3].parse::<i32>(),
+                                parts[4].parse::<i32>(),
+                                parts[5].parse::<i32>(),
+                                parts[6].parse::<u32>(),
+                            ) {
+                                Ok(Some(Record::from_rdata(
+                                    name,
+                                    ttl as u32,
+                                    RData::SOA(SOA::new(
+                                        mname, rname, serial, refresh, retry, expire, minimum,
+                                    )),
+                                )))
+                            } else {
+                                debug!(
+                                    section = %section,
+                                    record_type = "SOA",
+                                    data = %data,
+                                    "Failed to parse record data"
+                                );
+                                Ok(None)
+                            }
+                        } else {
+                            debug!(
+                                section = %section,
+                                record_type = "SOA",
+                                data = %data,
+                                "Failed to parse record data"
+                            );
+                            Ok(None)
+                        }
+                    }
+                    _ => {
+                        if section == dns_section::ANSWER {
+                            // Answer 段出现不支持的记录类型且携带 data：返回错误让上层
+                            // （UpstreamManager）按换服务器重试处理，避免静默产出
+                            // 错误的 NOERROR + 0 answer 响应并被负缓存放大。
+                            return Err(AppError::Upstream(format!(
+                            "Unsupported record type {} with data in DoH JSON Answer section: {}",
+                            record_type, data
+                        )));
+                        }
+                        // Authority/Additional 等补充段：对于不支持的记录类型宽容跳过。
+                        debug!(
+                            section = %section,
+                            record_type = %record_type,
+                            data = %data,
+                            "Failed to parse record"
+                        );
+                        Ok(None)
+                    }
+                }
+            };
+
+        // 非成功响应通常不再附带 Answer 记录，但 Authority 段可能携带 SOA。
+        // RFC 2308 的负缓存 TTL（min(SOA.MINIMUM, negative_ttl)）依赖该 SOA，
+        // 因此返回前需要解析并保留 Authority 段，而非整体丢弃。
         if response.response_code() != ResponseCode::NoError {
             // 如果响应包含 `Comment` 字段，则作为调试信息输出。
             if let Some(comment) = json.get(json_fields::COMMENT).and_then(|c| c.as_str()) {
-                debug!("DNS JSON response comment: {}", comment);
+                trace!(comment = %comment, "DoH JSON response comment");
+            }
+
+            if let Some(authority) = json.get(json_fields::AUTHORITY).and_then(|a| a.as_array()) {
+                for auth in authority {
+                    if let Some(record) = parse_record(auth, dns_section::AUTHORITY)? {
+                        response.add_name_server(record);
+                    }
+                }
             }
 
             return Ok(response);
         }
 
-        // 处理记录的辅助函数
-        let parse_record = |record: &JsonValue, section: &str| -> Option<Record> {
-            // 获取记录的基本属性
-            let name = record.get(json_fields::NAME).and_then(|n| n.as_str())?;
-            let r_type = record.get(json_fields::TYPE).and_then(|t| t.as_u64())?;
-            let ttl = record.get(json_fields::TTL).and_then(|t| t.as_u64())?;
-            let data = record.get(json_fields::DATA).and_then(|d| d.as_str())?;
-
-            // 解析域名
-            let name = match Name::parse(name, None) {
-                Ok(n) => n,
-                Err(e) => {
-                    warn!("Failed to parse {} record name {}: {}", section, name, e);
-                    return None;
-                }
-            };
-
-            // 记录类型
-            let record_type = RecordType::from(r_type as u16);
-
-            // 根据记录类型创建适当的RData
-            match record_type {
-                RecordType::A => match data.parse::<Ipv4Addr>() {
-                    Ok(addr) => {
-                        let octets = addr.octets();
-                        let rdata =
-                            HickoryRData::A::new(octets[0], octets[1], octets[2], octets[3]);
-                        Some(Record::from_rdata(name, ttl as u32, RData::A(rdata)))
-                    }
-                    Err(e) => {
-                        warn!("Failed to parse A record data {}: {}", data, e);
-                        None
-                    }
-                },
-                RecordType::AAAA => match data.parse::<Ipv6Addr>() {
-                    Ok(addr) => {
-                        let segments = addr.segments();
-                        let rdata = HickoryRData::AAAA::new(
-                            segments[0],
-                            segments[1],
-                            segments[2],
-                            segments[3],
-                            segments[4],
-                            segments[5],
-                            segments[6],
-                            segments[7],
-                        );
-                        Some(Record::from_rdata(name, ttl as u32, RData::AAAA(rdata)))
-                    }
-                    Err(e) => {
-                        warn!("Failed to parse AAAA record data {}: {}", data, e);
-                        None
-                    }
-                },
-                RecordType::CNAME => match Name::parse(data, None) {
-                    Ok(target) => {
-                        let rdata = HickoryRData::CNAME(target);
-                        Some(Record::from_rdata(name, ttl as u32, RData::CNAME(rdata)))
-                    }
-                    Err(e) => {
-                        warn!("Failed to parse CNAME record data {}: {}", data, e);
-                        None
-                    }
-                },
-                RecordType::MX => {
-                    let parts: Vec<&str> = data.split_whitespace().collect();
-                    if parts.len() == 2 {
-                        if let (Ok(preference), Ok(exchange)) =
-                            (parts[0].parse::<u16>(), Name::parse(parts[1], None))
-                        {
-                            Some(Record::from_rdata(
-                                name,
-                                ttl as u32,
-                                RData::MX(MX::new(preference, exchange)),
-                            ))
-                        } else {
-                            warn!("Failed to parse MX record data '{}'", data);
-                            None
-                        }
-                    } else {
-                        warn!("Invalid MX record data format '{}'", data);
-                        None
-                    }
-                }
-                RecordType::TXT => {
-                    // Google 的 JSON 格式通常把 TXT 记录压成单个字符串，这里按单段 TXT 处理。
-                    // 如果服务端返回多段 TXT，需要引入更复杂的拆分逻辑。
-                    let txt_data = TXT::new(vec![normalize_txt_data(data)]);
-                    Some(Record::from_rdata(name, ttl as u32, RData::TXT(txt_data)))
-                }
-                RecordType::SRV => {
-                    let parts: Vec<&str> = data.split_whitespace().collect();
-                    if parts.len() == 4 {
-                        if let (Ok(priority), Ok(weight), Ok(port), Ok(target)) = (
-                            parts[0].parse::<u16>(),
-                            parts[1].parse::<u16>(),
-                            parts[2].parse::<u16>(),
-                            Name::parse(parts[3], None),
-                        ) {
-                            Some(Record::from_rdata(
-                                name,
-                                ttl as u32,
-                                RData::SRV(SRV::new(priority, weight, port, target)),
-                            ))
-                        } else {
-                            warn!("Failed to parse SRV record data '{}'", data);
-                            None
-                        }
-                    } else {
-                        warn!("Invalid SRV record data format '{}'", data);
-                        None
-                    }
-                }
-                RecordType::PTR => match Name::parse(data, None) {
-                    Ok(ptrdname) => {
-                        let rdata = HickoryRData::PTR(ptrdname);
-                        Some(Record::from_rdata(name, ttl as u32, RData::PTR(rdata)))
-                    }
-                    Err(e) => {
-                        warn!("Failed to parse PTR record data {}: {}", data, e);
-                        None
-                    }
-                },
-                RecordType::NS => match Name::parse(data, None) {
-                    Ok(target) => {
-                        let rdata = HickoryRData::NS(target);
-                        Some(Record::from_rdata(name, ttl as u32, RData::NS(rdata)))
-                    }
-                    Err(e) => {
-                        warn!("Failed to parse NS record data {}: {}", data, e);
-                        None
-                    }
-                },
-                _ => {
-                    // 对于其他记录类型，尝试作为未知记录处理
-                    warn!("Unsupported record type: {:?}, data: {}", record_type, data);
-                    None
-                }
-            }
-        };
-
         // 处理Answer部分
         if let Some(answers) = json.get(json_fields::ANSWER).and_then(|a| a.as_array()) {
             for answer in answers {
-                if let Some(record) = parse_record(answer, dns_section::ANSWER) {
+                if let Some(record) = parse_record(answer, dns_section::ANSWER)? {
                     response.add_answer(record);
                 }
             }
@@ -313,7 +468,7 @@ impl JsonConverter {
         // 处理Authority部分
         if let Some(authority) = json.get(json_fields::AUTHORITY).and_then(|a| a.as_array()) {
             for auth in authority {
-                if let Some(record) = parse_record(auth, dns_section::AUTHORITY) {
+                if let Some(record) = parse_record(auth, dns_section::AUTHORITY)? {
                     response.add_name_server(record);
                 }
             }
@@ -322,7 +477,7 @@ impl JsonConverter {
         // 处理Additional部分
         if let Some(additional) = json.get(json_fields::ADDITIONAL).and_then(|a| a.as_array()) {
             for add in additional {
-                if let Some(record) = parse_record(add, dns_section::ADDITIONAL) {
+                if let Some(record) = parse_record(add, dns_section::ADDITIONAL)? {
                     response.add_additional(record);
                 }
             }
@@ -333,7 +488,7 @@ impl JsonConverter {
             .get(json_fields::EDNS_CLIENT_SUBNET)
             .and_then(|e| e.as_str())
         {
-            debug!("EDNS Client Subnet from DNS JSON response: {}", ecs);
+            trace!(ecs = %ecs, "EDNS Client Subnet in DoH JSON response");
             // 这里可以添加EDNS处理代码，但由于复杂性，我们只记录不处理
             // 以后如果具体需求，可以添加处理代码
         }

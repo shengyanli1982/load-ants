@@ -2,6 +2,7 @@ use crate::doh::handlers::{handle_doh_get, handle_doh_post, handle_json_get};
 use crate::doh::state::AppState;
 use crate::error::AppError;
 use crate::handler::RequestHandler;
+use crate::r#const::subsystem_names;
 use crate::rate_limit::RateLimiter;
 use axum::extract::DefaultBodyLimit;
 use axum::{routing::get, Router};
@@ -11,7 +12,7 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 use tokio_graceful_shutdown::SubsystemHandle;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 const DOH_QUERY_PATH: &str = "/dns-query";
 const JSON_QUERY_PATH: &str = "/resolve";
@@ -71,11 +72,14 @@ impl DoHServer {
 
             let tls_config = match RustlsConfig::from_pem_file(cert_path, key_path).await {
                 Ok(config) => {
-                    info!("DoH TLS configuration loaded successfully");
+                    info!("DoH TLS configuration loaded");
                     config
                 }
                 Err(e) => {
-                    error!("Failed to load DoH TLS configuration: {}", e);
+                    error!(
+                        error = &e as &dyn std::error::Error,
+                        "Failed to load DoH TLS configuration"
+                    );
                     return Err(AppError::Io(std::io::Error::new(
                         std::io::ErrorKind::InvalidData,
                         format!("Failed to load TLS cert/key: {}", e),
@@ -83,26 +87,31 @@ impl DoHServer {
                 }
             };
 
-            info!("DoH server (HTTPS) listening on {}", self.bind_addr);
-
             let handle = axum_server::Handle::new();
             let shutdown_handle = handle.clone();
 
-            let server = axum_server::bind_rustls(self.bind_addr, tls_config)
+            let std_listener = std::net::TcpListener::bind(self.bind_addr).map_err(AppError::Io)?;
+            std_listener.set_nonblocking(true).map_err(AppError::Io)?;
+            info!(transport = "doh-https", addr = %self.bind_addr, "Listener ready");
+            let server = axum_server::from_tcp_rustls(std_listener, tls_config)
+                .map_err(AppError::Io)?
                 .handle(handle)
                 .serve(app.into_make_service_with_connect_info::<SocketAddr>());
 
             tokio::select! {
                 result = server => {
                     if let Err(e) = result {
-                        error!("DoH server error: {}", e);
+                        error!(
+                            error = &e as &dyn std::error::Error,
+                            "Failed to run DoH server"
+                        );
                     } else {
-                        info!("DoH server completed normally");
+                        info!(status = "graceful", "DoH server stopped");
                     }
                     Ok(())
                 }
                 _ = subsys.on_shutdown_requested() => {
-                    info!("Shutdown requested, stopping DoH server");
+                    info!(subsystem = subsystem_names::DOH_SERVER, "Shutdown requested");
                     shutdown_handle.graceful_shutdown(Some(std::time::Duration::from_secs(30)));
                     let _ = self.shutdown_tx.send(());
                     Ok(())
@@ -113,11 +122,14 @@ impl DoHServer {
 
             let listener = match TcpListener::bind(self.bind_addr).await {
                 Ok(listener) => {
-                    info!("DoH server (HTTP) listening on {}", self.bind_addr);
+                    info!(transport = "doh-http", addr = %self.bind_addr, "Listener ready");
                     listener
                 }
                 Err(e) => {
-                    error!("Failed to bind DoH server: {}", e);
+                    error!(
+                        error = &e as &dyn std::error::Error,
+                        "Failed to bind DoH server"
+                    );
                     return Err(AppError::Io(e));
                 }
             };
@@ -131,17 +143,20 @@ impl DoHServer {
                 )
                 .with_graceful_shutdown(async {
                     let _ = shutdown_rx.await;
-                    info!("DoH server received shutdown signal");
+                    debug!("DoH server received shutdown signal");
                 }) => {
                     if let Err(e) = result {
-                        error!("DoH server error: {}", e);
+                        error!(
+                            error = &e as &dyn std::error::Error,
+                            "Failed to run DoH server"
+                        );
                     } else {
-                        info!("DoH server completed normally");
+                        info!(status = "graceful", "DoH server stopped");
                     }
                     Ok(())
                 }
                 _ = subsys.on_shutdown_requested() => {
-                    info!("Shutdown requested, stopping DoH server");
+                    info!(subsystem = subsystem_names::DOH_SERVER, "Shutdown requested");
                     let _ = self.shutdown_tx.send(());
                     Ok(())
                 }
