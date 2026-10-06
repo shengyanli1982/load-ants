@@ -1,4 +1,9 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{hash_map::DefaultHasher, HashMap},
+    hash::{Hash, Hasher},
+    net::Ipv4Addr,
+    sync::Arc,
+};
 use tokio::sync::RwLock;
 
 use axum::{
@@ -12,12 +17,14 @@ use axum::{
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use hickory_proto::op::{Message, MessageType, ResponseCode};
+use hickory_proto::rr::{rdata::A, Name, RData, Record, RecordType};
 use hyper::body::Bytes;
 use loadants::{
-    cache::DnsCache,
+    cache::{filter_response_records, CacheKey, DnsCache},
     doh::{
         handlers::{
-            handle_doh_get, handle_doh_post, handle_json_get, DohGetParams, DohJsonGetParams,
+            build_json_query_message, handle_doh_get, handle_doh_post, handle_json_get,
+            DohGetParams, DohJsonGetParams,
         },
         state::AppState,
     },
@@ -594,4 +601,97 @@ async fn test_handle_json_get_handler_error() {
         serde_json::from_slice(&resp_body).expect("Failed to parse JSON response");
     // SERVFAIL = Status 2
     assert_eq!(json.get("Status").and_then(|s| s.as_u64()), Some(2));
+}
+
+// ============================================================================
+// 以下测试为本轮新增回归测试（D-06 查询名 FQDN 归一化派生），并非迁移自 src
+// 内嵌测试（src/doh/handlers.rs 从无内嵌测试）。
+// ============================================================================
+
+fn hash_of<T: Hash>(value: &T) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    value.hash(&mut hasher);
+    hasher.finish()
+}
+
+/// 构造 wire 路径（/dns-query、UDP/TCP）等价的查询消息：
+/// 经编码→解码往返后，查询名恒为 FQDN（is_fqdn=true）。
+fn wire_path_query_message(name_with_root: &str) -> Message {
+    let mut query = Message::new();
+    query.set_message_type(MessageType::Query);
+    query.set_recursion_desired(true);
+    query.add_query(hickory_proto::op::Query::query(
+        Name::from_ascii(name_with_root).unwrap(),
+        RecordType::A,
+    ));
+    Message::from_vec(&query.to_vec().unwrap()).unwrap()
+}
+
+/// [D-06] 验收①：无尾点域名构造的查询名必须是 FQDN，
+/// 且 CacheKey 与 wire 路径等价（Eq 与 Hash 均一致）。
+#[test]
+fn json_query_name_without_trailing_dot_matches_wire_cache_key() {
+    let json_query =
+        build_json_query_message("example.com", RecordType::A, false, false, None).unwrap();
+    let wire_query = wire_path_query_message("example.com.");
+
+    assert!(
+        json_query.queries()[0].name().is_fqdn(),
+        "无尾点域名构造的查询名 is_fqdn 必须为 true（D-06 缓存键分裂根因）"
+    );
+
+    let json_key = CacheKey::from_message(&json_query).unwrap();
+    let wire_key = CacheKey::from_message(&wire_query).unwrap();
+    assert_eq!(
+        json_key, wire_key,
+        "/resolve 与 wire 路径的 CacheKey 必须相等（否则缓存 100% miss）"
+    );
+    assert_eq!(
+        hash_of(&json_key),
+        hash_of(&wire_key),
+        "CacheKey 哈希必须一致（否则 moka 查找 miss）"
+    );
+}
+
+/// [D-06] 验收③：带尾点输入行为不变，仍产生 FQDN 且 CacheKey 与 wire 路径一致。
+#[test]
+fn json_query_name_with_trailing_dot_behavior_unchanged() {
+    let json_query =
+        build_json_query_message("example.com.", RecordType::A, false, false, None).unwrap();
+    let wire_query = wire_path_query_message("example.com.");
+
+    assert!(json_query.queries()[0].name().is_fqdn());
+    assert_eq!(
+        CacheKey::from_message(&json_query).unwrap(),
+        CacheKey::from_message(&wire_query).unwrap()
+    );
+}
+
+/// [D-06] 验收②：投毒误报回归证明。
+/// 上游响应记录名为 FQDN；修复前查询名非 FQDN → chain.contains 恒 false
+/// → 全部答案被 filter_response_records 误拒 → 触发 "Cache poisoning detected"。
+/// 修复后归一化查询名必须通过投毒过滤。
+#[test]
+fn fqdn_normalized_query_survives_poisoning_filter() {
+    let json_query =
+        build_json_query_message("example.com", RecordType::A, false, false, None).unwrap();
+    let query_name = json_query.queries()[0].name().clone();
+
+    let mut upstream_response = Message::new();
+    upstream_response.set_message_type(MessageType::Response);
+    upstream_response.add_query(json_query.queries()[0].clone());
+    upstream_response.add_answer(Record::from_rdata(
+        Name::from_ascii("example.com.").unwrap(),
+        300,
+        RData::A(A(Ipv4Addr::new(93, 184, 216, 34))),
+    ));
+    // 忠实模拟生产路径：上游响应经 wire 解析，header 计数与记录段同步
+    let upstream_response = Message::from_vec(&upstream_response.to_vec().unwrap()).unwrap();
+
+    let filtered = filter_response_records(&query_name, upstream_response);
+    assert_eq!(
+        filtered.answers().len(),
+        1,
+        "FQDN 答案不应被投毒过滤误拒（误拒即触发投毒告警刷屏）"
+    );
 }

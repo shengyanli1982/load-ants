@@ -7,11 +7,16 @@ use loadants::config::{
 use loadants::error::AppError;
 use loadants::r#const::remote_rule_limits;
 use loadants::remote_rule::{
-    evaluate_remote_rule_startup, load_and_merge_rules, ClashRuleParser, RemoteRuleLoader,
-    RemoteRuleSnapshotStore, RuleParser, V2RayRuleParser,
+    evaluate_remote_rule_startup, load_and_merge_rules, reload_once, run_panic_guarded,
+    ClashRuleParser, RemoteRuleLoader, RemoteRuleSnapshotStore, RuleParser, V2RayRuleParser,
 };
+use loadants::router::Router;
+use loadants::RemoteSourceStatus;
 use std::fs;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use tempfile::tempdir;
+use tokio::sync::RwLock;
 use wiremock::{
     matchers::{method, path},
     Mock, MockServer, ResponseTemplate,
@@ -55,7 +60,8 @@ another.domain.com
     assert!(result.is_ok());
 
     let rules = result.unwrap();
-    assert_eq!(rules.len(), 3);
+    // D-01: 裸域名产出双规则——apex 本身的 exact + 子域的 wildcard
+    assert_eq!(rules.len(), 4);
     assert_eq!(rules[0], ("example.com".to_string(), MatchType::Exact));
     assert_eq!(
         rules[1],
@@ -63,6 +69,11 @@ another.domain.com
     );
     assert_eq!(
         rules[2],
+        ("another.domain.com".to_string(), MatchType::Exact),
+        "裸域名必须额外产出覆盖 apex 本身的 exact 规则"
+    );
+    assert_eq!(
+        rules[3],
         ("*.another.domain.com".to_string(), MatchType::Wildcard)
     );
 }
@@ -125,9 +136,14 @@ sub.domain.org
         match rule.match_type {
             MatchType::Exact => {
                 has_exact = true;
-                assert_eq!(rule.patterns.len(), 2);
+                // D-01: 裸域名 `sub.domain.org` 的 apex 本身进入 Exact 组
+                assert_eq!(rule.patterns.len(), 3);
                 assert!(rule.patterns.contains(&"example.com".to_string()));
                 assert!(rule.patterns.contains(&"test.example.com".to_string()));
+                assert!(
+                    rule.patterns.contains(&"sub.domain.org".to_string()),
+                    "裸域名的 apex exact 规则必须与 full: 条目一起归入 Exact 组"
+                );
             }
             MatchType::Wildcard => {
                 has_wildcard = true;
@@ -890,4 +906,115 @@ async fn test_build_router_allows_strict_remote_failures_with_snapshot_fallback(
         .expect("snapshot-backed remote rule should be compiled into router");
     assert_eq!(matched.action, RouteAction::Block);
     assert_eq!(matched.rule_source, "remote");
+}
+
+// ============================================================================
+// 以下测试为本轮新增回归测试（D-01 裸域名 apex+wildcard 规则派生），并非迁移
+// 自 src 内嵌测试（src/remote_rule/parser.rs 从无内嵌测试）。
+// ============================================================================
+
+/// D-01: V2Ray 裸域名 `example.com` 语义 = apex 本身 + 所有子域，
+/// 必须同时产出 exact（apex）与 wildcard（子域）两条规则。
+#[test]
+fn bare_domain_emits_apex_exact_and_subdomain_wildcard() {
+    let parser = V2RayRuleParser;
+    let rules = parser.parse("example.com").unwrap();
+
+    assert_eq!(rules.len(), 2, "bare domain must yield exactly 2 rules");
+    assert!(
+        rules.contains(&("example.com".to_string(), MatchType::Exact)),
+        "missing apex exact rule, got {rules:?}"
+    );
+    assert!(
+        rules.contains(&("*.example.com".to_string(), MatchType::Wildcard)),
+        "missing subdomain wildcard rule, got {rules:?}"
+    );
+}
+
+/// 验收标准②：带前缀规则（full:/regexp:）、全局通配 `*`、注释与空行语义保持不变。
+#[test]
+fn prefixed_and_global_rules_keep_existing_semantics() {
+    let parser = V2RayRuleParser;
+    let content = "# comment\n\nfull:exact.example.com\nregexp:.*\\.example\\.com$\n*";
+    let rules = parser.parse(content).unwrap();
+
+    assert_eq!(
+        rules,
+        vec![
+            ("exact.example.com".to_string(), MatchType::Exact),
+            (".*\\.example\\.com$".to_string(), MatchType::Regex),
+            ("*".to_string(), MatchType::Wildcard),
+        ]
+    );
+}
+
+// ============================================================================
+// 以下测试迁移自 src/main.rs 内嵌 #[cfg(test)] mod tests（测试语义零变化）。
+// 被测函数 run_panic_guarded / reload_once 已平移至 loadants::remote_rule。
+// ============================================================================
+
+#[tokio::test]
+async fn test_reload_guard_contains_iteration_panic() {
+    // 单次迭代 panic 不得向外传播，否则刷新循环会静默退出且永不恢复
+    run_panic_guarded("test", async {
+        panic!("simulated remote rule parse panic");
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn test_reload_guard_runs_normal_iteration() {
+    let completed = Arc::new(AtomicBool::new(false));
+    let flag = Arc::clone(&completed);
+    run_panic_guarded("test", async move {
+        flag.store(true, Ordering::SeqCst);
+    })
+    .await;
+    assert!(
+        completed.load(Ordering::SeqCst),
+        "normal iteration should run to completion"
+    );
+}
+
+#[tokio::test]
+async fn test_reload_once_swaps_router_and_updates_statuses() {
+    let mut remote_rules_config = RemoteRulesConfig::default();
+    remote_rules_config.snapshot.enabled = false;
+
+    let static_rules = vec![RouteRuleConfig {
+        match_type: MatchType::Wildcard,
+        patterns: vec!["*".to_string()],
+        action: RouteAction::Forward,
+        target: Some("default".to_string()),
+    }];
+
+    let router: Arc<RwLock<Arc<Router>>> = Arc::new(RwLock::new(Arc::new(
+        Router::new(Vec::new()).expect("empty router should build"),
+    )));
+    let statuses = Arc::new(RwLock::new(vec![RemoteSourceStatus {
+        url: "https://example.com/rules.txt".to_string(),
+        status: "pending".to_string(),
+        last_updated: 0,
+        rule_count: 0,
+        error_message: None,
+    }]));
+
+    reload_once(
+        remote_rules_config,
+        static_rules,
+        HttpClientConfig::default(),
+        Arc::clone(&router),
+        Arc::clone(&statuses),
+    )
+    .await;
+
+    assert_eq!(
+        router.read().await.rule_count(),
+        1,
+        "router should be rebuilt from merged rules"
+    );
+    assert!(
+        statuses.read().await.is_empty(),
+        "statuses should be rebuilt from source list"
+    );
 }

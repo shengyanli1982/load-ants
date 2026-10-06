@@ -135,6 +135,38 @@ sum by (group, server) (rate(loadants_upstream_requests_total[5m]))
 rate(loadants_route_matches_total{rule_source="remote"}[5m])
 ```
 
+## 告警规则
+
+仓库提供了一份即用型 Prometheus 告警规则示例：[`examples/prometheus/alert-rules.yml`](https://github.com/shengyanli1982/load-ants/blob/main/examples/prometheus/alert-rules.yml)，覆盖上游健康、熔断、请求错误与连接池共 7 个告警相关指标。
+
+在 `prometheus.yml` 中挂载后重载配置即可生效：
+
+```yaml
+rule_files:
+  - "/etc/prometheus/rules/loadants-alerts.yml"  # 替换为规则文件的实际路径
+```
+
+规则概览：
+
+| 告警 | 指标 | 触发条件（建议值） | severity |
+|------|------|--------------------|----------|
+| `LoadAntsUpstreamServerUnhealthy` | `loadants_upstream_health_state` | `== 0`（Unhealthy）持续 5m | warning |
+| `LoadAntsUpstreamGroupAllDown` | `loadants_upstream_health_state` | 组内全部服务器 `== 0` 持续 2m | critical |
+| `LoadAntsCircuitBreakerTripped` | `loadants_circuit_breaker_transitions_total` | 5m 内出现迁移到 `unhealthy` | warning |
+| `LoadAntsUpstreamErrorRateHigh` | `loadants_upstream_errors_total` | 按 `group`/`server` 聚合 rate > 1/s 持续 5m | warning |
+| `LoadAntsStaleFallbackSustained` | `loadants_stale_fallback_total` | 按 `group` 聚合 10m 内 increase > 10 | warning |
+| `LoadAntsDnsRequestErrorsHigh` | `loadants_dns_request_errors_total` | 按 `error_type` 聚合 rate > 0.5/s 持续 5m | warning |
+| `LoadAntsDnsRoutingConfigError` | `loadants_dns_request_errors_total` | `error_type=~"route_error\|missing_target"` 10m 内 increase > 0 | warning |
+| `LoadAntsHttpRequestErrorsHigh` | `loadants_http_request_errors_total` | 按 `error_type` 聚合 rate > 0.5/s 持续 5m | warning |
+| `LoadAntsTcpPoolNearCapacity` | `loadants_tcp_pool_connections` | `> 204`（默认上限 256 的 80%）持续 5m | warning |
+
+注意事项：
+
+- 表中所有阈值均为**保守建议值**，请按实际流量规模调整（低流量环境可将速率类阈值下调，或改用错误比例判断）。
+- `LoadAntsUpstreamServerUnhealthy` 依赖 2026-08 后的值语义（`0`=Unhealthy，见上文[上游解析](#上游解析)），从旧版本升级时请先核对规则方向。
+- `LoadAntsTcpPoolNearCapacity` 的阈值对应默认 `max_tcp_connections=256`；若自定义了该配置，请同步按上限的 80% 调整。
+- 缓存投毒检测、0x20 大小写校验失败、`deny_answers` 全过滤三类**安全事件无 metric 覆盖**，仍以 WARN 级别写入日志（见 `specs/logging-standard.md` 安全例外条目），请通过日志告警通道（如 Loki/Alertmanager 日志路由）接入，不要依赖本规则文件。
+
 ## 下一步
 
 - [➡️ 了解安全注意事项](./security.md)

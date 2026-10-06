@@ -1,6 +1,6 @@
 use crate::error::AppError;
 use crate::metrics::METRICS;
-use crate::r#const::{cache_labels, cache_limits, ttl_source_labels};
+use crate::r#const::{cache_limits, cache_op_indices, ttl_source_indices};
 use hickory_proto::{
     op::{Message, ResponseCode},
     rr::{
@@ -106,10 +106,11 @@ impl CacheKey {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct CacheEntry {
-    pub(crate) message: Arc<Message>,
-    pub(crate) timestamp: Instant,
-    pub(crate) effective_ttl: u32,
+#[doc(hidden)] // 仅为 tests/ 集成测试构造回拨时间戳条目而公开，非稳定 API
+pub struct CacheEntry {
+    pub message: Arc<Message>,
+    pub timestamp: Instant,
+    pub effective_ttl: u32,
 }
 
 // ---- Cache dump/restore DTOs ----
@@ -226,7 +227,8 @@ impl Expiry<CacheKey, CacheEntry> for CacheEntryExpiry {
 }
 
 pub struct DnsCache {
-    cache: Cache<CacheKey, CacheEntry, FxBuildHasher>,
+    #[doc(hidden)] // 仅为 tests/ 集成测试直接读写缓存条目而公开，非稳定 API
+    pub cache: Cache<CacheKey, CacheEntry, FxBuildHasher>,
     size: usize,
     min_ttl: u32,
     max_ttl: u32,
@@ -314,22 +316,15 @@ impl DnsCache {
 
         if elapsed_secs < entry.effective_ttl as u64 {
             let mut response = entry.message.as_ref().clone();
-            // Optimization: skip adjust_message_ttl for trivially small responses.
-            // All cached records share the same effective_ttl (normalized at insert),
-            // so the adjustment is uniform; skipping it for 0-1 answers avoids the
-            // iteration overhead on the cache hit hot path.
-            if entry.message.answer_count() > 1 {
-                self.adjust_message_ttl(&mut response, &entry);
-            }
+            // D-02: 命中即扣减已消耗 TTL（含 0-1 条 answer），
+            // 返回给客户端的 TTL 必须反映剩余有效时间。
+            self.adjust_message_ttl(&mut response, elapsed_secs);
 
             if key.record_type == RecordType::A || key.record_type == RecordType::AAAA {
                 self.shuffle_message_records(&mut response, key.record_type);
             }
 
-            METRICS
-                .cache_operations_total
-                .with_label_values(&[cache_labels::HIT])
-                .inc();
+            METRICS.cache_operations[cache_op_indices::HIT].inc();
 
             CacheResult::Fresh(response)
         } else if self.stale_while_revalidate > 0
@@ -359,18 +354,12 @@ impl DnsCache {
                 self.shuffle_message_records(&mut response, key.record_type);
             }
 
-            METRICS
-                .cache_operations_total
-                .with_label_values(&[cache_labels::STALE])
-                .inc();
+            METRICS.cache_operations[cache_op_indices::STALE].inc();
 
             CacheResult::Stale(response)
         } else {
             self.cache.invalidate(key).await;
-            METRICS
-                .cache_operations_total
-                .with_label_values(&[cache_labels::MISS])
-                .inc();
+            METRICS.cache_operations[cache_op_indices::MISS].inc();
             CacheResult::Miss
         }
     }
@@ -386,9 +375,8 @@ impl DnsCache {
 
         if elapsed_secs < entry.effective_ttl as u64 {
             let mut response = entry.message.as_ref().clone();
-            if entry.message.answer_count() > 1 {
-                self.adjust_message_ttl(&mut response, &entry);
-            }
+            // D-02: 与 get() 一致，命中即扣减已消耗 TTL
+            self.adjust_message_ttl(&mut response, elapsed_secs);
             if key.record_type == RecordType::A || key.record_type == RecordType::AAAA {
                 self.shuffle_message_records(&mut response, key.record_type);
             }
@@ -454,10 +442,7 @@ impl DnsCache {
             Some(k) => k,
             None => {
                 debug!("Cannot create cache key from query");
-                METRICS
-                    .cache_operations_total
-                    .with_label_values(&[cache_labels::INSERT_ERROR])
-                    .inc();
+                METRICS.cache_operations[cache_op_indices::INSERT_ERROR].inc();
                 return Err(AppError::Cache(
                     "Cannot create cache key from query".to_string(),
                 ));
@@ -468,11 +453,22 @@ impl DnsCache {
         // `key.name`. Reuse it directly to avoid re-extracting from the query.
         let query_name = &key.name;
 
-        let original_answer_count = response.answer_count();
+        // P1-1: 基数必须用实际记录段长度而非 header 计数——filter_response_records
+        // 不更新 header（Message::answer_count() 经 Deref 读 header，两者可失同步），
+        // 用 header 计数比较会使下方投毒"全拒"防线恒不触发（与 D-20 同一原则）。
+        let original_answer_count = response.answers().len();
+
+        // D-03: TTL 必须在投毒过滤前用原始 response 计算——filter_response_records
+        // 会按 CNAME chain 剥除 NXDOMAIN/NODATA 的 authority SOA（owner 是 zone
+        // apex，不在 chain 内），min(SOA.MINIMUM, negative_ttl) 的 RFC 2308 语义
+        // 只能从原始响应取得。
+        let ttl = self
+            .calculate_min_ttl(&response)
+            .clamp(cache_limits::MIN_TTL, cache_limits::MAX_TTL);
 
         let mut filtered_response = filter_response_records(query_name, response);
 
-        if filtered_response.answer_count() == 0 && original_answer_count > 0 {
+        if filtered_response.answers().is_empty() && original_answer_count > 0 {
             warn!(
                 query = %query_name.to_utf8(),
                 reason = "all_answers_rejected",
@@ -481,14 +477,7 @@ impl DnsCache {
             return Ok(());
         }
 
-        let ttl = self
-            .calculate_min_ttl(&filtered_response)
-            .clamp(cache_limits::MIN_TTL, cache_limits::MAX_TTL);
-
-        METRICS
-            .cache_ttl_seconds
-            .with_label_values(&[ttl_source_labels::ADJUSTED])
-            .observe(ttl as f64);
+        METRICS.cache_ttl_sources[ttl_source_indices::ADJUSTED].observe(ttl as f64);
 
         // P1-3: 存入缓存前将所有记录 TTL 规范化为 effective_ttl，
         // 确保 adjust_message_ttl() 的减法与缓存过期时间对齐。
@@ -517,10 +506,7 @@ impl DnsCache {
         );
         self.cache.insert(key, entry).await;
 
-        METRICS
-            .cache_operations_total
-            .with_label_values(&[cache_labels::INSERT])
-            .inc();
+        METRICS.cache_operations[cache_op_indices::INSERT].inc();
 
         Ok(())
     }
@@ -529,10 +515,7 @@ impl DnsCache {
         debug!("Clearing DNS cache");
         self.cache.invalidate_all();
 
-        METRICS
-            .cache_operations_total
-            .with_label_values(&[cache_labels::CLEAR])
-            .inc();
+        METRICS.cache_operations[cache_op_indices::CLEAR].inc();
         METRICS.cache_entries.set(0);
     }
 
@@ -590,10 +573,7 @@ impl DnsCache {
                 None => self.negative_ttl,
             };
 
-            METRICS
-                .cache_ttl_seconds
-                .with_label_values(&[ttl_source_labels::NEGATIVE_TTL])
-                .observe(ttl as f64);
+            METRICS.cache_ttl_sources[ttl_source_indices::NEGATIVE_TTL].observe(ttl as f64);
 
             let soa_minimum = soa_min_ttl.map_or_else(|| "none".to_string(), |v| v.to_string());
             debug!(
@@ -619,10 +599,7 @@ impl DnsCache {
                 .map(|v| v.min(self.negative_ttl))
                 .unwrap_or(self.negative_ttl);
 
-            METRICS
-                .cache_ttl_seconds
-                .with_label_values(&[ttl_source_labels::NEGATIVE_TTL])
-                .observe(ttl as f64);
+            METRICS.cache_ttl_sources[ttl_source_indices::NEGATIVE_TTL].observe(ttl as f64);
 
             let soa_minimum = soa_min_ttl.map_or_else(|| "none".to_string(), |v| v.to_string());
             debug!(
@@ -642,46 +619,37 @@ impl DnsCache {
         }
 
         if min_ttl != u32::MAX {
-            METRICS
-                .cache_ttl_seconds
-                .with_label_values(&[ttl_source_labels::ORIGINAL])
-                .observe(min_ttl as f64);
+            METRICS.cache_ttl_sources[ttl_source_indices::ORIGINAL].observe(min_ttl as f64);
         }
 
         if min_ttl == u32::MAX {
             min_ttl = self.min_ttl;
 
-            METRICS
-                .cache_ttl_seconds
-                .with_label_values(&[ttl_source_labels::MIN_TTL])
-                .observe(min_ttl as f64);
+            METRICS.cache_ttl_sources[ttl_source_indices::MIN_TTL].observe(min_ttl as f64);
         } else {
             let before_adjustment = min_ttl;
             min_ttl = min_ttl.max(self.min_ttl);
 
             if before_adjustment != min_ttl {
-                METRICS
-                    .cache_ttl_seconds
-                    .with_label_values(&[ttl_source_labels::MIN_TTL])
-                    .observe(min_ttl as f64);
+                METRICS.cache_ttl_sources[ttl_source_indices::MIN_TTL].observe(min_ttl as f64);
             }
 
             let before_max = min_ttl;
             min_ttl = min_ttl.min(self.max_ttl);
 
             if before_max != min_ttl {
-                METRICS
-                    .cache_ttl_seconds
-                    .with_label_values(&[ttl_source_labels::MAX_TTL])
-                    .observe(min_ttl as f64);
+                METRICS.cache_ttl_sources[ttl_source_indices::MAX_TTL].observe(min_ttl as f64);
             }
         }
 
         min_ttl
     }
 
-    fn adjust_message_ttl(&self, message: &mut Message, entry: &CacheEntry) {
-        let elapsed = entry.timestamp.elapsed().as_secs().min(u32::MAX as u64) as u32;
+    /// 按已消耗时间扣减消息中所有记录的 TTL（OPT-3：`elapsed_secs` 由调用点
+    /// 复用新鲜度判定已采样的值，消除对同一 entry 的二次 QPC 计时；
+    /// 同时保证新鲜度判定与 TTL 扣减使用同一时间采样）。
+    fn adjust_message_ttl(&self, message: &mut Message, elapsed_secs: u64) {
+        let elapsed = elapsed_secs.min(u32::MAX as u64) as u32;
 
         fn adjust_record_ttl(record: &mut Record, elapsed: u32) {
             let original_ttl = record.ttl();
@@ -921,13 +889,15 @@ pub fn build_cname_chain(query_name: &Name, answers: &[Record]) -> Vec<Name> {
 
 pub fn filter_answer_records(query_name: &Name, mut response: Message) -> Message {
     let chain = build_cname_chain(query_name, response.answers());
-    let original_count = response.answer_count();
+    // D-20: 减法基数必须用实际记录段长度而非 header 计数——合成 Message
+    // （测试夹具/restore 路径）两者可失同步，header 计数偏小时减法溢出 panic。
+    let original_count = response.answers().len();
     let answers = response.take_answers();
     let valid: Vec<Record> = answers
         .into_iter()
         .filter(|record| chain.contains(record.name()))
         .collect();
-    let rejected_count = original_count as usize - valid.len();
+    let rejected_count = original_count - valid.len();
     if rejected_count > 0 {
         debug!(
             query = %query_name.to_utf8(),
@@ -943,13 +913,14 @@ pub fn filter_answer_records(query_name: &Name, mut response: Message) -> Messag
 pub fn filter_response_records(query_name: &Name, mut response: Message) -> Message {
     let chain = build_cname_chain(query_name, response.answers());
 
-    let original_answer_count = response.answer_count();
+    // D-20: 与 filter_answer_records 同理，减法基数用实际记录段长度而非 header 计数
+    let original_answer_count = response.answers().len();
     let answers = response.take_answers();
     let valid_answers: Vec<Record> = answers
         .into_iter()
         .filter(|record| chain.contains(record.name()))
         .collect();
-    let rejected_answer_count = original_answer_count as usize - valid_answers.len();
+    let rejected_answer_count = original_answer_count - valid_answers.len();
     if rejected_answer_count > 0 {
         debug!(
             query = %query_name.to_utf8(),

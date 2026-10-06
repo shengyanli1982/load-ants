@@ -1,6 +1,6 @@
 use crate::doh::json::SerializableDnsMessage;
 use crate::doh::state::AppState;
-use crate::metrics::{normalize_query_type_label, normalize_response_code, METRICS};
+use crate::metrics::{normalize_query_type_label, response_code_index, METRICS};
 use crate::r#const::{error_labels, http_headers, processing_labels, protocol_labels};
 use axum::{
     body::Bytes,
@@ -14,6 +14,7 @@ use hickory_proto::rr::{
     rdata::opt::{ClientSubnet, EdnsOption},
     Name, RData, RecordType,
 };
+use hickory_proto::ProtoError;
 use serde::Deserialize;
 use std::borrow::Cow;
 use std::net::SocketAddr;
@@ -242,7 +243,7 @@ pub async fn handle_doh_get(
                 .unwrap_or_else(|_| HeaderValue::from_static("max-age=60")),
         );
 
-        let rcode = normalize_response_code(response.response_code());
+        let rcode = response.response_code();
         record_doh_metrics(
             start_time,
             &query_type,
@@ -366,7 +367,7 @@ pub async fn handle_doh_post(
                 .unwrap_or_else(|_| HeaderValue::from_static("max-age=60")),
         );
 
-        let rcode = normalize_response_code(response.response_code());
+        let rcode = response.response_code();
         record_doh_metrics(
             start_time,
             &query_type,
@@ -394,6 +395,48 @@ pub async fn handle_doh_post(
             status.into_response()
         }
     }
+}
+
+/// 构建 Google JSON API（`/resolve`）的 DNS 查询消息。
+///
+/// `name` 允许带或不带尾点（Google JSON API 标准用法为不带尾点）。
+/// 查询名统一归一化为 FQDN，保证与 wire 路径（/dns-query、UDP/TCP）
+/// 的缓存键一致，详见函数内 D-06 注释。
+#[doc(hidden)] // 仅为 tests/ 集成测试验证 FQDN 归一化与缓存键等价而公开，非稳定 API
+pub fn build_json_query_message(
+    name: &str,
+    record_type: RecordType,
+    checking_disabled: bool,
+    dnssec_ok: bool,
+    ecs_subnet: Option<ClientSubnet>,
+) -> Result<Message, ProtoError> {
+    let mut query = Message::new();
+    query.set_message_type(MessageType::Query);
+    query.set_recursion_desired(true);
+    query.set_checking_disabled(checking_disabled);
+
+    let mut name_result = Name::from_ascii(name)?;
+    // [D-06] 无尾点时 `from_ascii` 得到 is_fqdn=false，而 hickory `Name` 的
+    // PartialEq/Hash 均区分 is_fqdn：非 FQDN 查询名会使 CacheKey 与 wire 路径
+    // 分裂（缓存 100% miss），且投毒过滤 chain.contains 对 FQDN 答案恒 false
+    // （全部误拒 + 告警刷屏）。统一归一化为 FQDN；对带尾点输入是 no-op。
+    name_result.set_fqdn(true);
+
+    let q = hickory_proto::op::Query::query(name_result, record_type);
+    query.add_query(q);
+
+    if dnssec_ok || ecs_subnet.is_some() {
+        let mut edns = Edns::new();
+        if dnssec_ok {
+            edns.set_dnssec_ok(true);
+        }
+        if let Some(client_subnet) = ecs_subnet {
+            edns.options_mut().insert(EdnsOption::Subnet(client_subnet));
+        }
+        query.set_edns(edns);
+    }
+
+    Ok(query)
 }
 
 pub async fn handle_json_get(
@@ -488,38 +531,21 @@ pub async fn handle_json_get(
             _ => false,
         };
 
-        // 创建 DNS 查询消息
-        let mut query = Message::new();
-        query.set_message_type(MessageType::Query);
-        query.set_recursion_desired(true);
-        query.set_checking_disabled(checking_disabled);
-
-        let name_result = Name::from_ascii(name).map_err(|_| {
-            (
-                StatusCode::BAD_REQUEST,
-                processing_labels::error_types::BAD_REQUEST,
-                query_type.clone(),
-            )
-        })?;
-
-        let q = hickory_proto::op::Query::query(name_result, record_type);
-        query.add_query(q);
-
         let ecs_subnet = params
             .ecs
             .as_deref()
             .and_then(|ecs_str| ClientSubnet::from_str(ecs_str).ok());
 
-        if dnssec_ok || ecs_subnet.is_some() {
-            let mut edns = Edns::new();
-            if dnssec_ok {
-                edns.set_dnssec_ok(true);
-            }
-            if let Some(client_subnet) = ecs_subnet {
-                edns.options_mut().insert(EdnsOption::Subnet(client_subnet));
-            }
-            query.set_edns(edns);
-        }
+        // 创建 DNS 查询消息
+        let query =
+            build_json_query_message(name, record_type, checking_disabled, dnssec_ok, ecs_subnet)
+                .map_err(|_| {
+                (
+                    StatusCode::BAD_REQUEST,
+                    processing_labels::error_types::BAD_REQUEST,
+                    query_type.clone(),
+                )
+            })?;
 
         // 处理 DNS 请求
         let response = process_dns_message(&state, &query)
@@ -540,7 +566,7 @@ pub async fn handle_json_get(
         // 提取 edns_client_subnet 参数（Google JSON API）
         let ecs = params.ecs.as_deref();
 
-        let rcode = normalize_response_code(response.response_code());
+        let rcode = response.response_code();
 
         // 根据内容类型决定返回二进制 DNS 消息还是 JSON 文本。
         let response = match params.ct.as_deref() {
@@ -617,7 +643,7 @@ fn record_doh_metrics(
     client_addr: SocketAddr,
     result: &Result<StatusCode, StatusCode>,
     error_type: Option<&str>,
-    response_code: Option<&str>,
+    response_code: Option<ResponseCode>,
 ) {
     let duration = start_time.elapsed().as_secs_f64();
     let status_code = match result {
@@ -637,11 +663,8 @@ fn record_doh_metrics(
                 .with_label_values(&[query_type, status_str])
                 .observe(duration);
 
-            if let Some(rcode) = response_code {
-                METRICS
-                    .dns_response_codes_total
-                    .with_label_values(&[rcode])
-                    .inc();
+            if let Some(rc) = response_code {
+                METRICS.response_codes[response_code_index(rc)].inc();
             }
 
             debug!(

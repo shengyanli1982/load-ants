@@ -1,7 +1,7 @@
 use crate::error::AppError;
 use crate::handler::RequestHandler as DnsRequestHandler;
-use crate::metrics::{normalize_query_type_label, normalize_response_code, METRICS};
-use crate::r#const::{error_labels, protocol_labels, subsystem_names};
+use crate::metrics::{query_type_index, response_code_index, METRICS};
+use crate::r#const::{error_indices, protocol_indices, protocol_labels, subsystem_names};
 use crate::rate_limit::RateLimiter;
 use hickory_proto::op::{Header, Message, MessageType, OpCode, ResponseCode};
 use hickory_proto::rr::RecordType;
@@ -72,42 +72,52 @@ impl RequestHandler for HandlerAdapter {
         // 记录开始时间
         let start_time = Instant::now();
 
-        // 记录协议类型
-        let protocol = match request.protocol() {
-            hickory_proto::xfer::Protocol::Udp => protocol_labels::UDP,
-            hickory_proto::xfer::Protocol::Tcp => protocol_labels::TCP,
-            _ => "unknown",
+        // 记录协议类型（protocol_idx 供 OPT-2 预解析 metric 句柄索引）
+        let (protocol, protocol_idx) = match request.protocol() {
+            hickory_proto::xfer::Protocol::Udp => (protocol_labels::UDP, protocol_indices::UDP),
+            hickory_proto::xfer::Protocol::Tcp => (protocol_labels::TCP, protocol_indices::TCP),
+            _ => (protocol_labels::UNKNOWN, protocol_indices::UNKNOWN),
         };
 
         if let Some(limiter) = &self.rate_limiter {
             let src_ip = request.src().ip();
             if !limiter.check(src_ip) {
                 debug!(protocol = %protocol, "Rate limit hit");
-                METRICS
-                    .dns_request_errors_total
-                    .with_label_values(&[error_labels::REQUEST_ERROR])
-                    .inc();
+                METRICS.request_errors[error_indices::REQUEST_ERROR].inc();
+
+                // D-09: 实际发送 REFUSED 而非静默丢包——静默丢包会触发客户端
+                // 超时重试放大入站流量，且与 DoH 侧 429 显式拒绝语义不一致。
+                // UDP send_to / TCP 长度前缀帧由 ResponseHandler 实现负责，
+                // 与正常回包共用同一路径。
                 let mut header = Header::new();
                 header.set_id(request.id());
                 header.set_response_code(ResponseCode::Refused);
-                return ResponseInfo::from(header);
+
+                let builder = MessageResponseBuilder::from_message_request(request);
+                let response = builder.error_msg(&header, ResponseCode::Refused);
+
+                return response_handler
+                    .send_response(response)
+                    .await
+                    .unwrap_or_else(|_| {
+                        debug!(
+                            client_ip = %request.src().ip(),
+                            protocol = %protocol,
+                            "Failed to send response"
+                        );
+                        ResponseInfo::from(header)
+                    });
             }
         }
 
-        METRICS
-            .dns_requests_total
-            .with_label_values(&[protocol])
-            .inc();
+        METRICS.requests_by_protocol[protocol_idx].inc();
 
         // 检查是否为查询请求或支持的操作码
         if request.op_code() != OpCode::Query {
             debug!(opcode = ?request.op_code(), "Unsupported operation code");
 
             // 记录错误
-            METRICS
-                .dns_request_errors_total
-                .with_label_values(&[error_labels::UNSUPPORTED_OPCODE])
-                .inc();
+            METRICS.request_errors[error_indices::UNSUPPORTED_OPCODE].inc();
 
             let mut header = Header::new();
             header.set_id(request.id());
@@ -137,10 +147,7 @@ impl RequestHandler for HandlerAdapter {
             );
 
             // 记录错误
-            METRICS
-                .dns_request_errors_total
-                .with_label_values(&[error_labels::UNSUPPORTED_MESSAGE_TYPE])
-                .inc();
+            METRICS.request_errors[error_indices::UNSUPPORTED_MESSAGE_TYPE].inc();
 
             let mut header = Header::new();
             header.set_id(request.id());
@@ -169,7 +176,7 @@ impl RequestHandler for HandlerAdapter {
             .first()
             .map(|q| q.query_type())
             .unwrap_or(RecordType::A);
-        let query_type_label = normalize_query_type_label(query_type);
+        let query_type_idx = query_type_index(query_type);
 
         debug!(protocol = %protocol, "DNS request received");
 
@@ -183,10 +190,7 @@ impl RequestHandler for HandlerAdapter {
                     "Failed to parse request message"
                 );
 
-                METRICS
-                    .dns_request_errors_total
-                    .with_label_values(&[error_labels::REQUEST_ERROR])
-                    .inc();
+                METRICS.request_errors[error_indices::REQUEST_ERROR].inc();
 
                 let mut header = Header::new();
                 header.set_id(request.id());
@@ -198,9 +202,7 @@ impl RequestHandler for HandlerAdapter {
 
                 // 记录处理时间
                 let duration = start_time.elapsed();
-                METRICS
-                    .dns_request_duration_seconds
-                    .with_label_values(&[protocol, query_type_label])
+                METRICS.request_durations[protocol_idx][query_type_idx]
                     .observe(duration.as_secs_f64());
 
                 return response_handler
@@ -224,10 +226,7 @@ impl RequestHandler for HandlerAdapter {
                 let header = *result.header();
 
                 // 记录响应码指标
-                METRICS
-                    .dns_response_codes_total
-                    .with_label_values(&[normalize_response_code(header.response_code())])
-                    .inc();
+                METRICS.response_codes[response_code_index(header.response_code())].inc();
 
                 let mut builder = MessageResponseBuilder::from_message_request(request);
 
@@ -251,9 +250,7 @@ impl RequestHandler for HandlerAdapter {
 
                 // 记录处理时间
                 let duration = start_time.elapsed();
-                METRICS
-                    .dns_request_duration_seconds
-                    .with_label_values(&[protocol, query_type_label])
+                METRICS.request_durations[protocol_idx][query_type_idx]
                     .observe(duration.as_secs_f64());
 
                 response_handler
@@ -274,10 +271,7 @@ impl RequestHandler for HandlerAdapter {
                 debug!(error = %e, "Failed to process request");
 
                 // 记录错误
-                METRICS
-                    .dns_request_errors_total
-                    .with_label_values(&[error_labels::HANDLER_ERROR])
-                    .inc();
+                METRICS.request_errors[error_indices::HANDLER_ERROR].inc();
 
                 let mut header = Header::new();
                 header.set_id(request.id());
@@ -289,9 +283,7 @@ impl RequestHandler for HandlerAdapter {
 
                 // 记录处理时间
                 let duration = start_time.elapsed();
-                METRICS
-                    .dns_request_duration_seconds
-                    .with_label_values(&[protocol, query_type_label])
+                METRICS.request_durations[protocol_idx][query_type_idx]
                     .observe(duration.as_secs_f64());
 
                 response_handler
@@ -344,6 +336,41 @@ pub struct DnsServer {
     handler: Arc<DnsRequestHandler>,
 }
 
+/// 将 `ServerFuture::block_until_done` 的结果映射为子系统运行结果。
+/// 提取为独立函数以便对"运行期错误必须向上传播"这一语义进行单元测试（D-17）。
+///
+/// D-17: 运行期错误必须向上传播（与 admin 子系统对齐），使 toplevel 感知失败、
+/// 进程以非零退出码结束；吞掉错误会让 systemd/docker 重启策略与监控失效。
+/// 错误属子系统生命周期事件，按规范记 ERROR 一次。
+#[doc(hidden)]
+pub fn dns_server_result(result: Result<(), hickory_proto::ProtoError>) -> Result<(), AppError> {
+    result.map_err(|e| {
+        error!(error = %e, "Failed to run DNS server");
+        AppError::DnsProto(e)
+    })
+}
+
+/// 计算当前平台生效的 UDP socket 数量（D-18 seam，便于单元测试）。
+///
+/// unix: 保持配置值（SO_REUSEPORT 支持多 socket 安全地同端口绑定）。
+/// Windows: 无 SO_REUSEPORT，多 socket 同端口绑定只能依赖 SO_REUSEADDR，
+/// 而 Windows 的 SO_REUSEADDR 允许本机其他进程劫持已绑定端口（实测验证），
+/// 且收包分发不可控，因此降级为单 socket（Windows 默认 bind 即排他）。
+#[doc(hidden)]
+pub fn effective_udp_socket_count(configured: usize) -> usize {
+    let count = configured.max(1);
+    #[cfg(windows)]
+    if count > 1 {
+        warn!(
+            requested = count,
+            effective = 1,
+            "udp_socket_count > 1 is unsupported on Windows (no SO_REUSEPORT, SO_REUSEADDR is hijack-prone); falling back to a single socket"
+        );
+        return 1;
+    }
+    count
+}
+
 impl DnsServer {
     pub fn new(config: DnsServerConfig, handler: Arc<DnsRequestHandler>) -> Self {
         Self { config, handler }
@@ -357,7 +384,7 @@ impl IntoSubsystem<AppError> for DnsServer {
 
         let mut server = hickory_server::ServerFuture::new(adapter);
 
-        let socket_count = self.config.udp_socket_count.max(1);
+        let socket_count = effective_udp_socket_count(self.config.udp_socket_count);
 
         for i in 0..socket_count {
             let addr = self.config.udp_bind_addr;
@@ -380,12 +407,15 @@ impl IntoSubsystem<AppError> for DnsServer {
                     error!(addr = %addr, error = %e, "Failed to set send buffer size");
                     AppError::Io(e)
                 })?;
+            // D-18: 仅 unix 需要（且能安全支持）多 socket 同端口绑定。
+            // Windows 已在 effective_udp_socket_count 降级为单 socket，此块不编译；
+            // 且 Windows 的 SO_REUSEADDR 允许端口被其他进程劫持，绝不可设置。
+            #[cfg(unix)]
             if socket_count > 1 {
                 s.set_reuse_address(true).map_err(|e| {
                     error!(addr = %addr, error = %e, "Failed to set SO_REUSEADDR");
                     AppError::Io(e)
                 })?;
-                #[cfg(unix)]
                 s.set_reuse_port(true).map_err(|e| {
                     error!(addr = %addr, error = %e, "Failed to set SO_REUSEPORT");
                     AppError::Io(e)
@@ -438,14 +468,13 @@ impl IntoSubsystem<AppError> for DnsServer {
 
         // 使用tokio::select!监听服务器和关闭信号
         tokio::select! {
-            result = server.block_until_done() => {
-                if let Err(e) = result {
-                    error!(error = %e, "Failed to run DNS server");
-                } else {
+            result = server.block_until_done() => match dns_server_result(result) {
+                Ok(()) => {
                     info!("DNS server completed");
+                    Ok(())
                 }
-                Ok(())
-            }
+                Err(e) => Err(e),
+            },
             _ = subsys.on_shutdown_requested() => {
                 info!(subsystem = subsystem_names::DNS_SERVER, "Shutdown requested");
 

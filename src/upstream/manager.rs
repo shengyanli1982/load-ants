@@ -5,10 +5,10 @@ use crate::{
         DnsClientConfig, HttpClientConfig, LoadBalancingStrategy, UpstreamGroupConfig,
         UpstreamScheme,
     },
-    error::AppError,
+    error::{AppError, ConfigError},
     metrics::{normalize_response_code, METRICS},
     r#const::{
-        error_labels, protocol_labels, upstream_labels, upstream_protocol_labels,
+        coalesce_limits, error_labels, protocol_labels, upstream_labels, upstream_protocol_labels,
         upstream_transport_labels,
     },
     upstream::{
@@ -42,12 +42,18 @@ use hickory_proto::op::{Message, ResponseCode};
 use hickory_proto::rr::{RData, RecordType};
 use ipnet::IpNet;
 use reqwest_middleware::ClientWithMiddleware;
-use std::{collections::HashMap, net::IpAddr, sync::Arc, time::Instant};
+use std::{
+    collections::HashMap,
+    net::IpAddr,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 use tracing::{debug, info, warn};
 
 use super::dns_client::{DnsClient, DnsTransport};
 
-struct UpstreamGroupState {
+#[doc(hidden)] // 仅为 tests/ 集成测试断言 forward_deadline 派生值而公开，非稳定 API
+pub struct UpstreamGroupState {
     lb: Arc<dyn LoadBalancer>,
     scheme: UpstreamScheme,
     strategy: LoadBalancingStrategy,
@@ -55,11 +61,18 @@ struct UpstreamGroupState {
     deny_cidrs: Vec<IpNet>,
     case_randomization: bool,
     case_randomization_strict: bool,
+    /// 覆盖本组全部转发 attempts 的总 deadline（= 单请求超时 × 服务器台数，
+    /// 由运行时配置派生，见 D-04）。
+    pub forward_deadline: Duration,
 }
 
 pub struct UpstreamManager {
-    groups: HashMap<String, UpstreamGroupState>,
+    #[doc(hidden)] // 仅为 tests/ 集成测试断言各组 forward_deadline 而公开，非稳定 API
+    pub groups: HashMap<String, UpstreamGroupState>,
     dns_client: DnsClient,
+    /// 所有上游组中最坏的转发总 deadline；无上游组时为兜底默认值。
+    /// `RequestHandler` 据此派生 coalesce follower 等待时长。
+    max_forward_deadline: Duration,
 }
 
 impl UpstreamManager {
@@ -69,7 +82,10 @@ impl UpstreamManager {
         dns_config: DnsClientConfig,
     ) -> Result<Self, AppError> {
         let mut group_map = HashMap::with_capacity(groups.len());
+        // dns_config 随后被 move 进 DnsClient，先取出派生 deadline 所需的单请求超时。
+        let dns_request_timeout = dns_config.request_timeout;
         let dns_client = DnsClient::new(dns_config);
+        let mut max_forward_deadline = Duration::ZERO;
 
         for UpstreamGroupConfig {
             name,
@@ -85,6 +101,15 @@ impl UpstreamManager {
         } in groups
         {
             let server_count = servers.len();
+            // D-04: 总转发 deadline 从运行时配置派生 = 单请求超时 × 服务器台数（至少 1 台）。
+            // DoH 组用 http_client.request_timeout，DNS 组用 dns_client.request_timeout。
+            let per_request_timeout = match &scheme {
+                UpstreamScheme::Doh => http_config.request_timeout,
+                UpstreamScheme::Dns => dns_request_timeout,
+            };
+            let forward_deadline =
+                Duration::from_secs(per_request_timeout.saturating_mul(server_count.max(1) as u64));
+            max_forward_deadline = max_forward_deadline.max(forward_deadline);
             let scheme_str = match &scheme {
                 UpstreamScheme::Doh => "doh",
                 UpstreamScheme::Dns => "dns",
@@ -114,25 +139,21 @@ impl UpstreamManager {
                 None
             };
 
-            let deny_cidrs: Vec<IpNet> = if deny_answers.is_empty() {
-                Vec::new()
-            } else {
-                deny_answers
-                    .iter()
-                    .filter_map(|s| {
-                        s.parse::<IpNet>()
-                            .map_err(|e| {
-                                warn!(
-                                    group = %name,
-                                    cidr = %s,
-                                    error = %e,
-                                    "Failed to parse deny_answers CIDR"
-                                );
-                            })
-                            .ok()
-                    })
-                    .collect()
-            };
+            // D-15: 非法 CIDR 在构造期 fail fast——防污染过滤不允许静默降级带病运行。
+            // 错误信息由启动链路最终层统一以 ERROR 记录一次，此处只返回 Err。
+            let mut deny_cidrs: Vec<IpNet> = Vec::with_capacity(deny_answers.len());
+            for cidr in &deny_answers {
+                match cidr.parse::<IpNet>() {
+                    Ok(parsed) => deny_cidrs.push(parsed),
+                    Err(e) => {
+                        return Err(AppError::Config(ConfigError::InvalidUpstreamConfig(
+                            format!(
+                                "upstream group '{name}': invalid deny_answers CIDR '{cidr}': {e}"
+                            ),
+                        )))
+                    }
+                }
+            }
 
             info!(
                 group = %name,
@@ -152,13 +173,22 @@ impl UpstreamManager {
                     deny_cidrs,
                     case_randomization,
                     case_randomization_strict,
+                    forward_deadline,
                 },
             );
         }
 
+        // 无上游组时使用兜底 deadline，与旧默认请求超时对齐。
+        let max_forward_deadline = if group_map.is_empty() {
+            Duration::from_secs(coalesce_limits::FALLBACK_FORWARD_DEADLINE_SECS)
+        } else {
+            max_forward_deadline
+        };
+
         Ok(Self {
             groups: group_map,
             dns_client,
+            max_forward_deadline,
         })
     }
 
@@ -166,7 +196,18 @@ impl UpstreamManager {
         Ok(Self {
             groups: HashMap::new(),
             dns_client: DnsClient::new(DnsClientConfig::default()),
+            max_forward_deadline: Duration::from_secs(
+                coalesce_limits::FALLBACK_FORWARD_DEADLINE_SECS,
+            ),
         })
+    }
+
+    /// 返回所有上游组中最坏的转发总 deadline（各组 = 单请求超时 × 服务器台数的最大值）。
+    ///
+    /// `RequestHandler` 以此为基数（另加 margin）派生 coalesce follower 等待时长，
+    /// 保证 follower 等待不短于 leader 最坏转发时长（D-04）。无上游组时返回兜底默认值。
+    pub fn max_forward_deadline(&self) -> Duration {
+        self.max_forward_deadline
     }
 
     fn is_denied(ip: IpAddr, deny_cidrs: &[IpNet]) -> bool {
@@ -223,6 +264,34 @@ impl UpstreamManager {
             }
         };
 
+        // D-04: 覆盖全部 attempts 的总转发 deadline（= 单请求超时 × 服务器台数，
+        // 由运行时配置派生）。超时即取消整个逐台重试链并返回 Err(AppError::Timeout)，
+        // 走既有错误路径（handler 侧 stale fallback / SERVFAIL + metrics）。
+        let forward_deadline = group_state.forward_deadline;
+        match tokio::time::timeout(
+            forward_deadline,
+            self.forward_attempts(query, group_name, group_state),
+        )
+        .await
+        {
+            Ok(result) => result,
+            Err(_elapsed) => {
+                debug!(
+                    group = %group_name,
+                    "Failed to forward within total deadline"
+                );
+                Err(AppError::Timeout)
+            }
+        }
+    }
+
+    /// 执行逐台重试的转发链（内部不设总时限，由 `forward` 以总 deadline 约束）。
+    async fn forward_attempts(
+        &self,
+        query: &Message,
+        group_name: &str,
+        group_state: &UpstreamGroupState,
+    ) -> Result<Message, AppError> {
         let load_balancer = &group_state.lb;
         let scheme = &group_state.scheme;
 

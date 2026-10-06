@@ -8,6 +8,8 @@
 
 ### Changed
 
+- 所有单元/集成测试统一迁移至 `tests/` 目录（`src/` 下不再保留 `#[cfg(test)]` 内联测试模块）。
+
 本版本对全项目日志输出进行规范化改造（依据 `specs/logging-standard.md`）：统一级别语义、消息固定短语 + kv 结构化字段、错误措辞归一、URL userinfo 脱敏。
 
 #### 降级/变更清单（旧级别+旧消息 → 新级别+新消息）
@@ -99,3 +101,21 @@
 
 - 缓存投毒检测（SEC-1）暂不携带 `group` 上下文：`insert()` 调用链未穿透 group，改签名链属过度设计，本轮标注为已知限制。
 - `handle_json_get`（DoH JSON GET）无 per-request span，保持现状。
+
+### Fixed
+
+本版本另完成一轮深度代码审计后的缺陷修复：
+
+- 远程规则的裸域名条目现在按 V2Ray 语义同时匹配域名本身与全部子域（此前仅匹配子域，拦截/代理列表中的 apex 域名条目永不生效）。
+- 缓存命中返回的响应 TTL 正确扣减已消耗时间（此前单记录响应返回完整 TTL，下游二次缓存可使陈旧记录存活时间翻倍）。
+- 负缓存（NXDOMAIN/NODATA）TTL 遵循 RFC 2308，取 SOA.MINIMUM 与配置 `negative_ttl` 的较小值，wire 与 DoH JSON 双上游路径均生效（此前恒用配置值且 SOA 权威段在缓存前被丢弃）。
+- DoH JSON 上游遇到 Answer 段不支持的记录类型时不再静默返回错误的空 NOERROR 响应，改为报错并换服务器重试（此前 HTTPS/SVCB 等查询会被误判为「无此记录」并被负缓存放大）。
+- `/resolve` 端点对无尾点查询名（如 `name=example.com`）归一化为 FQDN，修复该端点缓存全部失效、与 DNS 入口缓存键分裂，以及每请求误报「Cache poisoning detected」告警的问题。
+- 上游转发增加总超时上限（单请求超时 × 服务器台数，由配置派生），请求合并（coalesce）follower 等待时长同步改为由上游配置派生（不再固定 5 秒，避免上游劣化时批量误报 SERVFAIL）。
+- 请求合并 leader 失败提前返回时，follower 立即收到相同错误（此前 follower 收到误导性内部错误或空等至超时）。
+- 速率限制修复：被 per-IP 限制拒绝的请求不再消耗全局配额（此前单点滥用流量可耗尽全局计数、殃及合法客户端）；DNS 限速命中现在回送 REFUSED 响应（此前静默丢包，客户端超时重试反而放大入站流量）。
+- `deny_answers` 中的非法 CIDR 现在启动期即报配置错误并启动失败（此前仅一条 warn 后静默丢弃规则，防污染过滤带病运行）。
+- DNS 子系统启动失败与运行期错误现在向上传播，进程以非零退出码结束（此前运行期错误被吞掉并上报为正常完成，systemd/docker 重启策略与监控无法感知）。
+- Windows 平台不再设置 SO_REUSEADDR（该选项允许本机其他进程劫持已绑定端口）；`udp_socket_count > 1` 配置在 Windows 降级为单 socket 并输出 warn（unix 的 SO_REUSEPORT 多 socket 行为不变）。
+- 缓存投毒过滤对合成消息中 header 计数与实际记录段长度失同步的情况做容错（消除减法溢出的 panic 面）。
+- 修复缓存投毒「全拒」防线因比较 header 计数而恒不触发的问题（此前上游响应中的答案全部因域名不匹配被过滤掉时，空响应仍会以原始记录的长 TTL 写入缓存、且不产生任何告警；现在正确记录「Cache poisoning detected」警告并放弃缓存）。

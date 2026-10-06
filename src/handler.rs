@@ -1,17 +1,13 @@
 use crate::{
-    cache_labels, error_labels,
-    metrics::{normalize_query_type_label, normalize_response_code, METRICS},
-    processing_labels, AppError, CacheKey, CacheResult, CoalescingMap, DnsCache, RouteAction,
-    Router, UpstreamManager,
+    metrics::{normalize_response_code, query_type_index, METRICS},
+    r#const::{cache_op_indices, error_indices, processing_indices},
+    AppError, CacheKey, CacheResult, CoalescingMap, DnsCache, RouteAction, Router, UpstreamManager,
 };
 use hickory_proto::op::{Edns, Message, MessageType, ResponseCode};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use tracing::{debug, error};
-
-const COALESCE_WAIT_TIMEOUT: Duration =
-    Duration::from_secs(crate::r#const::http_client_limits::DEFAULT_REQUEST_TIMEOUT);
 
 struct CoalesceGuard<'a> {
     map: &'a CoalescingMap,
@@ -22,6 +18,12 @@ struct CoalesceGuard<'a> {
 impl Drop for CoalesceGuard<'_> {
     fn drop(&mut self) {
         self.map.remove(&self.key);
+        // D-19: leader 提前返回（路由错误、panic、任务取消）时 cell 可能未设置，
+        // 兜底补写 Err，避免 follower 收到误导性的 "Coalescing cell not set"
+        // 或空等满超时。与 BackgroundCoalesceGuard 行为对齐。
+        if self.entry.cell.get().is_none() {
+            self.entry.cell.set(Err("leader aborted".to_string())).ok();
+        }
         self.entry.notify.notify_waiters();
     }
 }
@@ -60,6 +62,10 @@ pub struct RequestHandler {
     router: Arc<RwLock<Arc<Router>>>,
     upstream: Arc<UpstreamManager>,
     coalesce: CoalescingMap,
+    /// D-04: follower 的 coalesce 等待时长，构造时从运行时配置派生：
+    /// 所有上游组最坏转发总 deadline（request_timeout × 服务器台数的最大值）+ margin，
+    /// 保证等待时长 ≥ leader 最坏转发时长，不再使用 5s 编译期常量。
+    coalesce_wait_timeout: Duration,
 }
 
 impl RequestHandler {
@@ -68,11 +74,14 @@ impl RequestHandler {
         router: Arc<RwLock<Arc<Router>>>,
         upstream: Arc<UpstreamManager>,
     ) -> Self {
+        let coalesce_wait_timeout = upstream.max_forward_deadline()
+            + Duration::from_secs(crate::r#const::coalesce_limits::WAIT_MARGIN_SECS);
         Self {
             cache,
             router,
             upstream,
             coalesce: CoalescingMap::new(),
+            coalesce_wait_timeout,
         }
     }
 
@@ -90,12 +99,9 @@ impl RequestHandler {
         let query = self.validate_request(request)?;
         let query_name = query.name();
         let query_type = query.query_type();
-        let query_type_label = normalize_query_type_label(query_type);
+        let query_type_idx = query_type_index(query_type);
 
-        METRICS
-            .dns_query_type_total
-            .with_label_values(&[query_type_label])
-            .inc();
+        METRICS.query_types[query_type_idx].inc();
 
         debug!("Query received");
 
@@ -114,7 +120,7 @@ impl RequestHandler {
         };
 
         let cache_result = self
-            .check_cache(request, cache_key.as_ref(), query_type_label, &start_time)
+            .check_cache(request, cache_key.as_ref(), query_type_idx, &start_time)
             .await;
 
         match cache_result {
@@ -144,9 +150,7 @@ impl RequestHandler {
                 };
 
                 let duration = start_time.elapsed();
-                METRICS
-                    .dns_request_processing_duration_seconds
-                    .with_label_values(&[processing_labels::RESOLVED, query_type_label])
+                METRICS.processing_durations[processing_indices::RESOLVED][query_type_idx]
                     .observe(duration.as_secs_f64());
 
                 debug!(
@@ -178,7 +182,15 @@ impl RequestHandler {
                 entry: coalesce_entry.clone(),
             };
 
-            let route_match = self.find_route_match(query_name).await?;
+            // D-19: 路由错误提前返回前，把相同错误写入 cell，
+            // 让已注册的 follower 立即失败而不是空等/收到误导性错误。
+            let route_match = match self.find_route_match(query_name).await {
+                Ok(route_match) => route_match,
+                Err(e) => {
+                    coalesce_entry.cell.set(Err(e.to_string())).ok();
+                    return Err(e);
+                }
+            };
 
             let mut response = match route_match.action {
                 RouteAction::Forward => {
@@ -205,9 +217,7 @@ impl RequestHandler {
             coalesce_entry.cell.set(result).ok();
 
             let duration = start_time.elapsed();
-            METRICS
-                .dns_request_processing_duration_seconds
-                .with_label_values(&[processing_labels::RESOLVED, query_type_label])
+            METRICS.processing_durations[processing_indices::RESOLVED][query_type_idx]
                 .observe(duration.as_secs_f64());
 
             debug!(
@@ -224,7 +234,7 @@ impl RequestHandler {
             notified.as_mut().enable();
 
             if coalesce_entry.cell.get().is_none()
-                && tokio::time::timeout(COALESCE_WAIT_TIMEOUT, notified.as_mut())
+                && tokio::time::timeout(self.coalesce_wait_timeout, notified.as_mut())
                     .await
                     .is_err()
             {
@@ -254,10 +264,7 @@ impl RequestHandler {
         match request.queries().first() {
             Some(q) => Ok(q),
             None => {
-                METRICS
-                    .dns_request_errors_total
-                    .with_label_values(&[error_labels::EMPTY_QUERY])
-                    .inc();
+                METRICS.request_errors[error_indices::EMPTY_QUERY].inc();
                 Err(AppError::Internal("Empty query".to_string()))
             }
         }
@@ -267,7 +274,7 @@ impl RequestHandler {
         &self,
         request: &Message,
         cache_key: Option<&CacheKey>,
-        query_type_label: &'static str,
+        query_type_idx: usize,
         start_time: &Instant,
     ) -> CacheResult {
         if !self.cache.is_enabled() {
@@ -279,7 +286,6 @@ impl RequestHandler {
             None => return CacheResult::Miss,
         };
 
-        let cache_check_time = Instant::now();
         let result = self.cache.get(key).await;
 
         match result {
@@ -290,9 +296,7 @@ impl RequestHandler {
                 response.set_id(request.id());
 
                 let duration = start_time.elapsed();
-                METRICS
-                    .dns_request_processing_duration_seconds
-                    .with_label_values(&[processing_labels::CACHED, query_type_label])
+                METRICS.processing_durations[processing_indices::CACHED][query_type_idx]
                     .observe(duration.as_secs_f64());
 
                 CacheResult::Fresh(response)
@@ -304,25 +308,23 @@ impl RequestHandler {
                 response.set_id(request.id());
 
                 let duration = start_time.elapsed();
-                METRICS
-                    .dns_request_processing_duration_seconds
-                    .with_label_values(&[processing_labels::CACHED, query_type_label])
+                METRICS.processing_durations[processing_indices::CACHED][query_type_idx]
                     .observe(duration.as_secs_f64());
 
                 CacheResult::Stale(response)
             }
             CacheResult::Miss => {
-                METRICS
-                    .cache_operations_total
-                    .with_label_values(&[cache_labels::MISS])
-                    .inc();
+                METRICS.cache_operations[cache_op_indices::MISS].inc();
                 // 同步 cache entries gauge（moka 可能已惰性驱逐条目，
                 // miss 时同步真实计数可修正 insert-only 更新导致的漂移）
                 METRICS
                     .cache_entries
                     .set(self.cache.approximate_len() as i64);
+                // OPT-3: 不再为计时 cache.get 单独构造 Instant（hit 路径纯浪费），
+                // duration_ms 随用随取 start_time.elapsed()（请求路径耗时，与
+                // "Query resolved" 口径一致；tracing 字段惰性求值，debug 关闭零成本）
                 debug!(
-                    duration_ms = cache_check_time.elapsed().as_secs_f64() * 1000.0,
+                    duration_ms = start_time.elapsed().as_secs_f64() * 1000.0,
                     "Cache miss"
                 );
                 CacheResult::Miss
@@ -486,10 +488,7 @@ impl RequestHandler {
                     "Failed to match route"
                 );
 
-                METRICS
-                    .dns_request_errors_total
-                    .with_label_values(&[error_labels::ROUTE_ERROR])
-                    .inc();
+                METRICS.request_errors[error_indices::ROUTE_ERROR].inc();
 
                 return Err(AppError::Internal(format!("Route matching failed: {}", e)));
             }
@@ -522,10 +521,7 @@ impl RequestHandler {
                     "Failed to resolve forward target"
                 );
 
-                METRICS
-                    .dns_request_errors_total
-                    .with_label_values(&[error_labels::MISSING_TARGET])
-                    .inc();
+                METRICS.request_errors[error_indices::MISSING_TARGET].inc();
 
                 return Self::create_error_response(request, ResponseCode::ServFail);
             }
@@ -542,13 +538,11 @@ impl RequestHandler {
         match result {
             Ok(response) => Ok(response),
             Err(e) => {
-                METRICS
-                    .dns_request_errors_total
-                    .with_label_values(&[error_labels::UPSTREAM_ERROR])
-                    .inc();
+                METRICS.request_errors[error_indices::UPSTREAM_ERROR].inc();
 
                 if self.cache.is_enabled() && self.cache.stale_while_revalidate_enabled() {
                     if let Some(stale_response) = self.cache.get_stale_entry(request).await {
+                        // 红线：group 为无界标签（配置/远程规则来源），严禁预解析
                         METRICS
                             .stale_fallback_total
                             .with_label_values(&[target_group])

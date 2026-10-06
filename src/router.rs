@@ -15,12 +15,14 @@ const REGEX_SPECIAL_CHARS: [char; 15] = [
     '\\', '^', '$', '.', '|', '?', '*', '+', '(', ')', '[', ']', '{', '}', '-',
 ];
 
-const MAX_DOMAIN_STACK_LEN: usize = 253;
+#[doc(hidden)] // 仅为 tests/ 集成测试验证栈缓冲路径而公开，非稳定 API
+pub const MAX_DOMAIN_STACK_LEN: usize = 253;
 
 /// 在栈缓冲上构造全小写域名，结果与 `to_ascii()` + 去尾点 + 小写化逐字节一致，
 /// 用于消除 `find_match` 热路径上 `Name::to_ascii()` 的堆分配。
 /// 当名字包含需要转义的字节或超出缓冲容量时返回 `None`，由调用方回退堆路径。
-fn build_lowercase_domain<'buf>(
+#[doc(hidden)] // 仅为 tests/ 集成测试直接调用而公开，非稳定 API
+pub fn build_lowercase_domain<'buf>(
     query_name: &Name,
     buf: &'buf mut [u8; MAX_DOMAIN_STACK_LEN],
 ) -> Option<&'buf str> {
@@ -980,140 +982,5 @@ impl From<RouteAction> for &'static str {
             RouteAction::Block => rule_action_labels::BLOCK,
             RouteAction::Forward => rule_action_labels::FORWARD,
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn legacy_normalized_domain(query_name: &Name) -> String {
-        let mut domain = query_name.to_ascii();
-        if domain.ends_with('.') {
-            domain.pop();
-        }
-        if domain.is_ascii() {
-            domain.make_ascii_lowercase();
-        } else {
-            domain = domain.to_lowercase();
-        }
-        domain
-    }
-
-    fn fast_path_names() -> Vec<Name> {
-        vec![
-            Name::from_ascii("WWW.Example.COM.").unwrap(),
-            Name::from_ascii("MiXeD.Case-Host.Org").unwrap(),
-            Name::from_ascii("ads.example.com.").unwrap(),
-            Name::from_ascii("A.B.C.D.E.F.G.H.I.J.Example.Invalid.").unwrap(),
-            Name::from_ascii("_dmarc._domainkey.Example.COM.").unwrap(),
-            Name::from_ascii("*.Example.COM.").unwrap(),
-            Name::from_ascii("XN--ZS9H.Example.COM.").unwrap(),
-            Name::from_ascii("localhost.").unwrap(),
-            Name::from_ascii("LocalHost").unwrap(),
-            Name::from_ascii("my-Tracking-Host.My-Example.Com").unwrap(),
-            Name::root(),
-            Name::from_labels((0..127).map(|_| b"a".to_vec())).unwrap(),
-        ]
-    }
-
-    fn fallback_names() -> Vec<Name> {
-        vec![
-            Name::from_labels(vec![b"-Leading-Dash".to_vec(), b"Example".to_vec()]).unwrap(),
-            Name::from_labels(vec![vec![0xE9u8, b'A'], b"Example".to_vec()]).unwrap(),
-            Name::from_labels(vec![b"a*b".to_vec(), b"Example".to_vec()]).unwrap(),
-            Name::from_labels(vec![b"a.b".to_vec(), b"Example".to_vec()]).unwrap(),
-        ]
-    }
-
-    #[test]
-    fn stack_domain_is_byte_identical_to_legacy_normalization() {
-        for name in fast_path_names() {
-            let mut buf = [0u8; MAX_DOMAIN_STACK_LEN];
-            let stack_domain = build_lowercase_domain(&name, &mut buf)
-                .unwrap_or_else(|| panic!("expected fast path for {name}"));
-            assert_eq!(
-                stack_domain,
-                legacy_normalized_domain(&name),
-                "name: {name}"
-            );
-        }
-    }
-
-    #[test]
-    fn stack_domain_falls_back_for_escaped_or_oversized_names() {
-        for name in fallback_names() {
-            let mut buf = [0u8; MAX_DOMAIN_STACK_LEN];
-            assert!(
-                build_lowercase_domain(&name, &mut buf).is_none(),
-                "expected fallback for {name}"
-            );
-        }
-    }
-
-    #[test]
-    fn miss_path_matches_legacy_normalization_byte_for_byte() {
-        let router = Router::new(Vec::new()).unwrap();
-        for name in fast_path_names().into_iter().chain(fallback_names()) {
-            let expected = legacy_normalized_domain(&name);
-            match router.find_match(&name) {
-                Err(AppError::NoRouteMatch(domain)) => {
-                    assert_eq!(domain, expected, "name: {name}");
-                }
-                other => panic!("expected NoRouteMatch for {name}, got {other:?}"),
-            }
-        }
-    }
-
-    #[test]
-    fn find_match_is_case_insensitive_for_mixed_case_queries() {
-        let rules = vec![
-            RouteRuleConfig {
-                match_type: MatchType::Exact,
-                patterns: vec!["Ads.Example.COM".to_string()],
-                action: RouteAction::Block,
-                target: None,
-            },
-            RouteRuleConfig {
-                match_type: MatchType::Wildcard,
-                patterns: vec!["*.Corp.Local".to_string()],
-                action: RouteAction::Forward,
-                target: Some("internal_doh".to_string()),
-            },
-            RouteRuleConfig {
-                match_type: MatchType::Regex,
-                patterns: vec!["^api\\.service\\.com$".to_string()],
-                action: RouteAction::Block,
-                target: None,
-            },
-        ];
-        let router = Router::new(rules).unwrap();
-
-        let matched = router
-            .find_match(&Name::from_ascii("ADS.EXAMPLE.com.").unwrap())
-            .unwrap();
-        assert_eq!(matched.action, RouteAction::Block);
-        assert_eq!(matched.rule_type, rule_type_labels::EXACT);
-        assert_eq!(matched.domain, "ads.example.com");
-
-        let matched = router
-            .find_match(&Name::from_ascii("DeV.Corp.LOCAL.").unwrap())
-            .unwrap();
-        assert_eq!(matched.action, RouteAction::Forward);
-        assert_eq!(matched.rule_type, rule_type_labels::WILDCARD);
-        assert_eq!(matched.domain, "dev.corp.local");
-
-        let matched = router
-            .find_match(&Name::from_ascii("API.Service.Com.").unwrap())
-            .unwrap();
-        assert_eq!(matched.action, RouteAction::Block);
-        assert_eq!(matched.rule_type, rule_type_labels::REGEX);
-        assert_eq!(matched.domain, "api.service.com");
-
-        let matched = router
-            .find_match(&Name::from_ascii("Ads.Example.COM").unwrap())
-            .unwrap();
-        assert_eq!(matched.rule_type, rule_type_labels::EXACT);
-        assert_eq!(matched.domain, "ads.example.com");
     }
 }

@@ -4,7 +4,7 @@ use loadants::config::{
     DnsClientConfig, DnsUpstreamServerConfig, HttpClientConfig, LoadBalancingStrategy,
     UpstreamGroupConfig, UpstreamScheme, UpstreamServerConfig,
 };
-use loadants::upstream::UpstreamManager;
+use loadants::upstream::{DnsClient, UpstreamManager};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::str::FromStr;
 use std::sync::{
@@ -219,4 +219,100 @@ async fn test_dns_nxdomain_transparent() {
     let response = manager.forward(&query, "dns_group").await.unwrap();
     assert_eq!(response.response_code(), ResponseCode::NXDomain);
     assert_eq!(udp_count.load(Ordering::SeqCst), 1);
+}
+
+// ============================================================================
+// 以下测试迁移自 src/upstream/dns_client.rs 内嵌 #[cfg(test)] mod tests（测试语义零变化）。
+// ============================================================================
+
+fn response_with_question(name_ascii: &str) -> Message {
+    let mut response = Message::new();
+    response.set_message_type(MessageType::Response);
+    let name = Name::from_ascii(name_ascii).expect("valid DNS name");
+    response.add_query(Query::query(name, RecordType::A));
+    response
+}
+
+#[test]
+fn verify_response_case_fails_when_question_section_missing() {
+    let response = Message::new();
+    assert!(
+        !DnsClient::verify_response_case(&response, "Example.com."),
+        "missing question section must fail 0x20 verification"
+    );
+}
+
+#[test]
+fn verify_response_case_passes_on_exact_case_match() {
+    let response = response_with_question("Example.com.");
+    assert!(DnsClient::verify_response_case(&response, "Example.com."));
+}
+
+#[test]
+fn verify_response_case_fails_on_case_mismatch() {
+    let response = response_with_question("example.com.");
+    assert!(!DnsClient::verify_response_case(&response, "Example.com."));
+}
+
+#[tokio::test]
+async fn send_udp_concurrent_first_connect_keeps_all_queries_successful() {
+    let server_socket = UdpSocket::bind((Ipv4Addr::LOCALHOST, 0))
+        .await
+        .expect("bind test UDP server");
+    let server_addr = server_socket.local_addr().expect("server addr");
+    let received = Arc::new(AtomicUsize::new(0));
+    {
+        let received = received.clone();
+        tokio::spawn(async move {
+            let mut buf = [0u8; 2048];
+            loop {
+                let Ok((len, peer)) = server_socket.recv_from(&mut buf).await else {
+                    break;
+                };
+                received.fetch_add(1, Ordering::SeqCst);
+                let Ok(query) = Message::from_vec(&buf[..len]) else {
+                    continue;
+                };
+                let mut response = Message::new();
+                response.set_id(query.id());
+                response.set_message_type(MessageType::Response);
+                if let Some(q) = query.queries().first() {
+                    response.add_query(q.clone());
+                }
+                let Ok(bytes) = response.to_vec() else {
+                    continue;
+                };
+                let _ = server_socket.send_to(&bytes, peer).await;
+            }
+        });
+    }
+
+    let client = Arc::new(DnsClient::new(DnsClientConfig::default()));
+    let barrier = Arc::new(tokio::sync::Barrier::new(8));
+    let mut handles = Vec::new();
+    for _ in 0..8 {
+        let client = client.clone();
+        let barrier = barrier.clone();
+        handles.push(tokio::spawn(async move {
+            let mut query = Message::new();
+            query.set_recursion_desired(true);
+            let name = Name::from_str("concurrent.example.com.").expect("valid name");
+            query.add_query(Query::query(name, RecordType::A));
+            barrier.wait().await;
+            client.send_udp(server_addr, &query).await
+        }));
+    }
+
+    for handle in handles {
+        let response = handle
+            .await
+            .expect("task join")
+            .expect("concurrent first-connect send_udp must succeed");
+        assert_eq!(response.queries().len(), 1);
+        assert_eq!(
+            response.queries()[0].name().to_ascii(),
+            "concurrent.example.com."
+        );
+    }
+    assert_eq!(received.load(Ordering::SeqCst), 8);
 }

@@ -33,13 +33,18 @@ impl RuleParser for V2RayRuleParser {
                     rules.push((pattern, MatchType::Regex));
                 }
             } else {
-                // 通配符匹配规则（默认）: example.com -> *.example.com
+                // 裸域名规则（默认）: V2Ray 语义 = apex 本身 + 所有子域
                 let domain = line.trim().to_string();
                 if !domain.is_empty() {
-                    // 如果域名不是以*开头，转换为*.domain.com格式
                     if domain == "*" {
                         rules.push((domain, MatchType::Wildcard));
                     } else {
+                        // D-01: `*.domain` 通配符只覆盖真正的子域（trie 匹配保留
+                        // 至少 1 个 label），必须额外生成一条 exact 规则覆盖 apex
+                        // 本身，否则裸域名列表对 apex 查询永不命中。
+                        if !domain.starts_with('*') {
+                            rules.push((domain.clone(), MatchType::Exact));
+                        }
                         rules.push((format!("*.{}", domain), MatchType::Wildcard));
                     }
                 }

@@ -6,13 +6,17 @@ pub use self::loader::RemoteRuleLoader;
 pub use self::parser::{ClashRuleParser, RuleParser, V2RayRuleParser};
 pub use self::snapshot::{RemoteRuleSnapshotEnvelope, RemoteRuleSnapshotStore};
 
+use crate::admin::RemoteSourceStatus;
 use crate::config::{
     HttpClientConfig, RemoteRuleConfig, RemoteRuleFailurePolicy, RemoteRuleSnapshotConfig,
-    RouteAction, RouteRuleConfig,
+    RemoteRulesConfig, RouteAction, RouteRuleConfig,
 };
 use crate::error::AppError;
-use crate::router::{RoutedRule, RuleMetadata};
-use tracing::warn;
+use crate::router::{RoutedRule, Router, RuleMetadata};
+use std::sync::Arc;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use tokio::sync::RwLock;
+use tracing::{error, info, warn};
 
 pub(crate) fn strip_url_userinfo(url_str: &str) -> String {
     let Some(scheme_end) = url_str.find("://") else {
@@ -240,4 +244,135 @@ pub async fn load_and_merge_rules(
         successful_sources,
         failed_sources,
     })
+}
+
+/// 运行一次后台任务迭代，捕获迭代内的 panic 使其不向外传播。
+///
+/// 单次迭代 panic 不得终止外层刷新循环，否则循环会静默退出且永不恢复。
+/// （原位于 src/main.rs，为可测试性平移至 lib，逻辑零变化。）
+pub async fn run_panic_guarded<F>(task_name: &str, task: F)
+where
+    F: std::future::Future<Output = ()> + Send + 'static,
+{
+    match tokio::spawn(task).await {
+        Ok(()) => {}
+        Err(e) if e.is_panic() => {
+            error!(
+                task = %task_name,
+                error = &e as &dyn std::error::Error,
+                "Task iteration panicked"
+            );
+        }
+        Err(e) => {
+            warn!(task = %task_name, error = %e, "Task cancelled");
+        }
+    }
+}
+
+/// 执行一次远程规则重载：拉取并合并规则，成功后原子替换 router，
+/// 并重建各来源状态列表；失败时将所有来源标记为 failed。
+/// （原位于 src/main.rs，为可测试性平移至 lib，逻辑零变化。）
+pub async fn reload_once(
+    remote_rules_config: RemoteRulesConfig,
+    static_rules: Vec<RouteRuleConfig>,
+    http_client_config: HttpClientConfig,
+    router: Arc<RwLock<Arc<Router>>>,
+    statuses: Arc<RwLock<Vec<RemoteSourceStatus>>>,
+) {
+    let reload_started = Instant::now();
+
+    let load_result = load_and_merge_rules(
+        &remote_rules_config.sources,
+        &static_rules,
+        &http_client_config,
+        &remote_rules_config.snapshot,
+    )
+    .await;
+
+    let summary = match load_result {
+        Ok(s) => s,
+        Err(e) => {
+            warn!(
+                elapsed_ms = reload_started.elapsed().as_millis() as u64,
+                error = %e,
+                "Failed to reload remote rules"
+            );
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+            let mut guards = statuses.write().await;
+            for g in guards.iter_mut() {
+                g.status = "failed".to_string();
+                g.last_updated = now;
+                g.rule_count = 0;
+                g.error_message = Some(format!("{e}"));
+            }
+            return;
+        }
+    };
+
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    let new_statuses: Vec<RemoteSourceStatus> = remote_rules_config
+        .sources
+        .iter()
+        .map(|config| {
+            let url = &config.url;
+            let is_successful = summary.successful_sources.contains(url);
+            let failed_entry = summary.failed_sources.iter().find(|f| &f.url == url);
+            let rule_count = summary
+                .merged_rules
+                .iter()
+                .filter(|rule| {
+                    rule.metadata.source_id.as_ref().map(|s| s.as_str()) == Some(url.as_str())
+                })
+                .count();
+            let status = if is_successful { "ok" } else { "failed" };
+            let error_message = failed_entry.map(|f| f.error.clone());
+            RemoteSourceStatus {
+                url: url.clone(),
+                status: status.to_string(),
+                last_updated: now,
+                rule_count,
+                error_message,
+            }
+        })
+        .collect();
+
+    {
+        let mut guards = statuses.write().await;
+        *guards = new_statuses;
+    }
+
+    match evaluate_remote_rule_startup(summary) {
+        Ok(summary) => {
+            let rule_count = summary.merged_rules.len();
+            let sources_ok = summary.successful_sources.len();
+            let sources_failed = summary.failed_sources.len();
+            match Router::new_with_metadata(summary.merged_rules) {
+                Ok(new_router) => {
+                    let new_router = Arc::new(new_router);
+                    let mut writer = router.write().await;
+                    *writer = new_router;
+                    info!(
+                        rules = rule_count,
+                        sources_ok = sources_ok,
+                        sources_failed = sources_failed,
+                        elapsed_ms = reload_started.elapsed().as_millis() as u64,
+                        "Remote rules reload completed"
+                    );
+                }
+                Err(e) => {
+                    warn!(error = %e, "Failed to build router from reloaded rules");
+                }
+            }
+        }
+        Err(e) => {
+            warn!(error = %e, "Failed to evaluate reloaded rules");
+        }
+    }
 }

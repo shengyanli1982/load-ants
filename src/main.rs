@@ -3,7 +3,7 @@ use loadants::{
     doh::server::DoHServer,
     r#const::server_defaults,
     rate_limit::RateLimiter,
-    remote_rule::{evaluate_remote_rule_startup, load_and_merge_rules},
+    remote_rule::{reload_once, run_panic_guarded},
     server::DnsServerConfig,
     subsystem_names, AdminServer, AppError, Args, Config, ConfigSummary, DnsCache, DnsServer,
     RemoteSourceStatus, RequestHandler, Router, UpstreamManager,
@@ -11,11 +11,11 @@ use loadants::{
 use mimalloc::MiMalloc;
 use std::process;
 use std::sync::Arc;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use tokio::time::interval;
 use tokio_graceful_shutdown::{IntoSubsystem, SubsystemBuilder, Toplevel};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 
 #[global_allocator]
 static GLOBAL: MiMalloc = mimalloc::MiMalloc;
@@ -361,25 +361,6 @@ async fn create_components(config: Config) -> Result<AppComponents, AppError> {
     })
 }
 
-async fn run_panic_guarded<F>(task_name: &str, task: F)
-where
-    F: std::future::Future<Output = ()> + Send + 'static,
-{
-    match tokio::spawn(task).await {
-        Ok(()) => {}
-        Err(e) if e.is_panic() => {
-            error!(
-                task = %task_name,
-                error = &e as &dyn std::error::Error,
-                "Task iteration panicked"
-            );
-        }
-        Err(e) => {
-            warn!(task = %task_name, error = %e, "Task cancelled");
-        }
-    }
-}
-
 async fn run_reload_task(
     remote_rules_config: loadants::RemoteRulesConfig,
     static_rules: Vec<loadants::RouteRuleConfig>,
@@ -413,182 +394,5 @@ async fn run_reload_task(
             ),
         )
         .await;
-    }
-}
-
-async fn reload_once(
-    remote_rules_config: loadants::RemoteRulesConfig,
-    static_rules: Vec<loadants::RouteRuleConfig>,
-    http_client_config: loadants::HttpClientConfig,
-    router: Arc<RwLock<Arc<Router>>>,
-    statuses: Arc<RwLock<Vec<RemoteSourceStatus>>>,
-) {
-    let reload_started = Instant::now();
-
-    let load_result = load_and_merge_rules(
-        &remote_rules_config.sources,
-        &static_rules,
-        &http_client_config,
-        &remote_rules_config.snapshot,
-    )
-    .await;
-
-    let summary = match load_result {
-        Ok(s) => s,
-        Err(e) => {
-            warn!(
-                elapsed_ms = reload_started.elapsed().as_millis() as u64,
-                error = %e,
-                "Failed to reload remote rules"
-            );
-            let now = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs();
-            let mut guards = statuses.write().await;
-            for g in guards.iter_mut() {
-                g.status = "failed".to_string();
-                g.last_updated = now;
-                g.rule_count = 0;
-                g.error_message = Some(format!("{e}"));
-            }
-            return;
-        }
-    };
-
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
-
-    let new_statuses: Vec<RemoteSourceStatus> = remote_rules_config
-        .sources
-        .iter()
-        .map(|config| {
-            let url = &config.url;
-            let is_successful = summary.successful_sources.contains(url);
-            let failed_entry = summary.failed_sources.iter().find(|f| &f.url == url);
-            let rule_count = summary
-                .merged_rules
-                .iter()
-                .filter(|rule| {
-                    rule.metadata.source_id.as_ref().map(|s| s.as_str()) == Some(url.as_str())
-                })
-                .count();
-            let status = if is_successful { "ok" } else { "failed" };
-            let error_message = failed_entry.map(|f| f.error.clone());
-            RemoteSourceStatus {
-                url: url.clone(),
-                status: status.to_string(),
-                last_updated: now,
-                rule_count,
-                error_message,
-            }
-        })
-        .collect();
-
-    {
-        let mut guards = statuses.write().await;
-        *guards = new_statuses;
-    }
-
-    match evaluate_remote_rule_startup(summary) {
-        Ok(summary) => {
-            let rule_count = summary.merged_rules.len();
-            let sources_ok = summary.successful_sources.len();
-            let sources_failed = summary.failed_sources.len();
-            match Router::new_with_metadata(summary.merged_rules) {
-                Ok(new_router) => {
-                    let new_router = Arc::new(new_router);
-                    let mut writer = router.write().await;
-                    *writer = new_router;
-                    info!(
-                        rules = rule_count,
-                        sources_ok = sources_ok,
-                        sources_failed = sources_failed,
-                        elapsed_ms = reload_started.elapsed().as_millis() as u64,
-                        "Remote rules reload completed"
-                    );
-                }
-                Err(e) => {
-                    warn!(error = %e, "Failed to build router from reloaded rules");
-                }
-            }
-        }
-        Err(e) => {
-            warn!(error = %e, "Failed to evaluate reloaded rules");
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::sync::atomic::{AtomicBool, Ordering};
-
-    #[tokio::test]
-    async fn test_reload_guard_contains_iteration_panic() {
-        // 单次迭代 panic 不得向外传播，否则刷新循环会静默退出且永不恢复
-        run_panic_guarded("test", async {
-            panic!("simulated remote rule parse panic");
-        })
-        .await;
-    }
-
-    #[tokio::test]
-    async fn test_reload_guard_runs_normal_iteration() {
-        let completed = Arc::new(AtomicBool::new(false));
-        let flag = Arc::clone(&completed);
-        run_panic_guarded("test", async move {
-            flag.store(true, Ordering::SeqCst);
-        })
-        .await;
-        assert!(
-            completed.load(Ordering::SeqCst),
-            "normal iteration should run to completion"
-        );
-    }
-
-    #[tokio::test]
-    async fn test_reload_once_swaps_router_and_updates_statuses() {
-        let mut remote_rules_config = loadants::RemoteRulesConfig::default();
-        remote_rules_config.snapshot.enabled = false;
-
-        let static_rules = vec![loadants::RouteRuleConfig {
-            match_type: loadants::MatchType::Wildcard,
-            patterns: vec!["*".to_string()],
-            action: loadants::RouteAction::Forward,
-            target: Some("default".to_string()),
-        }];
-
-        let router: Arc<RwLock<Arc<Router>>> = Arc::new(RwLock::new(Arc::new(
-            Router::new(Vec::new()).expect("empty router should build"),
-        )));
-        let statuses = Arc::new(RwLock::new(vec![RemoteSourceStatus {
-            url: "https://example.com/rules.txt".to_string(),
-            status: "pending".to_string(),
-            last_updated: 0,
-            rule_count: 0,
-            error_message: None,
-        }]));
-
-        reload_once(
-            remote_rules_config,
-            static_rules,
-            loadants::HttpClientConfig::default(),
-            Arc::clone(&router),
-            Arc::clone(&statuses),
-        )
-        .await;
-
-        assert_eq!(
-            router.read().await.rule_count(),
-            1,
-            "router should be rebuilt from merged rules"
-        );
-        assert!(
-            statuses.read().await.is_empty(),
-            "statuses should be rebuilt from source list"
-        );
     }
 }

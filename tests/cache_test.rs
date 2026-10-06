@@ -1,9 +1,17 @@
 use hickory_proto::{
     op::{Message, MessageType, OpCode, Query, ResponseCode},
-    rr::{rdata::A, Name, RData, Record, RecordType},
+    rr::{
+        rdata::{A, SOA},
+        Name, RData, Record, RecordType,
+    },
 };
-use loadants::{build_cname_chain, filter_answer_records, CacheKey, CacheResult, DnsCache};
+use loadants::{
+    build_cname_chain, cache::CacheEntry, filter_answer_records, filter_response_records, CacheKey,
+    CacheResult, DnsCache,
+};
 use std::net::Ipv4Addr;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 fn make_query(name: &str, record_type: RecordType) -> Message {
     let mut msg = Message::new();
@@ -193,6 +201,40 @@ async fn test_cache_answer_domain_validation() {
             name_str
         );
     }
+}
+
+#[tokio::test]
+async fn insert_rejects_caching_when_all_answers_filtered_out() {
+    // P1-1 回归：全部答案均不在查询 CNAME chain 内（上游投毒/名称不匹配）时，
+    // filter_response_records 会全拒；insert() 必须走 SEC-1 投毒分支
+    // （warn + 放弃缓存），不得把空 NOERROR 响应以原始 answers 的长 TTL 缓存。
+    let cache = DnsCache::new(100, 10, 300, Some(60), None);
+
+    let query = make_query("example.com.", RecordType::A);
+    let answers = vec![
+        make_a_record("unrelated.org.", 300, Ipv4Addr::new(9, 10, 11, 12)),
+        make_a_record("evil.example.net.", 300, Ipv4Addr::new(13, 14, 15, 16)),
+    ];
+    let response = make_response(&query, ResponseCode::NoError, answers);
+
+    // 前置条件：header 计数与记录段同步（make_response 保证），且过滤确实全拒
+    assert_eq!(response.answer_count(), 2);
+    assert_eq!(response.answers().len(), 2);
+    let query_name = Name::from_ascii("example.com.").unwrap();
+    assert!(
+        filter_response_records(&query_name, response.clone())
+            .answers()
+            .is_empty(),
+        "前置条件：链外答案应被全部拒绝"
+    );
+
+    cache.insert(&query, response).await.unwrap();
+
+    let key = CacheKey::from_message(&query).unwrap();
+    assert!(
+        matches!(cache.get(&key).await, CacheResult::Miss),
+        "全拒的投毒响应不得写入缓存"
+    );
 }
 
 #[tokio::test]
@@ -513,4 +555,223 @@ async fn test_cache_restore_accepts_uppercase_hex() {
         CacheResult::Fresh(_) | CacheResult::Stale(_) => {}
         CacheResult::Miss => panic!("entry restored from uppercase hex should be found"),
     }
+}
+
+// ============================================================================
+// 以下测试为本轮新增回归测试（D-02 TTL 扣减 / D-03 负缓存 SOA / D-20 header
+// 计数失同步容错 派生），并非迁移自 src 内嵌测试（src/cache.rs 从无内嵌测试）。
+// ============================================================================
+
+fn make_soa_record(name: &str, minimum: u32) -> Record {
+    Record::from_rdata(
+        Name::from_ascii(name).unwrap(),
+        3600,
+        RData::SOA(SOA::new(
+            Name::from_ascii("ns1.example.com.").unwrap(),
+            Name::from_ascii("admin.example.com.").unwrap(),
+            1,
+            3600,
+            600,
+            86400,
+            minimum,
+        )),
+    )
+}
+
+fn make_response_with_authority(
+    query: &Message,
+    code: ResponseCode,
+    answers: Vec<Record>,
+    authority: Vec<Record>,
+) -> Message {
+    let mut msg = Message::new();
+    msg.set_id(query.id());
+    msg.set_message_type(MessageType::Response);
+    msg.set_op_code(query.op_code());
+    msg.set_recursion_desired(query.recursion_desired());
+    msg.set_recursion_available(true);
+    msg.set_response_code(code);
+    for q in query.queries() {
+        msg.add_query(q.clone());
+    }
+    let answer_count = answers.len() as u16;
+    let ns_count = authority.len() as u16;
+    for ans in answers {
+        msg.add_answer(ans);
+    }
+    for ns in authority {
+        msg.add_name_server(ns);
+    }
+    let mut header = *msg.header();
+    header.set_answer_count(answer_count);
+    header.set_name_server_count(ns_count);
+    msg.set_header(header);
+    msg
+}
+
+/// 构造一个已过去 `secs` 秒的时间戳，用于确定性地测试 TTL 扣减。
+/// 缓存内部使用 `std::time::Instant`（不受 tokio 虚拟时钟影响），
+/// 因此直接回拨条目时间戳而非真实 sleep。
+fn backdated_timestamp(secs: u64) -> Instant {
+    Instant::now()
+        .checked_sub(Duration::from_secs(secs))
+        .expect("system uptime shorter than test backdate window")
+}
+
+/// 构造一个"已存在 120 秒"的单 A 记录缓存条目并返回其 key。
+/// 模拟 `insert()` 的产物：记录 TTL 已归一化为 `effective_ttl`（300）。
+async fn insert_backdated_single_a_entry(cache: &DnsCache, name: &str) -> CacheKey {
+    let query = make_query(name, RecordType::A);
+    let response = make_response_with_authority(
+        &query,
+        ResponseCode::NoError,
+        vec![make_a_record(name, 300, Ipv4Addr::new(1, 2, 3, 4))],
+        vec![],
+    );
+    let key = CacheKey::from_message(&query).unwrap();
+    let entry = CacheEntry {
+        message: Arc::new(response),
+        timestamp: backdated_timestamp(120),
+        effective_ttl: 300,
+    };
+    cache.cache.insert(key.clone(), entry).await;
+    key
+}
+
+// ---- D-02: 缓存命中必须按已消耗时间扣减 TTL（answer ≤ 1 同样扣减）----
+
+#[tokio::test]
+async fn get_deducts_elapsed_ttl_for_single_answer_hit() {
+    let cache = DnsCache::new(100, 10, 300, Some(60), Some(0));
+    let key = insert_backdated_single_a_entry(&cache, "single-a.example.com.").await;
+
+    match cache.get(&key).await {
+        CacheResult::Fresh(msg) => assert_eq!(
+            msg.answers()[0].ttl(),
+            180,
+            "single-answer cache hit must return effective_ttl(300) - elapsed(120) = 180"
+        ),
+        CacheResult::Stale(_) => panic!("expected Fresh, got Stale"),
+        CacheResult::Miss => panic!("expected cache hit, got Miss"),
+    }
+}
+
+#[tokio::test]
+async fn get_stale_entry_deducts_elapsed_ttl_for_single_answer_hit() {
+    // 与 get() 行为一致：fresh 分支同样按已消耗时间扣减 TTL
+    let cache = DnsCache::new(100, 10, 300, Some(60), Some(60));
+    let query = make_query("stale-consistent.example.com.", RecordType::A);
+    insert_backdated_single_a_entry(&cache, "stale-consistent.example.com.").await;
+
+    let msg = cache
+        .get_stale_entry(&query)
+        .await
+        .expect("fresh entry should be returned");
+    assert_eq!(
+        msg.answers()[0].ttl(),
+        180,
+        "get_stale_entry fresh branch must return effective_ttl(300) - elapsed(120) = 180, \
+         consistent with get()"
+    );
+}
+
+// ---- D-03: 负缓存 TTL 必须取 min(SOA.MINIMUM, negative_ttl)（RFC 2308）----
+
+#[tokio::test]
+async fn insert_nxdomain_ttl_uses_soa_minimum_below_negative_ttl() {
+    // SOA MINIMUM=5 < negative_ttl=60 → effective_ttl 应为 5 而非配置值 60。
+    // SOA owner 是 zone apex（example.com.），不在查询名的 CNAME chain 内，
+    // 会被 filter_response_records 剥除，因此 TTL 必须在过滤前用原始 response 计算。
+    let cache = DnsCache::new(100, 10, 300, Some(60), Some(0));
+    let query = make_query("nx.example.com.", RecordType::A);
+    let response = make_response_with_authority(
+        &query,
+        ResponseCode::NXDomain,
+        vec![],
+        vec![make_soa_record("example.com.", 5)],
+    );
+
+    cache.insert(&query, response).await.unwrap();
+
+    let key = CacheKey::from_message(&query).unwrap();
+    let entry = cache
+        .cache
+        .get(&key)
+        .await
+        .expect("NXDOMAIN response should be cached");
+    assert_eq!(
+        entry.effective_ttl, 5,
+        "negative cache TTL must be min(SOA.MINIMUM=5, negative_ttl=60) = 5 (RFC 2308)"
+    );
+}
+
+#[tokio::test]
+async fn insert_nodata_ttl_uses_soa_minimum_below_negative_ttl() {
+    // NODATA（NOERROR + 0 answer）与 NXDOMAIN 同病：SOA 在 TTL 计算前被过滤剥除
+    let cache = DnsCache::new(100, 10, 300, Some(60), Some(0));
+    let query = make_query("nodata.example.com.", RecordType::A);
+    let response = make_response_with_authority(
+        &query,
+        ResponseCode::NoError,
+        vec![],
+        vec![make_soa_record("example.com.", 5)],
+    );
+
+    cache.insert(&query, response).await.unwrap();
+
+    let key = CacheKey::from_message(&query).unwrap();
+    let entry = cache
+        .cache
+        .get(&key)
+        .await
+        .expect("NODATA response should be cached");
+    assert_eq!(
+        entry.effective_ttl, 5,
+        "NODATA cache TTL must be min(SOA.MINIMUM=5, negative_ttl=60) = 5 (RFC 2308)"
+    );
+}
+
+// ---- D-20: 过滤函数必须容忍 header 计数与实际记录段失同步 ----
+
+/// 构造 header.answer_count 与 answer 记录段失同步的合成响应。
+/// hickory-proto 0.25.2 的 `add_answer` 不更新 header（且 `Message::answer_count()`
+/// 经 `Deref<Target=Header>` 读的是 header 计数），合成 Message 不经 wire 往返
+/// 即天然失同步：header=0、实际记录=1 → `header_count - valid_len` 减法溢出。
+fn make_header_desynced_response(name: &str) -> Message {
+    let mut msg = Message::new();
+    msg.set_message_type(MessageType::Response);
+    msg.set_response_code(ResponseCode::NoError);
+    msg.add_query(Query::query(Name::from_ascii(name).unwrap(), RecordType::A));
+    msg.add_answer(make_a_record(name, 300, Ipv4Addr::new(1, 2, 3, 4)));
+    assert_eq!(msg.answer_count(), 0, "前置条件：header 计数应失同步为 0");
+    assert_eq!(msg.answers().len(), 1, "前置条件：answer 段实际有 1 条记录");
+    msg
+}
+
+#[test]
+fn filter_answer_records_tolerates_header_count_desync() {
+    let query_name = Name::from_ascii("desync-a.example.com.").unwrap();
+    let response = make_header_desynced_response("desync-a.example.com.");
+
+    let filtered = filter_answer_records(&query_name, response);
+
+    assert_eq!(
+        filtered.answers().len(),
+        1,
+        "过滤结果必须按实际记录段计算，链内有效记录应保留"
+    );
+}
+
+#[test]
+fn filter_response_records_tolerates_header_count_desync() {
+    let query_name = Name::from_ascii("desync-r.example.com.").unwrap();
+    let response = make_header_desynced_response("desync-r.example.com.");
+
+    let filtered = filter_response_records(&query_name, response);
+
+    assert_eq!(
+        filtered.answers().len(),
+        1,
+        "过滤结果必须按实际记录段计算，链内有效记录应保留"
+    );
 }

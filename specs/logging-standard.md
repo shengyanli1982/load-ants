@@ -407,7 +407,7 @@ flowchart TD
 | HDL-01 | L100 收查询 debug | NORM | `debug!("Query received")`（span 已含 query/qtype/client_ip，消息去插值） |
 | HDL-02 | L152/L199 block debug | NORM | `debug!("Query blocked")` |
 | HDL-03 | L163/L224 解析完成 debug | NORM | `debug!(duration_ms = .., rcode = .., answers = .., "Query resolved")`（去掉 `query` 字段与 `duration = ?..`） |
-| HDL-04 | L299/L317/L344 缓存 debug | NORM | `debug!("Cache hit")`；`debug!("Cache stale served, background revalidation scheduled")`；`debug!(duration_ms = .., "Cache miss")`（去掉 span 重复字段；`cache_check_duration` → `duration_ms`） |
+| HDL-04 | L299/L317/L344 缓存 debug | NORM | `debug!("Cache hit")`；`debug!("Cache stale served, background revalidation scheduled")`；`debug!(duration_ms = .., "Cache miss")`（去掉 span 重复字段；`cache_check_duration` → `duration_ms`；OPT-3：`duration_ms` = `start_time.elapsed()`，即请求路径耗时至 miss 确认，与 §4.2 词表及 HDL-03「Query resolved」口径一致） |
 | HDL-05 | L358/387/393/403/419/429/441/443/452 后台刷新 | ADJ/NORM | 全部 WARN/INFO → **DEBUG**（含 L443 info「Background revalidation completed」——硬约束 #4）；统一消息族 `Background revalidation started / completed / failed / skipped`，失败/跳过带 `reason = <no_cache_key\|no_query\|route_match_failed\|blocked\|missing_target\|cache_insert_failed\|upstream_failed>`；因 `tokio::spawn` 脱离 span，**必须**显式携带 `query` 字段；错误字段 DEBUG 层用 `%e` |
 | HDL-06 | L484 路由匹配失败 warn | ADJ | WARN → **DEBUG**：`debug!(query = .., error = %e, "Failed to match route")`（metrics ROUTE_ERROR 已计数） |
 | HDL-07 | L516 forward 缺 target error! | ADJ（P0-3 同类） | ERROR → **DEBUG**：`debug!(query = .., reason = "target_missing", "Failed to resolve forward target")`（metrics MISSING_TARGET 已计数；配置问题依赖启动期日志） |
@@ -438,7 +438,7 @@ flowchart TD
 
 | ID | 位置 | 优先级 | 要求 |
 |----|------|--------|------|
-| MGR-01 | L111 deny_answers 非法 CIDR warn | NORM | 保留 WARN（启动期配置降级）；kv：`warn!(group = %name, cidr = %s, error = %e, "Failed to parse deny_answers CIDR")` |
+| MGR-01 | L111 deny_answers 非法 CIDR warn | **已废止（warn 移除，改 fail-fast）** | 非法 CIDR 不再降级保留：`UpstreamManager::new` 构造期解析失败即返回 `Err(AppError::Config)`，本处零日志；错误由 main.rs 启动链唯一一次 ERROR 记录（`Failed to create application components`，符合 §3.1「启动失败/组件构建失败」）+ `process::exit(1)` 进程启动失败。原「保留 WARN（启动期配置降级）」要求随之下线 |
 | MGR-02 | L185 转发 debug | NORM | kv：`debug!(group = %group_name, "Forwarding request to upstream group")` |
 | MGR-03 | L190/206/242/271/342 请求路径 error! × 5 | **P0-3** | ERROR → **DEBUG**（配置不变量类错误，启动期可发现；避免每请求洪流；不引入新校验逻辑）：统一 `debug!(group = %group_name, reason = "group_not_found"/"select_failed"/"invalid_server_type"/"http_client_missing"[+error = %e（select_failed 时）], "Failed to select upstream path")`；保留各处既有 metrics 不变 |
 | MGR-04 | L303/L404 deny_answers warn × 2 | SEC-3 冻结级别 | 保留 WARN；现有字段（group/query）保持；消息允许保留现状（`All A/AAAA answers filtered by deny_answers, returning SERVFAIL`） |

@@ -1,0 +1,26 @@
+# Rust / Cargo 构建产物
+/target/
+**/*.rs.bk
+
+# 运行时本地配置（保留模板：config.default.yaml / config.example.yaml）
+config.yaml
+config.local.yaml
+
+# 运行时日志与数据
+*.log
+*.pid
+
+# mkdocs 文档构建产物
+site/
+
+# 编辑器 / IDE
+.serena/
+.agent-*/
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 操作系统
+.DS_Store
+Thumbs.db

@@ -9,5 +9,7 @@ mod manager;
 pub use manager::UpstreamManager;
 
 // 增强重导出
+pub use dns_client::DnsClient;
 pub use doh::DoHClient;
 pub use http_client::HttpClient;
+pub use json::JsonConverter;
